@@ -21,9 +21,9 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 |---|---|
 | 🛍️ **Full storefront** | Hero carousel (3 slides, auto-advance), feature bar, Trending / Shop by Category / New Arrivals / On Sale sections — byte-parity port of the reference |
 | 🔍 **Search** | Header dropdown with live typeahead (`/api/search`, 250 ms debounce, keyboard + click navigation) and `/shop?search=` results page |
-| 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params |
+| 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params; sort semantics pinned to the reference (Featured = array order, Top Rated = stable rating-desc, Newest = reverse array order) |
 | 📦 **Product pages** | Badges, ratings, discount math, feature chips, quantity stepper, Description/Reviews/Shipping tabs, related products |
-| 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with steppers and server-re-derived totals. Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
+| 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with steppers, line totals, and server-re-derived totals. Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
 | ❤️ **Persistent wishlist** | Same guest→user identity pattern; hearts everywhere, dedicated page |
 | 💳 **3-step checkout** | Shipping → Payment (card/PayPal) → Review; server-validated, transactional order placement, confirmation page with the order number; reference-parity "No items in cart" empty state |
 | 👤 **Account dashboard** | Profile editing, real order history with status badges, address book CRUD, password change, logout |
@@ -31,7 +31,7 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 | 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login; standalone chrome-less auth screens (reference parity) |
 | 📱 **Mobile navigation** | Left-sliding Radix Sheet (w-72) pinned by a dedicated E2E spec (the Tailwind v4 trap-log surface) |
 | 🧭 **Reference-exact edge states** | Chrome-less platform 404 (v3 slate palette, quoted path) and in-chrome "Product not found" block — both E2E-pinned |
-| 🧪 **107 automated tests** | 45 Vitest unit + 62 Playwright E2E, including a computed-style parity gate measured against the live reference |
+| 🧪 **117 automated tests** | 45 Vitest unit + 72 Playwright E2E, including computed-style + catalog-order parity gates measured against the live reference |
 | 🌐 **SEO & ops** | Per-page metadata, `sitemap.xml`, `robots.txt`, `/api/health` probe |
 
 ## Architecture
@@ -104,7 +104,7 @@ flowchart TB
 │       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts
 │       └── 📂 actions/            ← the mutation seam (ActionResult<T> + Zod)
 ├── 📂 tests/
-│   ├── 📂 e2e/                    ← 9 spec files (62 tests) + setup/global-setup
+│   ├── 📂 e2e/                    ← 10 spec files (72 tests) + setup/global-setup
 │   └── 📄 db-path.test.ts         ← URL-resolution contract
 └── 📄 AGENTS.md · CLAUDE.md · Project_Architecture_Document.md · ecommerce-store_SKILL.md
 ```

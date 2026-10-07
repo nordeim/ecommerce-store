@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Prisma } from "@prisma/client";
 import { Search, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { Input } from "@/components/ui/input";
@@ -70,16 +71,23 @@ export default async function ShopPage({
   else if (price === "100-200") where.price = { gte: 10001, lte: 20000 };
   else if (price === "over-200") where.price = { gte: 20001 };
 
-  const orderBy: Record<string, string> =
+  // Reference sort semantics (measured live 2026-10-07):
+  // - Featured = the product array order (seed sortOrder mirrors it 1:1).
+  // - Top Rated = a STABLE rating-desc over the array order — Prisma's
+  //   single-key orderBy does not guarantee tie order, so sortOrder is the
+  //   explicit tie-break (4.8 ties: headphones < serum < yoga-mat).
+  // - Newest = reverse array order (seed createdAt is staggered by array
+  //   position, so createdAt desc is deterministic).
+  const orderBy: Prisma.ProductOrderByWithRelationInput[] =
     sort === "price_asc"
-      ? { price: "asc" }
+      ? [{ price: "asc" }]
       : sort === "price_desc"
-        ? { price: "desc" }
+        ? [{ price: "desc" }]
         : sort === "newest"
-          ? { createdAt: "desc" }
+          ? [{ createdAt: "desc" }]
           : sort === "rating"
-            ? { rating: "desc" }
-            : { sortOrder: "asc" };
+            ? [{ rating: "desc" }, { sortOrder: "asc" }]
+            : [{ sortOrder: "asc" }];
 
   const [products, allCategories] = await Promise.all([
     db.product.findMany({ where, include: { category: true }, orderBy }),

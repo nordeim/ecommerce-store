@@ -55,7 +55,7 @@ export default function CartPage() {
                 >
                   {item.name}
                 </Link>
-                <p className="text-sm text-muted-foreground mt-0.5">{formatCents(item.price)}</p>
+                <p className="text-sm font-bold mt-1">{formatCents(item.price)}</p>
                 <div className="flex items-center justify-between mt-auto pt-2">
                   <div className="flex items-center border border-border rounded-lg">
                     <button
@@ -76,7 +76,7 @@ export default function CartPage() {
                     </button>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold">{formatCents(item.lineTotal)}</span>
+                    <span className="text-sm font-bold">{formatCents(item.lineTotal)}</span>
                     <button
                       className="p-2 text-muted-foreground hover:text-destructive transition-colors"
                       aria-label={`Remove ${item.name} from cart`}

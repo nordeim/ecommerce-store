@@ -299,12 +299,20 @@ There are no custom hooks; one context covers all state:
   OrderItem, OrderEvent, NewsletterSubscriber. Money = INTEGER CENTS
   everywhere; "enums" (role/status/type) = String + Zod unions (SQLite has
   no enums).
-- **Seed** (`prisma/seed.ts`, 424 lines): idempotent natural-key upserts —
-  6 categories, 12 products (the reference catalog: names, prices, ratings,
-  badges, sort), 3 demo orders pinned to the reference account page
-  (ORD-2026-001 $349.98 delivered · 002 $189.00 in transit · 003 $524.97
-  delivered — 003's total is pinned; line items sum to 524.98), demo user +
-  admin user, 3 hero slides, demo address.
+- **Seed** (`prisma/seed.ts`): idempotent natural-key upserts — 6 categories,
+  12 products (the reference catalog transcribed verbatim: names, prices,
+  ratings, review counts, badges, descriptions), 3 demo orders pinned to the
+  reference account page (ORD-2026-001 $349.98 delivered · 002 $189.00 in
+  transit · 003 $524.97 delivered — 003's total is pinned; line items sum to
+  524.98), demo user + admin user, 3 hero slides, demo address.
+- **Catalog order is a parity contract (ADR-009):** `Product.sortOrder`
+  mirrors the reference's array position 1:1 (headphones=1, watch=2, tee=3,
+  speaker=4, planter=5, shoes=6, serum=7, blanket=8, sunglasses=9, mat=10,
+  pad=11, pajama=12); the seed staggers `createdAt` by the same position
+  (position 1 = oldest) so "Newest" = `createdAt desc` = reverse array
+  order; "Top Rated" = `[{rating: desc}, {sortOrder: asc}]` (Prisma ties
+  are otherwise undefined). Home's On Sale = first 4 `isOnSale` products in
+  array order. E2E-pinned by `tests/e2e/catalog-parity.spec.ts`.
 - **Product imagery** loads from the reference's public CDN
   (`media.base44.com`, `images.unoptimized: true`, plain `<img>` for
   byte-parity). Swap to owned assets in the seed before rebranding.
@@ -323,7 +331,10 @@ There are no custom hooks; one context covers all state:
   hamburger: `Open navigation menu`; hearts: `Add/Remove X to/from wishlist`;
   steppers: `Increase/Decrease quantity`).
 - The mobile nav Sheet traps focus; Escape and backdrop dismiss; nav links
-  auto-close on navigation (E2E-pinned).
+  auto-close on navigation (E2E-pinned). Deliberate divergence: the
+  reference's Sheet STAYS OPEN after link navigation (verified live twice —
+  a demo quirk); the clone keeps the production-correct auto-close. Do not
+  "fix" this back to the reference behavior.
 - Form errors surface in `p[role=alert]` (red `text-destructive`).
   ⚠ Next's route announcer ALSO carries `role=alert` — scope selectors with
   `p[role=alert]`, not bare `getByRole("alert")`.
@@ -371,7 +382,7 @@ bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
 bun run test          # 45 unit tests pass
 bun run build         # compiles; 19 routes
-bun run test:e2e      # 62 tests pass (requires the build)
+bun run test:e2e      # 72 tests pass (requires the build)
 ```
 
 Then:
@@ -487,7 +498,7 @@ discountPercent(29999, 39999) // 25  (for -25% badges)
 `prisma/schema.prisma` (walk up from CWD), so CLI/build/runtime all open
 `<repo>/db/custom.db`. Absolute `file:` and non-SQLite URLs pass through.
 
-### 15.5 The drawer interaction (reference-parity)
+### 15.5 The drawer interaction & anatomy (reference-parity)
 
 ```ts
 // add: badge only
@@ -495,6 +506,14 @@ await addToCart(productId, quantity);
 // inspect drawer: open it the way a reference user does
 await openCartDrawer(page); // tests/e2e/helpers.ts — header cart button
 ```
+
+Item-row anatomy (captured live, E2E-pinned): border-separated rows
+(`flex gap-3 py-4 border-b border-border/50`), plain truncated `h4` name
+(not a link), bold unit price (`text-sm font-bold mt-1`), `gap-2`
+stepper+trash row, right-side line total (`text-sm font-bold shrink-0`),
+summary `pt-4 space-y-3` with Separators, `text-primary` "Free",
+`font-bold text-lg` total. Production extras kept over the reference:
+aria-labels, disabled minus at qty 1.
 
 ### 15.6 Logout (state-survival-aware)
 
@@ -617,6 +636,7 @@ Full records with context/rationale/consequences in
 | 006 | scrypt + DB-backed sessions over JWT |
 | 007 | Checkout = client wizard over one transactional server action |
 | 008 | Route-group chrome split (minimal root layout, standalone auth/404) |
+| 009 | Catalog order as a parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break) |
 
 ## Appendix B: The Meticulous Workflow
 

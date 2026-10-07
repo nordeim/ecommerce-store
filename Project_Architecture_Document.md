@@ -13,6 +13,7 @@
 |---|---|---|---|---|
 | 1.0 | 2026-10-07 | Build agent (Super Z) | [RES]/[SYN]/[SAN] | Initial production blueprint after full-site recon, build, computed-style parity gate, and 103-test verification |
 | 1.1 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-1 remediation: route-group chrome split (ADR-008), reference-parity 404/auth/empty-states/drawer behavior, slate-palette pin (trap 7), stale-state logout fix, `.env.example` realignment, 107-test gate — see docs/remediation-plan-session1.md |
+| 1.2 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-2 remediation: catalog-order parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break), reference-exact seed data (3 ratings + 11 descriptions), cart-drawer item-row anatomy rewrite, /cart line-total consistency, deliberate-divergence register, 117-test gate — see docs/remediation-plan-session2.md |
 
 ## Table of Contents
 
@@ -117,6 +118,13 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Consequences:** (+) Exact reference parity on three previously-diverging surfaces; login/register became statically prerendered (perf win). (−) The `StoreProvider` state survives client-side navigation inside the group — logout must explicitly `setUser(null)` (a latent stale-state bug the refactor surfaced and fixed); one extra layout file to keep in mind when adding routes.
 - **Alternatives Rejected:** fixed-position overlay hiding the chrome (DOM parity break); a catch-all route rendering the 404 inline (fights the router, swallows real routes).
 
+**ADR-009: Catalog order as a parity contract (sortOrder = reference array position)**
+- **Context:** The reference is a client-side SPA whose product array order drives its shop "Featured" listing, its home "On Sale" membership (first 4 sale items in array order), its "Newest" sort (array reverse), and its "Top Rated" sort (stable rating-desc over the array). The original seed ordered products by merchandising group (trending first), so all four surfaces diverged.
+- **Decision:** `Product.sortOrder` in the seed mirrors the reference array position 1:1 (headphones=1 … pajama=12); the seed sets a staggered `createdAt` (array position 1 = oldest) so `createdAt desc` reproduces "Newest" deterministically; the shop's rating sort uses `[{ rating: "desc" }, { sortOrder: "asc" }]` because Prisma's single-key orderBy leaves tie order undefined. Seed ratings/reviewCounts/descriptions are transcribed verbatim from the live reference.
+- **Rationale:** Ordering is visible on every shop/home visit — parity requires encoding the reference's array semantics in data, not approximating them. The tie-break makes the E2E assertion deterministic (4.8 ties: headphones < serum < yoga-mat).
+- **Consequences:** (+) All four order-sensitive surfaces match the reference exactly and are E2E-pinned (catalog-parity.spec.ts). (−) Reordering or adding products requires re-measuring the reference and updating sortOrder/createdAt together; the deliberate-divergence register documents the one order-adjacent behavior we do NOT replicate (the reference's mobile menu staying open after navigation).
+- **Alternatives Rejected:** computed rank columns (duplicates state, drifts); client-side re-sorting (fights RSC, breaks deep links).
+
 ---
 
 ## 2. High-Level System Topology
@@ -204,7 +212,7 @@ ecommerce-store/
 │       └── *.test.ts            ← co-located unit layer
 ├── tests/
 │   ├── db-path.test.ts
-│   └── e2e/                     ← 9 specs + auth.setup + global-setup
+│   └── e2e/                     ← 10 specs + auth.setup + global-setup
 ├── docs/                        ← trap log, deployment, ssh push runbook
 └── AGENTS.md · CLAUDE.md · README.md · Project_Architecture_Document.md
 ```
@@ -374,18 +382,20 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | Unit — db-path contract | 1 | 15 | `tests/db-path.test.ts` | Vitest |
 | E2E — smoke | 1 | 7 | `tests/e2e/smoke.spec.ts` | Playwright |
 | E2E — computed-style parity | 1 | 10 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
-| E2E — cart | 1 | 5 | `tests/e2e/cart.spec.ts` | Playwright |
+| E2E — catalog-order parity | 1 | 9 | `tests/e2e/catalog-parity.spec.ts` | Playwright |
+| E2E — cart | 1 | 6 | `tests/e2e/cart.spec.ts` | Playwright |
 | E2E — checkout | 1 | 4 | `tests/e2e/checkout.spec.ts` | Playwright |
 | E2E — account | 1 | 8 | `tests/e2e/account.spec.ts` | Playwright |
 | E2E — auth | 1 | 7 | `tests/e2e/auth.spec.ts` | Playwright |
 | E2E — wishlist | 1 | 4 | `tests/e2e/wishlist.spec.ts` | Playwright |
 | E2E — search | 1 | 5 | `tests/e2e/search.spec.ts` | Playwright |
 | E2E — mobile navigation | 1 | 7 | `tests/e2e/mobile-navigation.spec.ts` | Playwright |
-| **Total** | **14** | **107** | | |
+| **Total** | **15** | **117** | | |
 
 ### 8.2 Test Patterns
 
 - **Parity gate:** `storefront-parity.spec.ts` asserts computed styles against values measured live on the reference (colors, radii, the shadow pin, font). This is the objective "looks identical" gate — screenshots are not.
+- **Catalog-order gate:** `catalog-parity.spec.ts` pins the reference's product array order (Featured), the home On Sale membership, the Newest (reverse array) and Top Rated (stable rating-desc) sort semantics, the sort-dropdown option order, and the reference-exact ratings/descriptions.
 - **Isolation:** E2E global setup pushes/seeds/resets `db/e2e.db` (never the dev DB); `auth.setup.ts` logs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out with an empty state; cart specs start from a cleared cart (`clearCartViaDrawer`).
 - **Radix-aware selectors:** close dialogs before asserting on page chrome (aria-hidden); scope text/label lookups to `main` (footer collisions).
 - **TDD:** bugs get a failing regression test at the same seam before the fix; the suite asserts behavior through the UI/API only.

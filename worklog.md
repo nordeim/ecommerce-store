@@ -104,3 +104,25 @@ Stage Summary:
 - Deliverable: 5 parity gaps closed + 1 latent client-state bug fixed + repo hygiene (env example, stale docs/skill removed) + SKILL.md + remediation plan + 16 screenshots
 - Gate at ship: lint 0/0 · tsc clean · 45 unit · build OK · 62 E2E (was 58; +4 parity pins, none removed)
 - docs/remediation-plan-session1.md records the full audit trail for future sessions
+
+---
+Task ID: S3 (session-2 review + remediation)
+Agent: main
+Task: Post-push audit vs live reference (round 2); remediation plan; execute fixes; SKILL.md refresh; docs; screenshots; ship
+
+Work Log:
+- git pull → 5090b22 (docs/session_2.md added); reviewed AGENTS/CLAUDE/README/PAD/SKILL + session_2.md + remediation-plan-session1.md + worklogs; re-validated the full gate (lint 0/0, tsc clean, 45 unit, build, 62 E2E) — codebase matched documented status; DB contract verified (hard-linked inode, db/custom.db at repo root); vitest+playwright suites confirmed configured
+- Live A/B differential audit (agent-browser ref vs clone + VLM): verified home/shop/PDP/account/orders/footer/wishlist/404/auth/mobile-menu-panel/search parity; found 7 findings — shop Featured order diverged (seed sortOrder grouped by merchandising, reference interleaves), home On Sale membership wrong (consequence), sort dropdown option order (Newest before Top Rated), Newest sort arbitrary (uniform createdAt), Top Rated tie order undefined (Prisma single-key orderBy), 3 products' rating/reviewCount drift (planter 4.9/87, blanket 4.7/145, yoga-mat 4.8/267), 11 of 12 product descriptions paraphrased instead of transcribed, cart drawer item row anatomy (no line total, link-vs-h4 name, muted price, justify-between stepper row, no row borders, no separators in summary, non-primary "Free")
+- Decoded reference sort semantics from live behavior: Featured = array order; Newest = exact reverse; Top Rated = stable rating-desc over array order (verified against live output); price sorts standard; URL params do NOT drive the reference SPA sort (clone's deep-linkable sort = superset)
+- Discovered + documented deliberate divergence: the reference's mobile menu STAYS OPEN after link navigation (verified live twice — page dimmed at brightness 45.8, dialog state=open); the clone's auto-close kept as production-correct superset
+- Wrote docs/remediation-plan-session2.md (issue inventory w/ evidence, ground-truth data, TDD ToDo list, validation, sign-off); validated against codebase (sortOrder consumers, E2E dependency sweep, seed idempotency, Prisma orderBy array support)
+- Executed TDD-first: RED (9 catalog-parity tests + drawer anatomy test, all failing) → GREEN: seed sortOrder realigned to reference array position 1:1, staggered createdAt (position 1 = oldest), ratings/reviewCounts corrected, 11 descriptions transcribed verbatim, SORT_OPTIONS swapped (Top Rated before Newest), shop rating orderBy → [{rating:desc},{sortOrder:asc}], cart-drawer row+summary rewritten to reference anatomy (border rows, h4 truncate, bold price, gap-2 stepper+trash, right line total, separators, text-primary Free, font-bold text-lg total), /cart page unit-price typography aligned
+- Full gate green: lint 0/0 · tsc clean · 45 unit · build OK · 72 E2E (was 62; +9 catalog-parity +1 drawer anatomy, none removed)
+- Live re-verification: Featured/On Sale/Newest/Top Rated orders all byte-exact vs reference; planter PDP shows 4.9 (87 reviews) + reference description; VLM drawer comparison = "no visible layout differences"
+- Docs updated: AGENTS.md (catalog-order contract, deliberate-divergence register, drawer anatomy pin), CLAUDE.md (test counts, data contract), README.md (117 tests, sort semantics, line totals), PAD v1.2 (ADR-009 + test distribution 15 files/117), ecommerce-store_SKILL.md (§7 catalog contract, §8 divergence note, §15.5 drawer anatomy, ADR index, counts)
+- Screenshots: refreshed 01/02/04 (new order + drawer anatomy) + added 17-shop-newest-sort, 18-product-planter, 19-cart-page → 19 total; VLM-verified key captures
+
+Stage Summary:
+- Deliverable: 4 parity gaps closed (catalog order ×3 surfaces, sort semantics, PDP data, drawer anatomy) + reference ground-truth transcribed + deliberate-divergence register + docs/SKILL refresh + 19 screenshots
+- Gate at ship: lint 0/0 · tsc clean · 45 unit · build OK · 72 E2E
+- docs/remediation-plan-session2.md records the full audit trail for future sessions

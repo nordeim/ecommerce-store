@@ -38,6 +38,47 @@ test.describe("cart", () => {
     await expect(dialog.getByText("Shipping").locator("..")).toContainText("Free");
   });
 
+  test("drawer item row matches the reference anatomy (session-2 parity)", async ({ page }) => {
+    await page.goto("/product/wireless-headphones");
+    await page.getByRole("button", { name: "Add to Cart" }).first().click();
+    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await openCartDrawer(page);
+    const dialog = page.getByRole("dialog");
+
+    // The item name is a single-line truncated heading (not a 2-line link).
+    const name = dialog.getByRole("heading", { name: "Wireless Noise-Cancelling Headphones" });
+    await expect(name).toBeVisible();
+    expect(await name.evaluate((el) => getComputedStyle(el).webkitLineClamp === "none")).toBe(true);
+
+    // Unit price is bold (reference: text-sm font-bold mt-1).
+    const unitPrice = dialog.getByText("$299.99").first();
+    expect(await unitPrice.evaluate((el) => getComputedStyle(el).fontWeight)).toBe("700");
+
+    // A right-side LINE TOTAL exists (unit price AND line total both visible).
+    expect(await dialog.getByText("$299.99").count()).toBeGreaterThanOrEqual(2);
+
+    // Rows are border-separated (reference: py-4 border-b border-border/50).
+    const row = name.locator("xpath=ancestor::div[contains(@class,'border-b')]");
+    await expect(row).toBeVisible();
+
+    // The trash button sits immediately after the stepper (gap-2, not
+    // justify-between): measure from the stepper CONTAINER's right edge.
+    const trash = dialog.getByLabel(/Remove/);
+    const stepperBox = await dialog
+      .getByLabel(/Decrease quantity/)
+      .locator("xpath=..")
+      .boundingBox();
+    const trashBox = await trash.boundingBox();
+    expect(stepperBox).not.toBeNull();
+    expect(trashBox).not.toBeNull();
+    expect(trashBox!.x - (stepperBox!.x + stepperBox!.width)).toBeLessThan(20);
+
+    // "Free" shipping value is the primary color (reference: text-primary).
+    const free = dialog.getByText("Free");
+    const freeColor = await free.evaluate((el) => getComputedStyle(el).color);
+    expect(freeColor).toBe("rgb(230, 107, 26)");
+  });
+
   test("PDP add respects the quantity stepper", async ({ page }) => {
     await page.goto("/product/leather-watch");
     await page.getByLabel("Increase quantity", { exact: true }).click();
@@ -84,6 +125,8 @@ test.describe("cart", () => {
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByRole("heading", { name: "Shopping Cart" })).toBeVisible();
     await expect(page.getByText("$69.99").first()).toBeVisible();
+    // Line total alongside the unit price (drawer-anatomy consistency).
+    expect(await page.getByText("$69.99").count()).toBeGreaterThanOrEqual(2);
     await expect(page.getByRole("link", { name: "Checkout" })).toBeVisible();
   });
 });

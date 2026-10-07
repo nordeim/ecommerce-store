@@ -32,8 +32,8 @@ const SORT_OPTIONS = [
   { value: "featured", label: "Featured" },
   { value: "price_asc", label: "Price: Low to High" },
   { value: "price_desc", label: "Price: High to Low" },
-  { value: "newest", label: "Newest" },
   { value: "rating", label: "Top Rated" },
+  { value: "newest", label: "Newest" },
 ];
 
 export function ShopFilters({ categories, activeCategory, activePrice, activeSort, activeSearch }: Props) {

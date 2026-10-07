@@ -39,6 +39,7 @@ Project-specific principles: never weaken a trap-log pin to make something pass;
 
 ### Data
 - Prisma + SQLite (`db/custom.db`, schema-relative `file:../db/custom.db` — the resolution contract in `src/lib/db-path.ts` is test-pinned; don't inline it).
+- **Catalog order is a parity contract**: `Product.sortOrder` = the reference's array position (1:1); seed `createdAt` is staggered by array position (drives "Newest" = reverse array order); "Top Rated" ties break by sortOrder. Do not reorder the seed without re-measuring the reference.
 - Integer cents for all money; format only at display (`formatCents`).
 - SQLite has no enums — String columns + Zod union validation at the boundary.
 - Seed is idempotent (natural-key upserts); demo fixtures mirror the reference account page.
@@ -65,7 +66,7 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 | `bun run lint` | ESLint 9 flat config — must be 0/0 |
 | `bun run typecheck` | `tsc --noEmit` — must be 0 errors |
 | `bun run test` | Vitest unit suite (45 tests) |
-| `bun run test:e2e` | Playwright E2E (62 tests; requires `bun run build` first) |
+| `bun run test:e2e` | Playwright E2E (72 tests; requires `bun run build` first) |
 | `bun run db:setup` | `db push` + seed |
 | `bun run db:reset` | `prisma migrate reset` |
 
@@ -74,7 +75,7 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 **Pyramid:** Vitest unit (pure domain seams, co-located `*.test.ts`) → Playwright E2E (production standalone server on :3100, isolated `db/e2e.db`, real UI flows).
 
 - Unit layer: `src/lib/*.test.ts` + `tests/db-path.test.ts` — money math, password hashing, Zod schemas, rate limiter, DB-path resolution. TDD red→green→refactor; bug fixes get a failing regression test first.
-- E2E layer: `tests/e2e/*.spec.ts` — smoke (incl. the standalone 404 + product-not-found + standalone auth screens), storefront-parity (computed-style gate), cart (incl. the no-auto-open drawer pin), checkout (incl. the "No items in cart" empty state), account, auth, wishlist, search, mobile-navigation. `auth.setup.ts` signs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out for logged-out flows. `global-setup.ts` pushes/seeds/resets the e2e DB every run. `openCartDrawer` (helpers.ts) is the reference-mirroring way to open the drawer.
+- E2E layer: `tests/e2e/*.spec.ts` — smoke (incl. the standalone 404 + product-not-found + standalone auth screens), storefront-parity (computed-style gate), catalog-parity (array order, sort semantics, ratings, descriptions), cart (incl. the no-auto-open drawer pin + reference drawer anatomy), checkout (incl. the "No items in cart" empty state), account, auth, wishlist, search, mobile-navigation. `auth.setup.ts` signs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out for logged-out flows. `global-setup.ts` pushes/seeds/resets the e2e DB every run. `openCartDrawer` (helpers.ts) is the reference-mirroring way to open the drawer.
 - Assert behavior through the UI/API, never internals; scope selectors to `main` on chrome pages (footer text collisions); auth screens have NO `main` landmark — use page-level selectors and `p[role=alert]` for the inline error (the route announcer also carries `role=alert`). Close dialogs before asserting on header chrome (Radix `aria-hidden`).
 
 ## 6. Code Quality Standards
