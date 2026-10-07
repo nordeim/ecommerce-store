@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.4.0
+version: 1.5.0
 last_updated: "2026-10-07"
 tags:
   - e-commerce
@@ -377,6 +377,33 @@ There are no custom hooks; one context covers all state:
   REMOVE is silent. Region is `pointer-events-none` + `aria-live=polite`
   (registered divergences: reference toasts are inert on click; the spring
   is a CSS `@starting-style` approximation).
+- **Wishlist hearts are a color contract (session-5, ADR-012):** ACTIVE
+  hearts are `fill-destructive text-destructive` (red rgb(239,67,67)) on
+  BOTH the PDP buy-panel heart and the product-card hearts — NOT primary
+  orange. The card heart is muted inactive (`h-4 w-4 transition-colors
+  text-muted-foreground`, rgb(111,111,123)); the PDP heart is `h-5 w-5`
+  foreground-inactive with an `h-10 px-8` button (82px — px-4 lets the
+  flex-1 ATC absorb 32px; ATC + heart svgs carry `h-5 w-5`, rendered 16px
+  by the Button `[&_svg]:size-4` base on both sites). Mobile: px-8
+  reproduces the reference's iPhone-14 row exactly — its heart is clipped
+  ~35px past the 390px viewport (scrollWidth 425); that's parity, not a
+  bug to fix. The reference's wishlist is COSMETIC (toggles fire no
+  network call; its wishlist page never fetches entities) — the clone's
+  DB-backed wishlist is the superset.
+- **Home section dividers (session-5):** the home page frames its product
+  sections with TWO `shrink-0 bg-border h-[1px] w-full max-w-7xl mx-auto`
+  hairlines — after the feature bar and between New Arrivals and On Sale
+  (measured live + present in the session-0 recon HTML; missed for four
+  rounds because full-page screenshots lazy-load the reference's
+  below-fold sections — DOM comparison is the ground truth).
+- **StoreProvider re-syncs from server truth (ADR-012):** when a
+  `router.refresh()` delivers changed `initialCart`/`initialUser`/
+  `initialWishlistIds` prop identities, the provider re-syncs via
+  adjust-state-during-render — "last seen props" in STATE, not a ref (the
+  React Compiler `refs` rule forbids ref access during render). Found as
+  CHECKOUT-BADGE-1: the header badge kept the stale cart count after order
+  placement until a manual reload (the refresh DID deliver an empty cart
+  prop; the state just never re-read it).
 
 ## 8. Accessibility Implementation
 
@@ -421,6 +448,9 @@ There are no custom hooks; one context covers all state:
 | 16 | Guest cart empties / each add starts fresh | Cart mutation passed `undefined` as the guest token — every add minted a new cart | Mutations read `cookies().get(CART_COOKIE)` (ADR-011); `guest-cart.spec.ts` pins it |
 | 17 | Rapid stepper clicks land as +1 instead of +2 | Stepper posted ABSOLUTE qty computed from stale render state (lost-update race) | Post deltas: `adjustQuantity(itemId, ±1)` → transactional `changeQuantityBy` |
 | 18 | Toast assertions flake (position off by 1–2 px; toast gone at 3.1 s) | Enter spring still in flight; the poll ate the 3 s window | Wait ~450 ms for the spring, ±2 px tolerance; settle-then-measure for lifetime |
+| 19 | Header badge keeps the old count after placing an order | `useState(initialCart)` never re-reads the fresh prop a `router.refresh()` delivers | Adjust-state-during-render re-sync in StoreProvider (ADR-012); checkout spec asserts exact-name "Cart" |
+| 20 | Wishlist-heart spec fails with "element not found" right after a successful toggle | The aria-label flipped Add→Remove, orphaning a state-anchored locator | State-stable locators: `/«Product» (from|to) wishlist/` or `aria-pressed` |
+| 21 | PDP spec hits the related-products heart/ATC instead of the buy panel's | Cards below the buy panel carry the same button roles | Scope to `main .flex.items-center.gap-4.mb-4` (the action row) |
 
 ## 10. Debugging Guide
 
@@ -442,7 +472,7 @@ bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
 bun run test          # 66 unit tests pass
 bun run build         # compiles; 21 routes
-bun run test:e2e      # 104 tests pass (103 spec + the setup login; requires the build)
+bun run test:e2e      # 107 tests pass (106 spec + the setup login; requires the build)
 ```
 
 Then:
@@ -500,6 +530,19 @@ Then:
     (each guest add minted a new cart) across three remediation rounds.
     Coverage follows the flows you actually exercise — guest-cart.spec.ts
     (storageState opt-out) now pins the cookie path forever.
+12. **useState props are initial values only (L12).** A `router.refresh()`
+    re-renders the layout server-side and delivers fresh props — but
+    `useState(initialCart)` never re-reads them, so every
+    server-mutation-followed-by-refresh shows stale client state (the
+    post-order cart badge). Re-sync in render with a state-based
+    "last seen props" guard, NOT a ref (React Compiler `refs` rule) and
+    NOT an effect (`set-state-in-effect` is an error) (ADR-012).
+13. **Locator names that describe state will orphan you (L13).** A
+    Playwright locator anchored to "Add … to wishlist" stops matching the
+    instant the toggle succeeds (the label flips to "Remove …") — the
+    failure reads "element not found" which looks like the bug, not the
+    success. Match state-stable patterns (`/«Product» (from|to) wishlist/`)
+    or assert on `aria-pressed` instead.
 
 ## 13. Pitfalls to Avoid
 

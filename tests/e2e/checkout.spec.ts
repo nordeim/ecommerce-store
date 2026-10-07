@@ -66,6 +66,13 @@ test.describe("checkout", () => {
     await page.waitForURL(/\/checkout\/success\?order=/);
     await expect(page.getByRole("heading", { name: "Order Confirmed" })).toBeVisible();
     await expect(page.getByText(/ORD-\d{4}-\d+/)).toBeVisible();
+
+    // Session-5 (CHECKOUT-BADGE-1): the header badge re-syncs from server
+    // truth after the order clears the cart — the accessible name must be
+    // exactly "Cart" (no ", N items") WITHOUT a manual reload. Before the
+    // StoreProvider prop re-sync, the badge kept the stale count until a
+    // full page load.
+    await expect(page.getByRole("button", { name: "Cart", exact: true })).toBeVisible();
   });
 
   test("the placed order lands in the account order history", async ({ page }) => {

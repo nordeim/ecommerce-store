@@ -70,6 +70,34 @@ export function StoreProvider({
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
 
+  // Session-5 (CHECKOUT-BADGE-1): re-sync when a router.refresh() delivers
+  // fresh server truth. `useState(initialCart)` only reads the initial value
+  // on first render — after the checkout places an order (server clears the
+  // cart) the refreshed layout passed a new `initialCart` prop that the
+  // state ignored, so the header badge kept the stale count until a manual
+  // reload. This is the adjust-state-during-render pattern (React docs);
+  // the "last seen props" live in STATE (not a ref) per the repo's React
+  // Compiler refs rule, and the repo's lint policy prefers it over
+  // useEffect state sync. Server truth wins: prop identity changes only
+  // when the layout actually re-renders server-side, and client-optimistic
+  // updates land via action responses that the next refresh re-delivers
+  // unchanged.
+  const [lastServerCart, setLastServerCart] = React.useState(initialCart);
+  const [lastServerUser, setLastServerUser] = React.useState<SessionUser | null>(initialUser);
+  const [lastServerWishlistIds, setLastServerWishlistIds] = React.useState(initialWishlistIds);
+  if (lastServerCart !== initialCart) {
+    setLastServerCart(initialCart);
+    setCart(initialCart);
+  }
+  if (lastServerUser !== initialUser) {
+    setLastServerUser(initialUser);
+    setUser(initialUser);
+  }
+  if (lastServerWishlistIds !== initialWishlistIds) {
+    setLastServerWishlistIds(initialWishlistIds);
+    setWishlist(new Set(initialWishlistIds));
+  }
+
   // Hydrate from the server on mount — the SSR payload may be stale (e.g. a
   // guest cart mutated in another tab) and this is cheap.
   React.useEffect(() => {

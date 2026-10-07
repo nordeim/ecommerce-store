@@ -53,12 +53,14 @@ export function BuyPanel({ productId, name, stock }: { productId: string; name: 
             setAdding(false);
           }}
         >
-          <ShoppingBag className="h-4 w-4" />
+          {/* Session-5: the reference ATC icon carries h-5 w-5 (renders 16px
+              via the Button [&_svg]:size-4 base — class-level DOM parity). */}
+          <ShoppingBag className="h-5 w-5" />
           {soldOut ? "Out of Stock" : adding ? "Adding…" : "Add to Cart"}
         </Button>
         <Button
           variant="outline"
-          className="h-10 px-4 rounded-xl"
+          className="h-10 px-8 rounded-xl"
           aria-label={inWishlist ? `Remove ${name} from wishlist` : `Add ${name} to wishlist`}
           aria-pressed={inWishlist}
           onClick={() => {
@@ -69,7 +71,11 @@ export function BuyPanel({ productId, name, stock }: { productId: string; name: 
             });
           }}
         >
-          <Heart className={cn("h-4 w-4", inWishlist && "fill-primary text-primary")} />
+          {/* Session-5: h-5 w-5 + fill-destructive measured live on the
+              reference (the icon renders 16px via the Button
+              [&_svg]:size-4 base on both sites; active hearts are RED
+              rgb(239,67,67), not primary orange). */}
+          <Heart className={cn("h-5 w-5", inWishlist && "fill-destructive text-destructive")} />
         </Button>
       </div>
     </>

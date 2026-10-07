@@ -26,6 +26,44 @@ test.describe("wishlist", () => {
     await expect(heart).toHaveAttribute("aria-pressed", "false");
   });
 
+  test("heart color states match the reference (session-5)", async ({ page }) => {
+    // Measured live 2026-10-07: the reference's ACTIVE wishlist heart is
+    // fill-destructive text-destructive — RED rgb(239, 67, 67) — on BOTH the
+    // PDP buy-panel heart and the shop card hearts (the clone rendered
+    // fill-primary orange). The reference's CARD heart is MUTED inactive
+    // (text-muted-foreground, rgb(111, 111, 123), with transition-colors);
+    // the PDP buy-panel heart is FOREGROUND inactive (rgb(23, 23, 28), no
+    // color class). Uses linen-blanket (no other spec touches it) and
+    // self-cleans both toggles.
+    await page.goto("/product/linen-blanket");
+    // State-stable locator: the aria-label flips Add↔Remove on toggle, so a
+    // name anchored to "Add ..." would stop matching the moment the toggle
+    // lands (the element "disappearing" is the success signal, not a failure).
+    const pdpHeart = page.getByRole("button", { name: /Linen Throw Blanket (from|to) wishlist/ });
+    const pdpSvg = pdpHeart.locator("svg");
+    await expect(pdpSvg).toHaveCSS("color", "rgb(23, 23, 28)"); // foreground
+    await pdpHeart.click();
+    await expect(pdpSvg).toHaveClass(/fill-destructive text-destructive/);
+    await expect(pdpSvg).toHaveCSS("color", "rgb(239, 67, 67)");
+    // Clean up so later specs see an untouched wishlist.
+    await pdpHeart.click();
+    await expect(pdpHeart).toHaveAttribute("aria-pressed", "false");
+
+    await page.goto("/shop");
+    const card = page.locator(".bg-card.group").filter({ hasText: "Linen Throw Blanket" });
+    const cardHeart = card.getByRole("button", { name: /wishlist/ });
+    const cardSvg = cardHeart.locator("svg");
+    await expect(cardSvg).toHaveClass(/text-muted-foreground/);
+    await expect(cardSvg).toHaveClass(/transition-colors/);
+    await expect(cardSvg).toHaveCSS("color", "rgb(111, 111, 123)"); // muted
+    await cardHeart.click();
+    await expect(cardSvg).toHaveClass(/fill-destructive text-destructive/);
+    await expect(cardSvg).toHaveCSS("color", "rgb(239, 67, 67)");
+    // Clean up.
+    await cardHeart.click();
+    await expect(cardHeart).toHaveAttribute("aria-pressed", "false");
+  });
+
   test("wishlist ADD toasts; REMOVE does not (reference parity, session-4)", async ({ page }) => {
     // Measured live: adding to wishlist toasts "«name» added to wishlist!"
     // in the same dark box as the cart toast; un-toggling (removing) shows

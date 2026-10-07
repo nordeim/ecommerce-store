@@ -167,3 +167,26 @@ Stage Summary:
 - Gate at ship: lint 0/0 · tsc clean · 66 unit · build OK · 104 E2E (170 total; was 140)
 - docs/remediation-plan-session4.md + docs/session_6.md record the full audit trail
 - Committed to main and pushed via the SSH wrapper (explicit --remote, remote ref verified, key shredded)
+
+---
+Task ID: S6 (session-5 review + remediation, round 5)
+Agent: main
+Task: Round-5 differential audit vs live reference (buy-panel/home/heart surfaces + superset functional sweep); remediation plan; TDD execution; docs/SKILL/screenshots; ship
+
+Work Log:
+- Baseline verified at main @ fba0259: full gate green (66 unit / 104 E2E / 170 total) matching the session-4 ship state; DB contract verified (hard link, inode 274771)
+- Round-5 live A/B audit (agent-browser ref + clone + admin sessions): mobile nav parity (4th verification), mobile overflow sweep clean on wishlist/account/checkout/shop, hero/announcement/shop/account/PDP-tabs drift check all at parity, checkout wizard full flow + admin console mutation paths verified functional (superset); 5 findings — HOME-DIVIDER-1 (two h-[1px] hairline section dividers missing since session-0), PDP-ACTION-1 (buy-panel heart px-4/50px vs reference px-8/82px + h-5 w-5 svgs; ATC 372 vs 340px), HEART-COLOR-1 (active hearts fill-primary orange vs reference fill-destructive red rgb(239,67,67)), HEART-COLOR-2 (card hearts dark vs reference muted rgb(111,111,123) + transition-colors), CHECKOUT-BADGE-1 (stale header badge after order placement — StoreProvider never re-read the fresh props router.refresh() delivers)
+- Reference quirk discoveries: the reference's wishlist is COSMETIC (heart toggles fire no network call; its wishlist page never fetches entities and always shows the empty state — also in the session-0 recon) — clone's DB-backed wishlist is the superset; the reference's "Continue with Google" launches real base44 Google OAuth — clone's is visual-only (registered divergence: no OAuth credentials exist for a self-hosted clone); the reference's mobile PDP action row overflows 35px (clipped heart, scrollWidth 425 on 390px) — matching px-8 reproduces it byte-exactly (parity, not a defect)
+- docs/remediation-plan-session5.md written and validated against the codebase (dependency sweeps: no test pins on px-4/fill-primary, product-card.tsx is the single card-heart seam, checkout specs never asserted the post-order badge)
+- TDD: RED (4 failing — divider count, heart geometry, heart colors, stale badge; one locator bug fixed during RED: PDP heart locator matched related-product card hearts) → GREEN (2 divider divs in page.tsx; buy-panel px-8 + h-5 w-5 + fill-destructive; product-card muted-inactive/destructive-active with the button text-primary branch removed; StoreProvider adjust-state-during-render re-sync — the initial ref-based guard failed the React Compiler react-hooks/refs rule, rewritten with STATE-based last-seen-props guards). Two test bugs fixed during GREEN (state-anchored locator orphaned on toggle success — "element not found" IS the success signal; invalid constructed CSS selector with unescaped brackets)
+- Tooling: prisma/dev-cleanup.ts added (dev-DB hygiene — targeted deletes of stray orders/test subscribers/wishlist-cart residue; never migrate reset, which would break the sandbox hard-link). Dev DB returned to canonical state after the audit's live orders (ORD-2026-004/005)
+- Gate at ship: lint 0/0 · tsc clean · 66/66 unit · build OK (21 routes) · 107/107 E2E = 173 total (was 170)
+- Live A/B re-verification of every remediated surface: home dividers byte-exact (y=940/y=2561, 1280×1 both); PDP action row identical (heart 82px h-10 px-8, ATC 340px, stepper 130px, svgs h-5 w-5); card hearts muted rgb(111,111,123) both; active heart red rgb(239,67,67); mobile PDP overflow exact parity (scrollWidth 425, heart right 425 on iPhone 14 on BOTH); checkout badge reads exactly "Cart" after a live order placement with no reload; VLM home comparison confirms both separators
+- Docs: AGENTS.md (hearts color contract, home dividers, StoreProvider re-sync rule, divergence register grown, testing quirks: state-stable locators + dev-cleanup), CLAUDE.md (ADR-012 bullets, spec list, 107), README.md (173 tests, wishlist row), PAD v1.5 (ADR-012 full record, test table 173, parity gate description), SKILL v1.5.0 (§7 contracts, §9 rows 19-21, §12 L12-L13), plan checked off with outcome notes, docs/session_8.md
+- Screenshots: 3 new (34-home-section-divider, 35-pdp-heart-red, 36-shop-card-hearts; VLM-verified) → 36 total; .env.example verified current (no new env plumbing)
+
+Stage Summary:
+- Deliverable: 4 parity gaps closed (home dividers, PDP heart geometry, heart colors ×2) + 1 functional superset bug fixed (stale post-order badge, ADR-012) + reference quirk register grown (cosmetic wishlist, base44 OAuth, mobile clipped-heart parity note) + dev-cleanup tooling
+- Gate at ship: lint 0/0 · tsc clean · 66 unit · build OK (21 routes) · 107 E2E (173 total; was 170)
+- docs/remediation-plan-session5.md + docs/session_8.md record the full audit trail
+- Committed to main and pushed via the SSH wrapper (explicit --remote, remote ref verified, key shredded)

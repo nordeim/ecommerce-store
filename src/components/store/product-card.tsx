@@ -57,10 +57,7 @@ export function ProductCard({ product, animate = true }: { product: ProductCardD
             type="button"
             aria-label={inWishlist ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
             aria-pressed={inWishlist}
-            className={cn(
-              "absolute top-3 right-3 h-9 w-9 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-background transition-colors",
-              inWishlist && "text-primary",
-            )}
+            className="absolute top-3 right-3 h-9 w-9 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-background transition-colors"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -71,7 +68,19 @@ export function ProductCard({ product, animate = true }: { product: ProductCardD
               });
             }}
           >
-            <Heart className={cn("h-4 w-4", inWishlist && "fill-primary")} />
+            {/* Session-5 (HEART-COLOR-1/2): measured live — the reference
+                card heart is MUTED inactive (text-muted-foreground,
+                rgb(111,111,123), with transition-colors) and RED active
+                (fill-destructive text-destructive, rgb(239,67,67)); the
+                button itself carries no color class. tailwind-merge drops
+                text-muted-foreground when text-destructive lands, matching
+                the reference's active class list exactly. */}
+            <Heart
+              className={cn(
+                "h-4 w-4 transition-colors text-muted-foreground",
+                inWishlist && "fill-destructive text-destructive",
+              )}
+            />
           </button>
           <div className="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
             <button

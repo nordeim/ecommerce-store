@@ -168,4 +168,50 @@ test.describe("storefront computed-style parity", () => {
     const duration = await dots.first().evaluate((el) => getComputedStyle(el).transitionDuration);
     expect(duration).toBe("0.3s");
   });
+
+  test("home section dividers frame the product sections (session-5)", async ({ page }) => {
+    // Measured live 2026-10-07 + present in the session-0 recon HTML: the
+    // reference home renders exactly TWO hairline dividers —
+    // `shrink-0 bg-border h-[1px] w-full max-w-7xl mx-auto` — after the
+    // feature bar (before Trending Now) and between New Arrivals and On
+    // Sale. Spacing comes from the py-12/py-16 section paddings; the
+    // hairline itself has no vertical margin.
+    await page.goto("/");
+    const wrapper = page.locator("main > div").first();
+    const classes = await wrapper.evaluate((el) =>
+      Array.from(el.children).map((c) => c.className.toString()),
+    );
+    expect(classes).toHaveLength(8); // hero, features, |, trending, categories, new, |, on-sale
+    const dividerClass = "shrink-0 bg-border h-[1px] w-full max-w-7xl mx-auto";
+    expect(classes.filter((c) => c === dividerClass)).toHaveLength(2);
+    expect(classes[2]).toBe(dividerClass); // after hero + features
+    expect(classes[6]).toBe(dividerClass); // before On Sale
+    // Geometry: 1px tall hairline (child #3 = the first divider; the class
+    // string can't be turned into a CSS selector — h-[1px] needs escaping).
+    const divider = wrapper.locator(":scope > *").nth(2);
+    await expect(divider).toHaveCSS("height", "1px");
+  });
+
+  test("PDP action-row heart is the wide px-8 variant (session-5)", async ({ page }) => {
+    // Measured live: the buy-panel wishlist heart is h-10 px-8 rounded-xl
+    // (82×40; the clone's px-4 rendered 50px and let the flex-1 ATC absorb
+    // the 32px — reference ATC 340px vs clone 372px at desktop). The ATC +
+    // heart svgs carry h-5 w-5 in the reference DOM (both sites render them
+    // at 16px via the Button base [&_svg]:size-4 — class-level parity).
+    // Mobile note: px-8 exactly reproduces the reference's iPhone-14 action
+    // row, whose 82px heart is clipped ~35px past the viewport (its
+    // scrollWidth is 425 on a 390px screen).
+    await page.goto("/product/wireless-headphones");
+    // Scope to the buy panel's action row — the related-products cards below
+    // carry their own wishlist hearts and Add-to-Cart buttons.
+    const actionRow = page.locator("main .flex.items-center.gap-4.mb-4").first();
+    const heart = actionRow.getByRole("button", { name: /to wishlist/ });
+    await expect(heart).toHaveClass(/(^|\s)px-8(\s|$)/);
+    await expect(heart).not.toHaveClass(/(^|\s)px-4(\s|$)/);
+    const width = await heart.evaluate((el) => el.getBoundingClientRect().width);
+    expect(Math.round(width)).toBe(82);
+    await expect(heart.locator("svg")).toHaveClass(/h-5 w-5/);
+    const atc = actionRow.getByRole("button", { name: "Add to Cart" });
+    await expect(atc.locator("svg")).toHaveClass(/h-5 w-5/);
+  });
 });

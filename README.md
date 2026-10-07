@@ -24,7 +24,7 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 | 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params; removable active-filter chips (category + search — clicking one clears it); reference-exact empty state; sort semantics pinned to the reference (Featured = array order, Top Rated = stable rating-desc, Newest = reverse array order) |
 | 📦 **Product pages** | Badges, ratings, discount math, feature chips, quantity stepper, Description/Reviews/Shipping tabs, related products (ALL same-category items excluding self — reference rule) |
 | 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with transactional delta steppers (rapid clicks each land exactly once), line totals, and server-re-derived totals ($9.99 flat shipping under $100 — reference parity). Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
-| ❤️ **Persistent wishlist** | Same guest→user identity pattern; hearts everywhere, dedicated page |
+| ❤️ **Persistent wishlist** | Same guest→user identity pattern; hearts everywhere (reference color contract: muted inactive, red active), dedicated page — a real superset over the reference's cosmetic wishlist |
 | 💳 **3-step checkout** | Shipping → Payment (card/PayPal) → Review; server-validated, transactional order placement, confirmation page with the order number; reference-parity "No items in cart" empty state |
 | 👤 **Account dashboard** | Profile editing (User-icon avatar, reference anatomy), real order history with status badges, address book CRUD with highlighted default card, Change Password + Notifications sections, logout |
 | 🛠️ **Admin console** | Role-gated `/admin`: revenue/orders/products/customers stats, order status transitions, stock + visibility management |
@@ -32,7 +32,7 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 | 🔔 **Action feedback** | Reference-exact toast subsystem — cart adds and wishlist adds fire a dark bottom-right "«Product» added to cart!" toast (accent check icon, 3 s lifetime, stacks); wishlist remove stays silent |
 | 📱 **Mobile navigation** | Left-sliding Radix Sheet (w-72) pinned by a dedicated E2E spec (the Tailwind v4 trap-log surface) |
 | 🧭 **Reference-exact edge states** | Chrome-less platform 404 (v3 slate palette, quoted path) and in-chrome "Product not found" block — both E2E-pinned |
-| 🧪 **170 automated tests** | 66 Vitest unit + 104 Playwright E2E (incl. the authenticated setup), including computed-style + catalog-order + auth-contract + money/toast parity gates measured against the live reference |
+| 🧪 **173 automated tests** | 66 Vitest unit + 107 Playwright E2E (incl. the authenticated setup), including computed-style + catalog-order + auth-contract + money/toast + heart-color parity gates measured against the live reference |
 | 🌐 **SEO & ops** | Per-page metadata, `sitemap.xml`, `robots.txt`, `/api/health` probe |
 
 ## Architecture

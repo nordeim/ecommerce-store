@@ -104,6 +104,12 @@ export default async function HomePage() {
     <div>
       <HeroCarousel slides={HERO_SLIDES} />
       <FeatureBar />
+      {/* Session-5 (HOME-DIVIDER-1): the reference frames the product
+          sections with hairline dividers — `shrink-0 bg-border h-[1px]
+          w-full max-w-7xl mx-auto` — after the feature bar and between New
+          Arrivals and On Sale (measured live + present in the session-0
+          recon HTML). Spacing comes from the py-12/py-16 paddings. */}
+      <div className="shrink-0 bg-border h-[1px] w-full max-w-7xl mx-auto" />
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
         <SectionHeader title="Trending Now" href="/shop" />
@@ -134,6 +140,8 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      <div className="shrink-0 bg-border h-[1px] w-full max-w-7xl mx-auto" />
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
         <SectionHeader title="On Sale" href="/shop" />
