@@ -19,6 +19,7 @@
 | 1.5 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-5 remediation: buy-panel/home parity round (ADR-012 — StoreProvider server-truth re-sync fixing the stale post-order cart badge; wishlist heart color contract: red `fill-destructive` active + muted card hearts + the 82px px-8 PDP heart incl. the reference's mobile clipped-heart geometry; home section hairline dividers), reference quirk register (cosmetic wishlist, base44 Google OAuth), 173-test gate — see docs/remediation-plan-session5.md |
 | 1.6 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-6 remediation: superset correctness round (ADR-013 — server-side stock enforcement: clamped cart mutations + in-transaction overselling rejection + atomic placement decrement; ADR-014 — redirect-after-login with `validateRedirectPath` open-redirect hardening; `/login` becomes dynamic), first admin-console E2E coverage + guest-checkout E2E, dead-code removal, 188-test gate — see docs/remediation-plan-session6.md |
 | 1.7 | 2026-10-08 | Review agent (Super Z) | [REM] | Session-7 remediation: operational-completeness round (ADR-015 — admin order-detail view rendering the OrderEvent timeline + dedicated admin E2E; fresh-clone build reproducibility — `public/` committed + hardened build script; per-page admin redirect targets fixing REDIRECT-2; unknown-slug PDP titles + CDN favicon parity; nested-`<main>` landmark fix; six unused dependencies pruned; e2e-reset run-to-run order isolation), 194-test gate — see docs/remediation-plan-session7.md |
+| 1.8 | 2026-10-08 | Review agent (Super Z) | [REM] | Session-8 remediation: computed-geometry parity round (ADR-016 — Tailwind v4 trap 8: `space-y-*` margins are inert on inline `<label>` first children, fixed surgically with `mt-2` input wrappers; account tab/label/button geometry; the PDP's flat floor() star row + gap-2/mb-8 breadcrumb + reference feature glyphs; humanized-path unknown-route titles via the `[...notFound]` catch-all; lowercase typeahead categories), 210-test gate — see docs/remediation-plan-session8.md |
 
 ## Table of Contents
 
@@ -177,6 +178,13 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Rationale:** An audit trail that exists only in the DB is operational theater — the admin who changes a status needs to see the history on a surface, and the round-6 stock work made the console's numbers meaningful, so the console's coverage had to catch up. A gate that fails on a fresh clone defeats the repo's own documented workflow (clone → install → `db:setup` → build → test). The redirect and title fixes follow the standing rule: parity surfaces are measured, not guessed — and both were measured live this round.
 - **Consequences:** (+) The admin console is now a complete operational surface (stats → list → detail → timeline) with E2E at every seam; fresh clones build green; E2E runs are deterministic run-over-run (proven: 118/118 twice consecutively); the browser tab carries the Lumina icon. (−) One more dynamic admin route (22 total); the e2e-reset's canonical-order list must be maintained if the seed's demo-order set ever changes (same contract as dev-cleanup's `CANONICAL_ORDERS`); `/favicon.ico` deliberately stays 404 (the reference's is a platform 302 — the `<link rel=icon>` is what browsers honor).
 - **Alternatives Rejected:** a timeline section on the orders LIST page (crowds the row card; the detail page has room for items + address too); a separate mutation seam on the detail page (duplicates the list row's Select for zero user value); shipping a favicon binary (breaks the remote-CDN parity pattern; the repo owns no icon asset); guarding the build's `cp` with `|| true` (masks real copy failures — `mkdir -p` is deterministic).
+
+**ADR-016: Computed-geometry parity — the v4 `space-y` inline trap and the form-field measuring round**
+- **Context:** The round-8 live A/B audit (paired agent-browser sessions + 15-route pixel diffs) surfaced a NEW Tailwind v4 engine trap the release notes don't call out: v4 emits `:where(.space-y-N > :not(:last-child)) { margin-block-end }` — the margin lands on the NON-LAST child and is INERT when that child is inline (a bare shadcn `<label>`), while v3 emitted `margin-top` on FOLLOWING block siblings (always effective). The auth forms (login 1 field, register 3, forgot-password 1) had silently lost 8px per field — register's card measured 490px vs the reference's 514px. The same engine rule wore two more faces: the account Tabs (`space-y-6` + TabsContent `mt-2` stack to 32px vs v3's collapsed 24px — v3's higher-specificity selector REPLACED the panel's own margin instead of stacking) and the account Save button (inside a `gap-4` grid, an extra `mt-4` doubled the reference's 16px to 32px). Independent findings in the same sweep: the PDP star row used a track+overlay structure with `gap-0.5` and round-up semantics (the reference renders a flat 5-glyph `gap-1` row with floor() — 4 amber + 1 gray for 4.8, no half-stars); the PDP breadcrumb used `gap-1.5 mb-6 flex-wrap` (reference: `gap-2 mb-8` — the 8px mb delta cascaded the ENTIRE PDP); feature bar + PDP feature row shipped `shield-check`/`refresh-cw` (reference glyphs: `shield`/`rotate-ccw`); unknown routes titled "Lumina" (the reference's SPA titles from the LAST letter-bearing path segment, humanized — decoded across 12 live probes); typeahead suggestion categories rendered capitalized (reference: lowercase).
+- **Decision:** (1) Surgical `mt-2` on the five auth input-wrapper `div.relative`s — keeping `space-y-2` on the wrappers (DOM parity) while restoring the v3 computed geometry (input wrapper `margin-top: 8px`, 11px visual label gap). A global CSS override of `space-y-*` semantics was evaluated and REJECTED: replicating v3 exactly requires layer/specificity engineering whose blast radius includes the `flex flex-col space-y-2` SheetHeader (flex items don't collapse margins — a naive override doubles that gap) and any `mb-*`-carrying non-last child (trap-5 territory). (2) The account Tabs root drops `space-y-6` — its TabsContent base `mt-6` alone supplies the reference's 24px gap (the PDP tabs already work this way); the profile form converts to the in-repo inline-label pattern (plain `Label` + `Input mt-1.5`, matching the reference's measured 18px line box + 6px input margin); the Save button drops `mt-4` (grid gap-4 supplies the 16px). (3) `star-rating.tsx` rewritten to the flat floor() form (its only callsite is the PDP — cards use the pinned single-star+number form). (4) Breadcrumb → `gap-2 mb-8`, `flex-wrap` dropped. (5) Lucide swaps: `ShieldCheck→Shield`, `RefreshCw→RotateCcw` in `category-card.tsx` + the PDP feature row. (6) New root catch-all `src/app/[...notFound]/page.tsx` + shared `Platform404` component + `notFoundPageTitle()` in `src/lib/format.ts` (the decoded title rule; `humanizeSlug` extended to `[-_]` splitting — measured live: `/FOO_BAR` titles "FOO BAR | Lumina"); no-letter paths render `title: { absolute: "Lumina" }` to bypass the template. (7) Typeahead categories lowercase. Every fix is E2E/unit-pinned at the same seam.
+- **Rationale:** Form-field geometry is a parity surface like any other — the reference is the ground truth and it was MEASURED (label rects, computed margins, card heights, on both sites). The trap log exists precisely so engine variance gets a name, a mechanism, and a fix pattern; trap 8 had gone undetected because nothing pinned field-level spacing (the E2E suite pinned anatomy, not gaps). The surgical fix follows Appendix-B rule 9 (no speculative scaffolding): five one-line `mt-2` additions with zero blast radius beat a global override with three known edge cases.
+- **Consequences:** (+) Auth/account/PDP surfaces sit at computed parity (pixel diffs: register 2.89%→0.17%, PDP 8.71%→0.48%, account 31.7%→0.23% after also fixing the button spacing); unknown routes now title themselves like the reference's SPA; the trap log documents the mechanism for future surfaces; 210-test gate (82 unit + 128 E2E, run twice consecutively). (−) The auth wrappers' class strings now carry `mt-2` the reference's DOM doesn't (computed parity chosen over class-string parity — invisible, and the reference's own `mt-2` on its TabsContent is dead code overridden by its space-y rule); the account Tabs root no longer carries `space-y-6` (same trade); trap 8 means reviewers must eyeball any NEW `space-y-*` wrapper whose first child is inline.
+- **Alternatives Rejected:** global `@utility`/CSS override of `space-y-*` (blast radius: flex SheetHeader double-gaps, avatar `mb-6` zeroing, margin-collapse asymmetries — all documented in the remediation plan); block-ifying the labels (`mb-2 block` — changes the 18px inline line box to 14px, drifting the label height itself); catch-all via `notFound()` (Next's boundary carries no path context — the title rule needs the segments).
 
 ---
 
@@ -437,17 +445,17 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | Unit — rate limit | 1 | 3 | `src/lib/rate-limit.test.ts` | Vitest |
 | Unit — db-path contract | 1 | 15 | `tests/db-path.test.ts` | Vitest |
 | Unit — cart delta-quantity + stock clamp | 1 | 10 | `src/lib/cart-quantity.test.ts` | Vitest |
-| Unit — slug/code format | 1 | 5 | `src/lib/format.test.ts` | Vitest |
+| Unit — slug/code/path-title format | 1 | 11 | `src/lib/format.test.ts` | Vitest |
 | Unit — verification codes | 1 | 4 | `src/lib/verification.test.ts` | Vitest |
-| E2E — smoke | 1 | 12 | `tests/e2e/smoke.spec.ts` | Playwright |
-| E2E — computed-style parity | 1 | 16 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
+| E2E — smoke | 1 | 13 | `tests/e2e/smoke.spec.ts` | Playwright |
+| E2E — computed-style parity | 1 | 20 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
 | E2E — catalog-order parity | 1 | 10 | `tests/e2e/catalog-parity.spec.ts` | Playwright |
 | E2E — cart | 1 | 10 | `tests/e2e/cart.spec.ts` | Playwright |
 | E2E — checkout | 1 | 5 | `tests/e2e/checkout.spec.ts` | Playwright |
-| E2E — account | 1 | 11 | `tests/e2e/account.spec.ts` | Playwright |
-| E2E — auth | 1 | 17 | `tests/e2e/auth.spec.ts` | Playwright |
+| E2E — account | 1 | 14 | `tests/e2e/account.spec.ts` | Playwright |
+| E2E — auth | 1 | 18 | `tests/e2e/auth.spec.ts` | Playwright |
 | E2E — wishlist | 1 | 6 | `tests/e2e/wishlist.spec.ts` | Playwright |
-| E2E — search | 1 | 10 | `tests/e2e/search.spec.ts` | Playwright |
+| E2E — search | 1 | 11 | `tests/e2e/search.spec.ts` | Playwright |
 | E2E — mobile navigation | 1 | 7 | `tests/e2e/mobile-navigation.spec.ts` | Playwright |
 | E2E — guest cart | 1 | 2 | `tests/e2e/guest-cart.spec.ts` | Playwright |
 | E2E — guest checkout | 1 | 1 | `tests/e2e/guest-checkout.spec.ts` | Playwright |
@@ -455,7 +463,7 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | E2E — admin console | 1 | 5 | `tests/e2e/admin.spec.ts` | Playwright |
 | E2E — verify email | 1 | 3 | `tests/e2e/verify-email.spec.ts` | Playwright |
 | E2E — authenticated setup | 1 | 1 | `tests/e2e/auth.setup.ts` | Playwright |
-| **Total** | **24** | **194** | | |
+| **Total** | **24** | **210** | | |
 
 ### 8.2 Test Patterns
 
@@ -475,9 +483,9 @@ Numeric coverage gates are not configured; instead, every domain seam (money, va
 
 1. `bun run lint` — 0 errors, 0 warnings
 2. `bun run typecheck` — 0 errors
-3. `bun run test` — 76/76
+3. `bun run test` — 82/82
 4. `bun run build` — compiles (validates RSC boundaries + redirects)
-5. `bun run test:e2e` — 118/118 (after a fresh build; 117 spec tests + the setup login)
+5. `bun run test:e2e` — 128/128 (after a fresh build; 127 spec tests + the setup login)
 6. No secrets/DB files/artifacts in `git status`
 
 ---
@@ -556,6 +564,9 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 | Resolved | Admin console E2E coverage was stock-form-only | Regressions in admin mutations beyond stock would not fail CI | Session-7 (ADR-015): dedicated `admin.spec.ts` (gating, stats, order-detail, status combobox, visibility toggle) |
 | Resolved | Fresh-clone `bun run build` exited 1 (`public/` never committed) | The repo's own gate was unrunnable from a bare clone | Session-7 (BUILD-1): `public/.gitkeep` committed + `mkdir -p public` in the build script |
 | Resolved | Sandbox env shadowing (parent `.env`/shell inject overriding `DATABASE_URL`) diverted the dev DB outside the repo | Stale rows survived reseeds; repo-root `db/` stayed empty | Documented in AGENTS.md; sandbox paths hard-linked onto the repo DB; repo contract test-pinned |
+| Resolved | v4 `space-y-*` margins inert on inline `<label>` first children (trap 8) — auth forms lost 8px per field; account Tabs stacked 24+8px | Form-field geometry drifted from the reference on 4 surfaces | Session-8 (ADR-016): surgical `mt-2` input wrappers; account Tabs without `space-y-*` |
+| Resolved | PDP star rating used track/overlay + round-up (5 amber for 4.8) and `gap-0.5`; breadcrumb `gap-1.5 mb-6` cascaded the whole PDP 8px low | Visible drift on every PDP | Session-8 (ADR-016): flat floor() 5-glyph `gap-1` row; `gap-2 mb-8` breadcrumb |
+| Resolved | Feature bar + PDP feature row icons (`shield-check`/`refresh-cw`) and unknown-route titles ("Lumina") diverged | Glyph + title parity gaps | Session-8 (ADR-016): reference glyphs (`shield`/`rotate-ccw`); `[...notFound]` catch-all with the decoded humanized-path title rule |
 
 ## 12. Key Files Reference
 

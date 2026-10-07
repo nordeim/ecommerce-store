@@ -130,7 +130,10 @@ export function SearchBar() {
                 <img src={s.image} alt="" className="h-10 w-10 rounded-md object-cover bg-secondary/30" />
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-medium truncate">{s.name}</span>
-                  <span className="block text-xs text-muted-foreground capitalize">{s.categoryName}</span>
+                  {/* Reference renders the suggestion's category lowercase
+                      ("electronics") even though its badges elsewhere render
+                      capitalized — measured live (session-8, SEARCH-CASE-1). */}
+                  <span className="block text-xs text-muted-foreground">{s.categoryName.toLowerCase()}</span>
                 </span>
                 <span className="text-sm font-semibold">${(s.price / 100).toFixed(2)}</span>
               </button>

@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.7.0
+version: 1.8.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -206,6 +206,17 @@ strings, DIFFERENT engine → seven measured differences, all pinned in
 7. **Slate palette pinned to v3 hexes** (`--color-slate-50…800`) — v4's
    oklch palette drifts ~3/255 per channel on some steps (slate-300); the
    platform 404 is built on v3 slate and must stay byte-identical.
+8. **`space-y-*` never carries the spacing of an inline first child**
+   (session-8, SPACE-Y-INLINE-1). v4 emits
+   `:where(.space-y-N > :not(:last-child)) { margin-block-end }` — the
+   margin lands on the NON-LAST child and is INERT when that child is
+   inline (a bare shadcn `<label>`); v3 emitted `margin-top` on
+   FOLLOWING block siblings (always effective). Fix pattern: keep
+   `space-y-2` on the wrapper and give the block input wrapper `mt-2`.
+   Same engine, other faces: a Tabs root must NOT carry `space-y-*`
+   (the TabsContent base `mt-6` supplies the 24px reference gap), and a
+   button inside a `gap-4` grid must NOT add `mt-4` (the gap is already
+   the reference's 16px).
 
 ### 4.3 Typography & motion
 
@@ -459,6 +470,7 @@ There are no custom hooks; one context covers all state:
 | 27 | Admin spec passes on run 1, fails on run 2 ("ORD-2026-001" missing from Recent Orders; duplicate timeline notes trip strict mode) | Spec-placed orders ACCUMULATE in the persisted `db/e2e.db`; new orders (placedAt=now) push demo fixtures (placedAt=Mar 2026) out of take:5 lists while status_changed events pile onto demo timelines | `e2e-reset.ts` deletes non-canonical orders + demo-order `status_changed` events every run (session-7); assert canonical fixtures only after a reset |
 | 28 | `locator("main")` strict-mode violation on admin pages | Every admin page nested its own `<main>` inside the storefront layout's `<main>` (two landmarks — invalid HTML) | Admin pages wrap in `<div className="flex-1">`; ONE `<main>` per page, owned by the layout (session-7 MAIN-NEST-1) |
 | 29 | Dev-mode live-verification login never navigates (no POST in dev.log) | Writing/editing scripts INSIDE the repo while `next dev` runs triggers Fast Refresh full reloads mid-fill — React's DOM adoption wipes the form values (and `networkidle` never fires under the HMR websocket) | Settle the server after repo-file edits; wait for the input + a beat, retry the submit once; drive Server-Action flows with Playwright (direct), not through the sandbox proxy |
+| 30 | Auth/register cards render 8px SHORT per field (register card 490px vs the reference's 514px); account panel 32px below the tablist; PDP everything 8px low | Tailwind v4 trap 8: `space-y-*` emits `margin-block-end` on NON-LAST children — inert on inline `<label>` first children (v3 landed `margin-top` on following blocks); same engine stacks Tabs `space-y-6` + panel `mt-2`; breadcrumb `mb-6` ≠ `mb-8` | Give the block input wrapper `mt-2` (keep `space-y-2` on the wrapper — computed parity, DOM parity); Tabs roots carry NO `space-y-*` (base `mt-6` supplies 24px); measure label rects + computed margins on BOTH sites before "fixing" spacing (session-8, ADR-016) |
 
 ## 10. Debugging Guide
 
@@ -835,6 +847,7 @@ Full records with context/rationale/consequences in
 | 013 | Server-side stock enforcement (clamp in cart, reject + decrement at placement) |
 | 014 | Redirect-after-login with validated same-origin targets (per-page paths on admin sub-pages) |
 | 015 | Admin order-detail view rendering the OrderEvent timeline + fresh-clone build reproducibility + admin E2E expansion (session-7 operational set) |
+| 016 | Computed-geometry parity round — v4 `space-y` inline-margin trap (auth field spacing, account tab/label/button geometry), flat floor() PDP stars, gap-2/mb-8 breadcrumb, reference feature glyphs, humanized-path unknown-route titles |
 
 ## Appendix B: The Meticulous Workflow
 
@@ -861,9 +874,9 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 
 | Path | What |
 |---|---|
-| `src/app/globals.css` | ALL design tokens + the 7 trap-log pins |
+| `src/app/globals.css` | ALL design tokens + the 8 trap-log pins |
 | `src/app/(storefront)/layout.tsx` | chrome + StoreProvider hydration |
-| `src/app/not-found.tsx` | chrome-less platform 404 (slate, quoted path) |
+| `src/app/not-found.tsx` + `src/app/[...notFound]/page.tsx` | chrome-less platform 404 (slate, quoted path) + the catch-all that titles unknown routes from the humanized path |
 | `src/components/store/store-provider.tsx` | the client state seam |
 | `src/lib/db-path.ts` | schema-relative SQLite URL contract (test-pinned) |
 | `src/lib/actions/*.ts` | every mutation (ActionResult + Zod) |
@@ -871,4 +884,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session4.md` | the post-push audits this skill distills (latest: session-4) |
+| `docs/remediation-plan-session1.md` … `session8.md` | the post-push audits this skill distills (latest: session-8) |

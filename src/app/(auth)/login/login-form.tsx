@@ -88,7 +88,11 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <div className="relative">
+            {/* mt-2 restores the v3 space-y geometry (session-8, trap 8):
+                v4's space-y-* lands margin-block-end on the inline <label>
+                (inert), so the block input wrapper must carry the margin —
+                computed parity with the reference's 11px label gap. */}
+            <div className="relative mt-2">
               <Mail
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                 aria-hidden="true"

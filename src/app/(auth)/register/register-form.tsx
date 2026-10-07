@@ -96,7 +96,8 @@ export function RegisterForm() {
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <div className="relative">
+            {/* mt-2: trap-8 v3 space-y geometry restore (session-8). */}
+            <div className="relative mt-2">
               <Mail
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                 aria-hidden="true"
@@ -116,7 +117,8 @@ export function RegisterForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <div className="relative">
+            {/* mt-2: trap-8 v3 space-y geometry restore (session-8). */}
+            <div className="relative mt-2">
               <Lock
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                 aria-hidden="true"
@@ -134,7 +136,8 @@ export function RegisterForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <div className="relative">
+            {/* mt-2: trap-8 v3 space-y geometry restore (session-8). */}
+            <div className="relative mt-2">
               <Lock
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                 aria-hidden="true"

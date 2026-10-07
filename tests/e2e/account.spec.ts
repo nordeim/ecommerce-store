@@ -35,6 +35,69 @@ test.describe("account", () => {
     expect(bg).toMatch(/rgba\(230, 107, 26, 0\.1\)|lab\([\d.]+ [\d.]+ [\d.]+ \/ 0\.1\)/);
   });
 
+  test("tab panel spacing matches the reference 24px (session-8, trap-5 variant)", async ({ page }) => {
+    // SPACE-TABS-1: v4's space-y-6 margin-block-end on the TabsList STACKS
+    // with the panel's own mt-2 (adjacent flex-row siblings don't collapse
+    // here — the Tabs root is a plain block, but the v3 engine's
+    // higher-specificity margin-top REPLACED mt-2 instead of adding to it).
+    // Reference gap: 24px; pre-fix clone: 32px. Measured live 2026-10-08.
+    const gap = await page.evaluate(() => {
+      const list = document.querySelector('[role=tablist]');
+      const panel = document.querySelector('[role=tabpanel]');
+      if (!list || !panel) throw new Error("tabs not found");
+      return (
+        panel.getBoundingClientRect().y -
+        (list.getBoundingClientRect().y + list.getBoundingClientRect().height)
+      );
+    });
+    expect(Math.abs(gap - 24)).toBeLessThanOrEqual(1);
+  });
+
+  test("profile form fields use the reference inline-label geometry (session-8)", async ({ page }) => {
+    // LABEL-BLOCK-1: the reference renders inline <label> (18px natural
+    // line box) + input with margin-top 6px (mt-1.5) in an unclassed div;
+    // the clone had block labels (14px) with mb-2. Computed parity pins:
+    // label display inline, input margin-top 6px (measured live on both
+    // sites 2026-10-08; the clone's own Change-Password form already used
+    // this pattern — the profile form just wasn't converted).
+    const firstLabel = page.locator("main label").filter({ hasText: /^First Name$/ });
+    await expect(firstLabel).toHaveCSS("display", "inline");
+    await expect(page.locator("#acc-first")).toHaveCSS("margin-top", "6px");
+    await expect(page.locator("#acc-email")).toHaveCSS("margin-top", "6px");
+    await expect(page.locator("#acc-phone")).toHaveCSS("margin-top", "6px");
+    // The label→input visual gap on the reference: 9px (24px line box
+    // strut + 6px margin over the 18px inline box).
+    const gap = await page.evaluate(() => {
+      const label = [...document.querySelectorAll("label")].find(
+        (l) => l.textContent?.trim() === "First Name",
+      );
+      const input = document.querySelector("#acc-first");
+      if (!label || !input) throw new Error("profile field not found");
+      const lr = label.getBoundingClientRect();
+      const ir = input.getBoundingClientRect();
+      return ir.y - (lr.y + lr.height);
+    });
+    expect(Math.abs(gap - 9)).toBeLessThanOrEqual(1);
+  });
+
+  test("profile Save button sits 16px below the fields (session-8)", async ({ page }) => {
+    // ACCOUNT-BTN-1: the button is a grid child — the grid's gap-4 (16px)
+    // alone must supply the field→button spacing (the reference renders
+    // the button as a plain sibling with mt-4 = 16px). The clone's extra
+    // mt-4 stacked with the gap to 32px and pushed the card + footer 16px
+    // low. Measured on both sites 2026-10-08.
+    const spacing = await page.evaluate(() => {
+      const phone = document.querySelector("#acc-phone");
+      const button = [...document.querySelectorAll("button")].find((b) =>
+        /Save Changes/.test(b.textContent ?? ""),
+      );
+      if (!phone || !button) throw new Error("profile form not found");
+      const row = phone.parentElement as HTMLElement;
+      return button.getBoundingClientRect().y - row.getBoundingClientRect().bottom;
+    });
+    expect(Math.abs(spacing - 16)).toBeLessThanOrEqual(1);
+  });
+
   test("profile edits persist", async ({ page }) => {
     await page.getByRole("main").getByLabel("Phone").fill("+1 (555) 999-0000");
     await page.getByRole("button", { name: "Save Changes" }).click();

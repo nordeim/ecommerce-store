@@ -143,6 +143,39 @@ test.describe("auth", () => {
     await expect(page.getByRole("banner")).toBeVisible();
     await expect(page.getByRole("banner").getByRole("link", { name: "Log in" })).toBeVisible();
   });
+
+  test("auth field spacing matches the reference 11px label gaps (session-8, trap 8)", async ({ page }) => {
+    // SPACE-Y-INLINE-1: Tailwind v4's space-y-* emits margin-block-end on
+    // NON-LAST children — inert when that child is the inline <label>, so
+    // the clone collapsed the label→input gap to the 3px strut. The
+    // reference (v3) landed margin-top on the block input wrapper: 11px
+    // visual gap (3px strut + 8px margin), measured live 2026-10-08 on
+    // every auth field. The fix restores it per-seam (mt-2 on the input
+    // wrappers); this pins the computed geometry.
+    const labelToInputGap = (labelText: string) =>
+      page.evaluate((txt) => {
+        const label = [...document.querySelectorAll("label")].find(
+          (l) => l.textContent?.trim() === txt,
+        );
+        if (!label) throw new Error(`label "${txt}" not found`);
+        const input = label.parentElement?.querySelector("input");
+        if (!input) throw new Error(`input for "${txt}" not found`);
+        const lr = label.getBoundingClientRect();
+        const ir = input.getBoundingClientRect();
+        return ir.y - (lr.y + lr.height);
+      }, labelText);
+
+    await page.goto("/login");
+    expect(Math.abs((await labelToInputGap("Email")) - 11)).toBeLessThanOrEqual(1);
+
+    await page.goto("/register");
+    for (const field of ["Email", "Password", "Confirm Password"]) {
+      expect(Math.abs((await labelToInputGap(field)) - 11)).toBeLessThanOrEqual(1);
+    }
+
+    await page.goto("/forgot-password");
+    expect(Math.abs((await labelToInputGap("Email address")) - 11)).toBeLessThanOrEqual(1);
+  });
 });
 
 test.describe("forgot password (session-3 parity)", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { generateVerificationCode, humanizeSlug } from "./format";
+import { generateVerificationCode, humanizeSlug, notFoundPageTitle } from "./format";
 
 // humanizeSlug (session-4, TITLE-2): the reference's PDP document.title is
 // the slug with dashes title-cased ("wireless-headphones" -> "Wireless
@@ -29,6 +29,47 @@ describe("humanizeSlug", () => {
     expect(humanizeSlug("")).toBe("");
     expect(humanizeSlug("single")).toBe("Single");
     expect(humanizeSlug("trailing-")).toBe("Trailing");
+  });
+
+  // Session-8 (TITLE-404-1): the reference's SPA humanizes underscore
+  // separators the same as dashes and preserves case otherwise (measured
+  // live: /FOO_BAR titles "FOO BAR | Lumina"; /foo123 titles "Foo123").
+  it("splits underscores like dashes and preserves non-leading case (session-8)", () => {
+    expect(humanizeSlug("FOO_BAR")).toBe("FOO BAR");
+    expect(humanizeSlug("some_page")).toBe("Some Page");
+    expect(humanizeSlug("foo123")).toBe("Foo123");
+  });
+
+  it("leaves digit-leading words untouched (session-8)", () => {
+    expect(humanizeSlug("123abc")).toBe("123abc");
+    expect(humanizeSlug("42")).toBe("42");
+  });
+});
+
+// notFoundPageTitle (session-8, TITLE-404-1): the reference titles unknown
+// routes from the LAST path segment containing a letter, humanized; null
+// when no segment has letters (the title stays the plain "Lumina" default).
+// Rule decoded from 12 live probes on the reference, 2026-10-08.
+
+describe("notFoundPageTitle", () => {
+  it("humanizes the last letter-bearing segment", () => {
+    expect(notFoundPageTitle(["nonexistent-route-xyz"])).toBe("Nonexistent Route Xyz");
+    expect(notFoundPageTitle(["foo", "bar-baz"])).toBe("Bar Baz");
+    expect(notFoundPageTitle(["a", "b", "c", "d"])).toBe("D");
+  });
+
+  it("falls back to earlier segments when later ones are numeric", () => {
+    expect(notFoundPageTitle(["products", "42"])).toBe("Products");
+    expect(notFoundPageTitle(["foo123", "456"])).toBe("Foo123");
+  });
+
+  it("returns null when no segment contains a letter", () => {
+    expect(notFoundPageTitle(["12345"])).toBeNull();
+    expect(notFoundPageTitle(["1", "23", "456"])).toBeNull();
+  });
+
+  it("handles empty input defensively", () => {
+    expect(notFoundPageTitle([])).toBeNull();
   });
 });
 

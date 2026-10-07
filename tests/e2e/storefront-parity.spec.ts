@@ -214,4 +214,73 @@ test.describe("storefront computed-style parity", () => {
     const atc = actionRow.getByRole("button", { name: "Add to Cart" });
     await expect(atc.locator("svg")).toHaveClass(/h-5 w-5/);
   });
+
+  test("PDP star rating is the reference's flat floor() row (session-8)", async ({ page }) => {
+    // STAR-RATE-1: the reference renders a FLAT row of exactly 5 direct
+    // Star svgs in `flex items-center gap-1` — floor(rating) carry
+    // fill-amber-400, the rest text-border (measured live on 4.8/4.5/4.6
+    // products: ALWAYS 4 amber + 1 gray; no half-stars, no rounding). The
+    // clone had a track+overlay structure with gap-0.5 that rounded 4.8 up
+    // to 5 amber stars.
+    await page.goto("/product/wireless-headphones");
+    const row = page.locator("main [aria-label^=\"Rated\"]");
+    await expect(row).toHaveCSS("column-gap", "4px"); // gap-1
+    // Flat structure: the row's DIRECT children are the 5 stars (no
+    // relative/overlay spans), and only 5 svgs exist under it.
+    await expect(row.locator("svg.lucide-star")).toHaveCount(5);
+    await expect(row.locator("span.relative")).toHaveCount(0);
+    // 4.8 -> 4 amber (floor), 1 muted — the reference's exact paint.
+    await expect(row.locator("svg.fill-amber-400")).toHaveCount(4);
+    await expect(row.locator("svg.text-border")).toHaveCount(1);
+  });
+
+  test("PDP breadcrumb geometry matches the reference (session-8)", async ({ page }) => {
+    // BREADCRUMB-1: reference nav = `flex items-center gap-2 text-sm
+    // text-muted-foreground mb-8` (8px column-gap, 32px bottom margin —
+    // the clone's gap-1.5/mb-6 offset the entire PDP 8px lower). Measured
+    // live 2026-10-08.
+    await page.goto("/product/wireless-headphones");
+    const nav = page.locator("main nav").first();
+    await expect(nav).toHaveCSS("column-gap", "8px"); // gap-2
+    await expect(nav).toHaveCSS("margin-bottom", "32px"); // mb-8
+    await expect(nav).not.toHaveClass(/flex-wrap/);
+    // The cascade proof: h1 top = breadcrumb top + 20 (nav h) + 32 (mb)
+    // + 24 (py-8 remnant) — pin the measured reference delta instead of
+    // absolute page coordinates.
+    const delta = await page.evaluate(() => {
+      const nav = document.querySelector("main nav");
+      const h1 = document.querySelector("main h1");
+      if (!nav || !h1) throw new Error("PDP structure not found");
+      return h1.getBoundingClientRect().y - nav.getBoundingClientRect().y;
+    });
+    expect(Math.abs(delta - 76)).toBeLessThanOrEqual(1); // 20 + 32 + 24
+  });
+
+  test("feature-bar icons are the reference glyphs (session-8, ICON-DRIFT-1)", async ({ page }) => {
+    // Measured live 2026-10-08: the reference feature bar (and PDP feature
+    // row) uses lucide shield (Secure Payment) and lucide rotate-ccw
+    // (30-Day Returns) — the clone shipped shield-check/refresh-cw.
+    // Scope: the feature grid (the 4 cards' shared parent).
+    await page.goto("/");
+    const heading = page.locator("h3").filter({ hasText: "30-Day Returns" }).first();
+    const grid = heading.locator("xpath=../../..");
+    await expect(grid.locator("svg.lucide-truck")).toHaveCount(1);
+    await expect(grid.locator("svg.lucide-shield")).toHaveCount(1);
+    await expect(grid.locator("svg.lucide-shield-check")).toHaveCount(0);
+    await expect(grid.locator("svg.lucide-rotate-ccw")).toHaveCount(1);
+    await expect(grid.locator("svg.lucide-refresh-cw")).toHaveCount(0);
+    await expect(grid.locator("svg.lucide-headphones")).toHaveCount(1);
+  });
+
+  test("PDP feature-row icons are the reference glyphs (session-8, ICON-DRIFT-1)", async ({ page }) => {
+    await page.goto("/product/wireless-headphones");
+    const iconRow = page.locator("main .grid.grid-cols-3").first();
+    await expect(iconRow).toContainText("Secure Payment");
+    await expect(iconRow).toContainText("30-Day Returns");
+    await expect(iconRow.locator("svg.lucide-truck")).toHaveCount(1);
+    await expect(iconRow.locator("svg.lucide-shield")).toHaveCount(1);
+    await expect(iconRow.locator("svg.lucide-shield-check")).toHaveCount(0);
+    await expect(iconRow.locator("svg.lucide-rotate-ccw")).toHaveCount(1);
+    await expect(iconRow.locator("svg.lucide-refresh-cw")).toHaveCount(0);
+  });
 });

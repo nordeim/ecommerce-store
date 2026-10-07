@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, ChevronRight, RefreshCw, ShieldCheck, Truck } from "lucide-react";
+import { Check, ChevronRight, RotateCcw, Shield, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,7 +90,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-muted-foreground mb-6 flex-wrap">
+      {/* Breadcrumb geometry (session-8, BREADCRUMB-1): the reference uses
+          gap-2 + mb-8 (measured live — the clone's gap-1.5/mb-6 offset the
+          entire PDP 8px). No flex-wrap: product names render single-line. */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
         <Link className="hover:text-foreground transition-colors" href="/">
           Home
         </Link>
@@ -153,11 +156,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <span>Free Shipping</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <ShieldCheck className="h-4 w-4" />
+              {/* Reference glyphs (session-8, ICON-DRIFT-1): shield (not
+                  shield-check) and rotate-ccw (not refresh-cw) — measured
+                  live on the reference PDP feature row. */}
+              <Shield className="h-4 w-4" />
               <span>Secure Payment</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <RefreshCw className="h-4 w-4" />
+              <RotateCcw className="h-4 w-4" />
               <span>30-Day Returns</span>
             </div>
           </div>

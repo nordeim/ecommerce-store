@@ -49,7 +49,8 @@ export function ForgotPasswordForm() {
             <form action={formAction} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email address</Label>
-                <div className="relative">
+                {/* mt-2: trap-8 v3 space-y geometry restore (session-8). */}
+                <div className="relative mt-2">
                   <Mail
                     className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                     aria-hidden="true"

@@ -85,6 +85,19 @@ from the injected location) — the repo contract itself is test-pinned in
   would lock out every new user). The screen + `verifyEmailAction` work
   regardless of the gate; E2E drives them via the seeded
   `unverified@example.com` fixture (code 123456, restored by e2e-reset).
+- **PDP visual contracts (session-8):** the star rating row is the
+  reference's FLAT form — exactly 5 direct `Star` svgs in
+  `flex items-center gap-1`, `floor(rating)` amber
+  (`fill-amber-400 text-amber-400`) + the rest `text-border`; NO rounding,
+  NO half-stars, NO track/overlay spans (4.8 renders 4 amber + 1 gray).
+  The breadcrumb is `flex items-center gap-2 text-sm
+  text-muted-foreground mb-8` (NO flex-wrap — the whole PDP's vertical
+  rhythm hangs off the 32px margin). The feature bar AND the PDP feature
+  row use lucide `shield` (Secure Payment) and `rotate-ccw` (30-Day
+  Returns) — NOT shield-check/refresh-cw (measured live; truck and
+  headphones were already right). Search-dropdown suggestion categories
+  render LOWERCASE ("electronics"), unlike the capitalized badges
+  elsewhere.
 - **PDP related products = ALL same-category products excluding self** in
   array (sortOrder) order — no cap, no cross-category fill (measured live:
   headphones → speaker + pad only). Shop active-filter chips render for
@@ -94,9 +107,17 @@ from the injected location) — the repo contract itself is test-pinned in
   NOT the product name — for EVERY slug, including unknown ones (session-7,
   TITLE-NF-1: the reference's SPA titles `/product/anything` as the
   humanized path; the in-chrome not-found BLOCK is unchanged). The h1 keeps
-  the full name. The Reviews tab's empty panel is `div.text-center.py-10`;
-  the Shipping tab is plain `p` elements with a literal `✓` prefix (NO
-  icons — only the Description tab's Key Features uses lucide checks).
+  the full name. **Unknown ROUTES (not just product slugs) follow the same
+  title rule (session-8, TITLE-404-1):** the `[...notFound]` catch-all
+  titles the page from the LAST path segment containing a letter, humanized
+  (`/foo/bar-baz` → "Bar Baz | Lumina", `/products/42` → "Products",
+  `/12345` → plain "Lumina" via `title.absolute`), rendering the identical
+  platform-404 UI — the shared component is
+  `src/components/store/platform-404.tsx` and the rule lives in
+  `notFoundPageTitle` (`src/lib/format.ts`, unit-pinned). The Reviews tab's
+  empty panel is `div.text-center.py-10`; the Shipping tab is plain `p`
+  elements with a literal `✓` prefix (NO icons — only the Description tab's
+  Key Features uses lucide checks).
 - **Cart mutations resolve the guest token from the cookie** (`src/lib/cart.ts`).
   The mutation seam (`addItem`/`changeQuantityBy`/`removeItem`) reads
   `cookies().get(CART_COOKIE)` and passes the token to `resolveCartRow` —
@@ -208,6 +229,7 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
 5. **Mobile nav stacks links with flex `gap-4`, never `space-y-*`** — a `space-y-*` panel with `mt-*` children renders different heights on v4 (v4's `:where()` drops specificity).
 6. Alpha utilities (`bg-background/80`, `border-border/50`) serialize as `lab(...)` in Chrome instead of v3's `rgba(...)` — same paint, different notation. The parity specs accept both.
 7. **The slate palette is pinned to v3 hexes** (`--color-slate-50…800` in `@theme inline`) — v4 redefines the palette in oklch and several steps (e.g. slate-300) drift ~3/255 per channel. The reference's platform 404 is built on v3 slate; the pin keeps it byte-identical.
+8. **`space-y-*` never carries the spacing of an inline first child (session-8, SPACE-Y-INLINE-1).** v4 emits `:where(.space-y-N > :not(:last-child)) { margin-block-end }` — margin lands on the NON-LAST child, which is INERT when that child is inline (a bare `<label>`); v3 emitted `margin-top` on FOLLOWING siblings (block-level — always effective). The auth forms lost 8px per `Label + input-wrapper` field. The fix pattern: keep `space-y-2` on the wrapper (DOM parity) and give the block input wrapper `mt-2` (computed parity — the reference's input wrapper measures `margin-top: 8px`). Same engine rule, second face (SPACE-TABS-1): a Tabs root with `space-y-6` + TabsContent `mt-2` renders 24+8=32px on v4 vs v3's 24px (v3's higher-specificity selector REPLACED the panel's own margin instead of stacking) — the account Tabs therefore carries NO `space-y-*`; its TabsContent base `mt-6` supplies the reference's 24px gap alone (margins against an `inline-flex` TabsList do not collapse). Third face (ACCOUNT-BTN-1): a button inside a `gap-4` grid already gets the 16px reference spacing — adding `mt-4` doubles it to 32px. `space-y-reverse` is used nowhere and unsupported by these pins.
 
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 

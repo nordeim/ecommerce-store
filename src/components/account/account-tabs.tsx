@@ -106,7 +106,13 @@ export function AccountTabs({
     state && !state.ok ? state.error.fieldErrors?.[field] : undefined;
 
   return (
-    <Tabs defaultValue="profile" className="space-y-6">
+    // NO space-y-* on the Tabs root (session-8, SPACE-TABS-1): v4's
+    // space-y-6 lands margin-block-end on the TabsList AND stacks with the
+    // TabsContent base mt-6 (margins don't collapse against an inline-flex
+    // sibling) — 24+24=48px. The reference renders a 24px gap via v3's
+    // margin-top-on-panel; the base mt-6 alone supplies the same 24px here
+    // (the PDP tabs work the same way).
+    <Tabs defaultValue="profile">
       <TabsList>
         <TabsTrigger value="profile">
           <UserIcon className="h-4 w-4" />
@@ -126,7 +132,7 @@ export function AccountTabs({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="profile" className="mt-2">
+      <TabsContent value="profile">
         <div className="border bg-card text-card-foreground shadow rounded-2xl">
           <div className="flex flex-col space-y-1.5 p-6">
             <div className="font-semibold leading-none tracking-tight">Personal Information</div>
@@ -145,29 +151,32 @@ export function AccountTabs({
             </div>
             <form action={profileAction} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label className="mb-2 block" htmlFor="acc-first">First Name</Label>
-                <Input id="acc-first" name="firstName" defaultValue={user.firstName ?? ""} required />
+                {/* Reference field geometry (session-8, LABEL-BLOCK-1): inline
+                    label + Input mt-1.5 — matches the reference's measured 18px
+                    inline label line-box and 6px input margin. */}
+                <Label htmlFor="acc-first">First Name</Label>
+                <Input id="acc-first" name="firstName" defaultValue={user.firstName ?? ""} required className="mt-1.5" />
                 {fieldError(profileState, "firstName") && (
                   <p className="text-xs text-destructive mt-1">{fieldError(profileState, "firstName")}</p>
                 )}
               </div>
               <div>
-                <Label className="mb-2 block" htmlFor="acc-last">Last Name</Label>
-                <Input id="acc-last" name="lastName" defaultValue={user.lastName ?? ""} required />
+                <Label htmlFor="acc-last">Last Name</Label>
+                <Input id="acc-last" name="lastName" defaultValue={user.lastName ?? ""} required className="mt-1.5" />
                 {fieldError(profileState, "lastName") && (
                   <p className="text-xs text-destructive mt-1">{fieldError(profileState, "lastName")}</p>
                 )}
               </div>
               <div>
-                <Label className="mb-2 block" htmlFor="acc-email">Email</Label>
-                <Input id="acc-email" name="email" type="email" defaultValue={user.email} required />
+                <Label htmlFor="acc-email">Email</Label>
+                <Input id="acc-email" name="email" type="email" defaultValue={user.email} required className="mt-1.5" />
                 {fieldError(profileState, "email") && (
                   <p className="text-xs text-destructive mt-1">{fieldError(profileState, "email")}</p>
                 )}
               </div>
               <div>
-                <Label className="mb-2 block" htmlFor="acc-phone">Phone</Label>
-                <Input id="acc-phone" name="phone" defaultValue={user.phone ?? ""} placeholder="+1 (555) 123-4567" />
+                <Label htmlFor="acc-phone">Phone</Label>
+                <Input id="acc-phone" name="phone" defaultValue={user.phone ?? ""} placeholder="+1 (555) 123-4567" className="mt-1.5" />
               </div>
               {profileState && !profileState.ok && !profileState.error.fieldErrors && (
                 <p role="alert" className="text-sm text-destructive col-span-full">
@@ -179,7 +188,11 @@ export function AccountTabs({
                   Profile updated.
                 </p>
               )}
-              <Button type="submit" className="rounded-xl mt-4 sm:col-span-2 sm:w-fit" disabled={profilePending}>
+              {/* No mt-4 (session-8): the button is a grid child, so the
+                  grid's gap-4 (16px) already supplies the reference's
+                  field→button spacing — adding mt-4 doubled it to 32px
+                  and pushed the card/footer 16px low. */}
+              <Button type="submit" className="rounded-xl sm:col-span-2 sm:w-fit" disabled={profilePending}>
                 {profilePending ? "Saving…" : "Save Changes"}
               </Button>
             </form>
@@ -187,7 +200,7 @@ export function AccountTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="orders" className="mt-2">
+      <TabsContent value="orders">
         <div className="border bg-card text-card-foreground shadow rounded-2xl">
           <div className="flex flex-col space-y-1.5 p-6">
             <div className="font-semibold leading-none tracking-tight">Order History</div>
@@ -229,7 +242,7 @@ export function AccountTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="addresses" className="mt-2">
+      <TabsContent value="addresses">
         <div className="border bg-card text-card-foreground shadow rounded-2xl">
           <div className="space-y-1.5 p-6 flex flex-row items-center justify-between">
             <div className="font-semibold leading-none tracking-tight">Saved Addresses</div>
@@ -370,7 +383,7 @@ export function AccountTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="settings" className="mt-2">
+      <TabsContent value="settings">
         <div className="flex flex-col gap-6">
           <div className="border bg-card text-card-foreground shadow rounded-2xl">
             <div className="flex flex-col space-y-1.5 p-6">

@@ -51,6 +51,9 @@ Project-specific principles: never weaken a trap-log pin to make something pass;
 - **The admin order-detail view (ADR-015, session-7)**: `/admin/orders/[id]` (admin-gated) renders the customer block, the parsed shipping-address snapshot, the OrderItem snapshots, and the chronological **OrderEvent timeline** — the audit trail `placeOrderAction`/`updateOrderStatusAction` write finally has a surface. Order numbers deep-link to it from the admin orders list and the dashboard's Recent Orders. Read-only (status changes stay on the list row's Select). Admin pages wrap in `<div className="flex-1">`, never a nested `<main>` (one landmark per page — the storefront layout owns `<main>`).
 - **PDP document.title = humanized slug** ("Wireless Headphones | Lumina", not the product name — for every slug INCLUDING unknown ones, session-7; the in-chrome not-found block is unchanged); the h1 keeps the full name. The Reviews tab's empty panel is `div.text-center.py-10`; the Shipping tab is plain `p` elements with a literal `✓` prefix. The favicon follows the remote-CDN parity pattern (`metadata.icons` → the reference's media.base44.com logo, session-7).
 - PDP "You May Also Like" = ALL same-category products excluding self (no cap/fill); shop chips appear for category + search only.
+- **Auth field spacing is a computed-geometry contract (session-8, trap 8)**: label→input visual gap = 11px (3px inline strut + 8px margin) on every auth field — the input wrappers carry `mt-2` because v4's `space-y-2` margin is INERT on the inline `<label>` (v3 landed it on the block sibling). Pinned by `auth.spec.ts` (login/register/forgot gaps).
+- **Account geometry contracts (session-8)**: tablist→panel gap 24px (the Tabs root carries NO `space-y-*`; the TabsContent base `mt-6` supplies it); the profile form uses the reference's field pattern — INLINE `Label` + `Input className="mt-1.5"` (labels are 18px natural line boxes, NOT `mb-2 block`); the Save button sits 16px below the fields (grid `gap-4` alone — NO `mt-4` on the button). Pinned by `account.spec.ts`.
+- **PDP visual contracts (session-8)**: star rating = flat 5-star row (`flex items-center gap-1`), floor(rating) amber + rest `text-border` (no half-stars/rounding — 4.8 renders 4+1); breadcrumb = `gap-2 mb-8` (no flex-wrap — the PDP's whole vertical rhythm hangs off it); feature bar + PDP feature row icons = lucide `shield` + `rotate-ccw` (not shield-check/refresh-cw); search-dropdown categories render lowercase. Unknown-route 404 titles follow `notFoundPageTitle` (last letter-bearing segment, humanized — `/foo/bar-baz` → "Bar Baz | Lumina", `/12345` → plain "Lumina"), rendered by the `[...notFound]` catch-all through the shared `Platform404` component.
 - Integer cents for all money; format only at display (`formatCents`).
 - SQLite has no enums — String columns + Zod union validation at the boundary.
 - Seed is idempotent (natural-key upserts); demo fixtures mirror the reference account page.
@@ -76,8 +79,8 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 | `bun run start` | Run the standalone production server |
 | `bun run lint` | ESLint 9 flat config — must be 0/0 |
 | `bun run typecheck` | `tsc --noEmit` — must be 0 errors |
-| `bun run test` | Vitest unit suite (76 tests) |
-| `bun run test:e2e` | Playwright E2E (118 tests incl. the setup login; requires `bun run build` first) |
+| `bun run test` | Vitest unit suite (82 tests) |
+| `bun run test:e2e` | Playwright E2E (128 tests incl. the setup login; requires `bun run build` first) |
 | `bun run db:setup` | `db push` + seed |
 | `bun run db:reset` | `prisma migrate reset` |
 
@@ -116,7 +119,7 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 ## 10. Project-Specific Standards
 
 ### Architecture
-Single Next.js app with route groups: `src/app/layout.tsx` (minimal shell — fonts, metadata, the CDN favicon link) · `src/app/(storefront)/` (chrome + all shopper pages: home, shop, PDP, cart [server page + `cart-client.tsx` island], checkout, wishlist, account, admin [dashboard, orders + `orders/[id]` detail, products]) · `src/app/(auth)/` (standalone login/register/forgot-password/verify-email + the shared `auth-error.tsx` box) · root `not-found.tsx` (chrome-less platform 404) · `src/app/api/` (3 route handlers) + sitemap/robots. `src/components/{ui,store,account,checkout}` · `src/lib` (domains + actions) · `prisma` (schema + seeds) · `tests` (vitest + playwright). Import direction: app → components → lib → db. `src/lib/db.ts` is server-only — never import it from a `"use client"` file. 22 routes; the build script is fresh-clone-safe (`mkdir -p public` + committed `public/.gitkeep`).
+Single Next.js app with route groups: `src/app/layout.tsx` (minimal shell — fonts, metadata, the CDN favicon link) · `src/app/(storefront)/` (chrome + all shopper pages: home, shop, PDP, cart [server page + `cart-client.tsx` island], checkout, wishlist, account, admin [dashboard, orders + `orders/[id]` detail, products]) · `src/app/(auth)/` (standalone login/register/forgot-password/verify-email + the shared `auth-error.tsx` box) · root `not-found.tsx` + the `[...notFound]` catch-all (chrome-less platform 404 — the catch-all adds the reference's humanized-path title, session-8) · `src/app/api/` (3 route handlers) + sitemap/robots. `src/components/{ui,store,account,checkout}` · `src/lib` (domains + actions) · `prisma` (schema + seeds) · `tests` (vitest + playwright). Import direction: app → components → lib → db. `src/lib/db.ts` is server-only — never import it from a `"use client"` file. 23 routes; the build script is fresh-clone-safe (`mkdir -p public` + committed `public/.gitkeep`).
 
 ### API / Action Design
 Mutations: server actions with Zod + `ActionResult<T>`. Reads: RSC direct Prisma queries. Route handlers: GET `/api/search?q&limit` (429-limited), POST `/api/newsletter` (idempotent upsert), GET `/api/health`.

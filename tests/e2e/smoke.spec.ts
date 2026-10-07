@@ -94,6 +94,29 @@ test.describe("smoke", () => {
     await expect(page.locator("header")).toHaveCount(0);
   });
 
+  test("unknown-route titles follow the reference's humanized-path rule (session-8, TITLE-404-1)", async ({ page }) => {
+    // The reference's SPA titles unknown routes from the LAST path segment
+    // containing a letter, humanized (dashes/underscores -> spaces, each
+    // word's first char uppercased, case otherwise preserved):
+    //   /nonexistent-route-xyz -> "Nonexistent Route Xyz | Lumina"
+    //   /foo/bar-baz           -> "Bar Baz | Lumina"
+    //   /products/42           -> "Products | Lumina"  ("42" has no letters
+    //                                                   -> falls back a
+    //                                                   segment)
+    //   /12345                 -> "Lumina"               (no letter segments)
+    // Measured live on the reference 2026-10-08. The clone previously
+    // rendered the plain default "Lumina" for every unknown route.
+    await page.goto("/nonexistent-route-xyz");
+    await expect(page).toHaveTitle("Nonexistent Route Xyz | Lumina");
+    await expect(page.getByText('"nonexistent-route-xyz"')).toBeVisible();
+    await page.goto("/foo/bar-baz");
+    await expect(page).toHaveTitle("Bar Baz | Lumina");
+    await page.goto("/products/42");
+    await expect(page).toHaveTitle("Products | Lumina");
+    await page.goto("/12345");
+    await expect(page).toHaveTitle("Lumina");
+  });
+
   test("unknown product slugs render the in-chrome product-not-found block", async ({ page }) => {
     await page.goto("/product/not-a-real-slug");
     await expect(page.getByRole("heading", { name: "Product not found" })).toBeVisible();

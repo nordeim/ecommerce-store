@@ -3,8 +3,8 @@ import {
   Dumbbell,
   Headphones,
   Monitor,
-  RefreshCw,
-  ShieldCheck,
+  RotateCcw,
+  Shield,
   Sofa,
   Sparkles,
   Shirt,
@@ -39,10 +39,12 @@ export function CategoryCard({ name, slug, icon }: { name: string; slug: string;
 }
 
 /** The four-feature trust bar (Free Shipping / Secure Payment / ...). */
+// Reference glyphs (session-8, ICON-DRIFT-1): shield (not shield-check) and
+// rotate-ccw (not refresh-cw) — measured live on the reference feature bar.
 const FEATURES = [
   { icon: Truck, title: "Free Shipping", text: "On orders over $100" },
-  { icon: ShieldCheck, title: "Secure Payment", text: "100% secure checkout" },
-  { icon: RefreshCw, title: "30-Day Returns", text: "Hassle-free returns" },
+  { icon: Shield, title: "Secure Payment", text: "100% secure checkout" },
+  { icon: RotateCcw, title: "30-Day Returns", text: "Hassle-free returns" },
   { icon: Headphones, title: "24/7 Support", text: "Dedicated support team" },
 ];
 

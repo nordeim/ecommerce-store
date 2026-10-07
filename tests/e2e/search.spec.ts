@@ -39,6 +39,22 @@ test.describe("search", () => {
     await expect(page).toHaveURL(/\/product\/vitamin-c-serum$/);
   });
 
+  test("dropdown suggestion categories render lowercase (session-8, SEARCH-CASE-1)", async ({ page }) => {
+    // Measured live on the reference's typeahead 2026-10-08: the item's
+    // category line reads lowercase ("electronics") even though the
+    // category badges elsewhere render capitalized — the clone's
+    // `capitalize` utility drifted the casing.
+    await page.goto("/");
+    await page.locator("header button[aria-label=\"Search\"]").click();
+    await page.getByLabel("Search products").fill("headphones");
+    const suggestion = page.locator("header button").filter({ hasText: "Wireless Noise-Cancelling Headphones" });
+    await expect(suggestion).toBeVisible({ timeout: 10_000 });
+    // exact: true — Playwright's getByText is case-insensitive by default,
+    // which would defeat the casing assertion entirely.
+    await expect(suggestion.getByText("electronics", { exact: true })).toBeVisible();
+    await expect(suggestion.getByText("Electronics", { exact: true })).toHaveCount(0);
+  });
+
   test("Escape closes the dropdown", async ({ page }) => {
     await page.goto("/");
     await page.locator("header button[aria-label=\"Search\"]").click();
