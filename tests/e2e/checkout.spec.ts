@@ -1,15 +1,33 @@
 import { expect, test } from "@playwright/test";
-import { clearCartViaDrawer } from "./helpers";
+import { clearCartViaDrawer, openCartDrawer } from "./helpers";
 
 // The checkout funnel: the 3-step wizard, server-side validation gates
 // (Continue is disabled until the step is valid), the placed order, and the
 // account order history. Runs authenticated; the cart is seeded per test.
+
+test.describe("checkout (empty cart)", () => {
+  test("an empty cart renders the reference's 'No items in cart' block", async ({ page }) => {
+    await clearCartViaDrawer(page);
+    await page.goto("/checkout");
+    await expect(page.getByRole("heading", { name: "No items in cart" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Continue Shopping" })).toBeVisible();
+    // Reference parity: a bare h1 + default button — no icon circle, no
+    // helper paragraph (captured live 2026-10-07).
+    await expect(page.getByText("Your cart is empty")).toHaveCount(0);
+    await expect(page.getByText("Add some items before checking out.")).toHaveCount(0);
+  });
+});
 
 test.describe("checkout", () => {
   test.beforeEach(async ({ page }) => {
     await clearCartViaDrawer(page);
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
+    // Reference parity: adding does NOT open the drawer — open it via the
+    // header cart button (the reference's only drawer entry point), then
+    // continue to checkout from the drawer.
+    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await openCartDrawer(page);
     await page.getByRole("dialog").getByRole("link", { name: "Checkout" }).click();
     await expect(page).toHaveURL(/\/checkout/);
   });

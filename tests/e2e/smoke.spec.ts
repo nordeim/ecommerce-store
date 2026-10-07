@@ -49,11 +49,32 @@ test.describe("smoke", () => {
     await expect(page.getByRole("heading", { name: "Your wishlist is empty" })).toBeVisible();
   });
 
-  test("unknown routes render the branded 404", async ({ page }) => {
+  test("unknown routes render the reference's standalone 404", async ({ page }) => {
     await page.goto("/this-page-does-not-exist");
     await expect(page.getByText("404")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Page Not Found" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Go Home" })).toBeVisible();
+    // Reference parity: the 404 is a chrome-less platform screen — the
+    // offending path is quoted (sans leading slash) and NO site header renders.
+    await expect(page.getByText('"this-page-does-not-exist"')).toBeVisible();
+    await expect(page.locator("header")).toHaveCount(0);
+  });
+
+  test("unknown product slugs render the in-chrome product-not-found block", async ({ page }) => {
+    await page.goto("/product/not-a-real-slug");
+    await expect(page.getByRole("heading", { name: "Product not found" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to Shop" })).toBeVisible();
+    // Unlike the route 404, this one keeps the storefront chrome.
+    await expect(page.getByRole("banner")).toBeVisible();
+  });
+
+  test("auth screens render standalone (no storefront chrome)", async ({ page }) => {
+    for (const path of ["/login", "/register"]) {
+      await page.goto(path);
+      await expect(page.locator("header")).toHaveCount(0);
+      await expect(page.locator("footer")).toHaveCount(0);
+    }
+    await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
   });
 
   test("footer carries the reference contact block", async ({ page }) => {

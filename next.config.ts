@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Hide the floating dev-tools indicator ("N" badge) — dev-only chrome
+  // that polluted UI screenshots and has no parity with the reference.
+  // No effect on production builds.
+  devIndicators: false,
   // Pin file tracing to this project so the standalone server always lands
   // at .next/standalone/server.js — even when the repo is cloned inside a
   // parent workspace that has its own lockfile.

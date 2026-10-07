@@ -68,6 +68,20 @@
   /* v3 shadow-scale pin — trap log #5 */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 
+  /* v3 slate-scale pin — trap log #7. The reference's platform 404
+   * (src/app/not-found.tsx) is built on the Tailwind v3 slate palette.
+   * v4 redefines the palette in oklch and several steps round to slightly
+   * different sRGB values (measured delta: slate-300 renders #cbd5e1 on
+   * v3 vs ~#c8d5e2 on v4 — a 3/255 channel drift). Pinning the v3 hexes
+   * keeps the 404 byte-identical to the reference. */
+  --color-slate-50: #f8fafc;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+
   --font-sans: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 }
 

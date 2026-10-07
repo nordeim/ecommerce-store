@@ -30,8 +30,9 @@ export default function LoginPage() {
   }, [state, router]);
 
   return (
-    <main className="flex-1 flex items-center justify-center py-16 px-4">
-      <div className="w-full max-w-md">
+    // Centering + background come from the (auth) group layout (reference:
+    // standalone screen, no site chrome).
+    <div className="w-full max-w-md">
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-8">
           <h1 className="text-2xl font-bold text-center mb-2">Welcome back</h1>
           <p className="text-muted-foreground text-center mb-8">Log in to your account</p>
@@ -114,7 +115,6 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }

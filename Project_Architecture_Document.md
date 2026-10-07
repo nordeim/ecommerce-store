@@ -12,6 +12,7 @@
 | Version | Date | Author | Tags | Change |
 |---|---|---|---|---|
 | 1.0 | 2026-10-07 | Build agent (Super Z) | [RES]/[SYN]/[SAN] | Initial production blueprint after full-site recon, build, computed-style parity gate, and 103-test verification |
+| 1.1 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-1 remediation: route-group chrome split (ADR-008), reference-parity 404/auth/empty-states/drawer behavior, slate-palette pin (trap 7), stale-state logout fix, `.env.example` realignment, 107-test gate — see docs/remediation-plan-session1.md |
 
 ## Table of Contents
 
@@ -109,6 +110,13 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Consequences:** (+) Crash-safe, replay-safe (rate-limited). (−) Card data transits the action (test-mode only — a real PSP integration is the documented next step, §11).
 - **Alternatives Rejected:** Per-step server persistence (three writes to unwind on back-navigation); client-computed totals (unacceptable).
 
+**ADR-008: Route-group chrome split (minimal root layout)**
+- **Context:** The reference renders /login and /register as standalone screens (no header/footer) and unknown routes on a chrome-less platform 404 — impossible under a single root layout that always wraps children in the storefront chrome.
+- **Decision:** `app/layout.tsx` is a minimal shell (html/body/font/metadata only). The shopper chrome + `StoreProvider` hydration live in `app/(storefront)/layout.tsx`; login/register live in `app/(auth)/` with a standalone centering layout; the root `not-found.tsx` replicates the reference's slate platform 404 (client component, `usePathname`, v3 slate palette pinned in `@theme`). Unknown product slugs render an in-chrome "Product not found" block instead of the 404.
+- **Rationale:** Next.js wraps the root not-found in the root layout — the only way to reproduce a chrome-less 404 is to keep the root layout chrome-free. Route groups are URL-neutral, so no route moved.
+- **Consequences:** (+) Exact reference parity on three previously-diverging surfaces; login/register became statically prerendered (perf win). (−) The `StoreProvider` state survives client-side navigation inside the group — logout must explicitly `setUser(null)` (a latent stale-state bug the refactor surfaced and fixed); one extra layout file to keep in mind when adding routes.
+- **Alternatives Rejected:** fixed-position overlay hiding the chrome (DOM parity break); a catch-all route rendering the 404 inline (fights the router, swallows real routes).
+
 ---
 
 ## 2. High-Level System Topology
@@ -151,7 +159,7 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Layer 1: Domains — `src/lib/*.ts`.** *Rule: pure(ish) server modules (auth, cart, wishlist, money, validation, rate-limit) that touch Layer 0 and nothing above. No React imports.*
 - **Layer 2: Mutations — `src/lib/actions/*.ts`.** *Rule: the ONLY write seam. Zod in, `ActionResult<T>` out; logs with `[tag]` context; never throws across the boundary.*
 - **Layer 3: Rendering — `src/app/**` (RSC) + `src/components/**`.** *Rule: RSC by default; `"use client"` only for interactive leaves; client components never import `@/lib/db` (build-time RSC boundary).*
-- **Layer 4: Chrome composition — root layout.** *Rule: the layout owns header/footer/overlays and hydrates `StoreProvider` with server-read cart/wishlist/user so the first paint carries badge state.*
+- **Layer 4: Chrome composition — `(storefront)` group layout.** *Rule: the shopper layout owns header/footer/overlays and hydrates `StoreProvider` with server-read cart/wishlist/user so the first paint carries badge state; the ROOT layout stays chrome-free so auth screens and the platform 404 can render standalone (ADR-008).*
 
 **Golden Rule:** dependencies point downward only (app → components → lib → db). A cycle or an upward import is a build or review failure.
 
@@ -165,18 +173,19 @@ ecommerce-store/
 │   └── e2e-reset.ts             ← clears carts/wishlists/spec-users before E2E runs
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx           ← fonts, chrome, StoreProvider server hydration
+│   │   ├── layout.tsx           ← MINIMAL shell: fonts + metadata only (ADR-008)
 │   │   ├── globals.css          ← Tailwind v4 @theme + ALL v3-parity pins (ADR-005)
-│   │   ├── page.tsx             ← home: hero carousel + 4 sections (RSC)
-│   │   ├── shop/page.tsx        ← PLP: filters from searchParams (RSC)
-│   │   ├── product/[slug]/      ← PDP + generateMetadata
-│   │   ├── cart/page.tsx        ← REAL cart (reference hardcodes empty — superset fix)
-│   │   ├── checkout/            ← wizard page + success confirmation
-│   │   ├── account/page.tsx     ← dashboard (auth-gated, tabs)
-│   │   ├── login/ · register/   ← auth cards (useActionState)
-│   │   ├── admin/               ← role-gated console + orders/products
-│   │   ├── wishlist/page.tsx    ← DB-backed
-│   │   ├── not-found.tsx        ← branded 404
+│   │   ├── not-found.tsx        ← chrome-less platform 404 (v3 slate, quoted path)
+│   │   ├── (storefront)/        ← chrome layout + shopper pages (ADR-008)
+│   │   │   ├── page.tsx         ← home: hero carousel + 4 sections (RSC)
+│   │   │   ├── shop/page.tsx    ← PLP: filters from searchParams (RSC)
+│   │   │   ├── product/[slug]/  ← PDP + generateMetadata + in-chrome not-found block
+│   │   │   ├── cart/page.tsx    ← REAL cart (reference hardcodes empty — superset fix)
+│   │   │   ├── checkout/        ← wizard page + success confirmation
+│   │   │   ├── account/         ← dashboard (auth-gated, tabs)
+│   │   │   ├── wishlist/        ← hearts page
+│   │   │   └── admin/           ← role-gated console (superset)
+│   │   ├── (auth)/              ← STANDALONE login/register — no chrome (ADR-008)
 │   │   ├── api/{health,search,newsletter}/route.ts   ← the 3-endpoint whitelist
 │   │   └── sitemap.ts · robots.ts
 │   ├── components/
@@ -372,7 +381,7 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | E2E — wishlist | 1 | 4 | `tests/e2e/wishlist.spec.ts` | Playwright |
 | E2E — search | 1 | 5 | `tests/e2e/search.spec.ts` | Playwright |
 | E2E — mobile navigation | 1 | 7 | `tests/e2e/mobile-navigation.spec.ts` | Playwright |
-| **Total** | **14** | **103** | | |
+| **Total** | **14** | **107** | | |
 
 ### 8.2 Test Patterns
 
@@ -463,6 +472,7 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 | Low | Order email notifications not sent | Confirmation is the success page + order history | Future outbox/worker (§7) |
 | Low | Reviews tab renders "coming soon" (reference parity) | No UGC surface | Deliberate parity decision |
 | Low | `typescript.ignoreBuildErrors: true` in next.config | Build does not type-check | `bun run typecheck` is the enforced gate; flip when the scaffold is retired |
+| Resolved | Sandbox env shadowing (parent `.env`/shell inject overriding `DATABASE_URL`) diverted the dev DB outside the repo | Stale rows survived reseeds; repo-root `db/` stayed empty | Documented in AGENTS.md; sandbox paths hard-linked onto the repo DB; repo contract test-pinned |
 
 ## 12. Key Files Reference
 

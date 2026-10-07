@@ -23,14 +23,15 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 | 🔍 **Search** | Header dropdown with live typeahead (`/api/search`, 250 ms debounce, keyboard + click navigation) and `/shop?search=` results page |
 | 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params |
 | 📦 **Product pages** | Badges, ratings, discount math, feature chips, quantity stepper, Description/Reviews/Shipping tabs, related products |
-| 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with steppers and server-re-derived totals |
+| 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with steppers and server-re-derived totals. Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
 | ❤️ **Persistent wishlist** | Same guest→user identity pattern; hearts everywhere, dedicated page |
-| 💳 **3-step checkout** | Shipping → Payment (card/PayPal) → Review; server-validated, transactional order placement, confirmation page with the order number |
+| 💳 **3-step checkout** | Shipping → Payment (card/PayPal) → Review; server-validated, transactional order placement, confirmation page with the order number; reference-parity "No items in cart" empty state |
 | 👤 **Account dashboard** | Profile editing, real order history with status badges, address book CRUD, password change, logout |
 | 🛠️ **Admin console** | Role-gated `/admin`: revenue/orders/products/customers stats, order status transitions, stock + visibility management |
-| 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login |
+| 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login; standalone chrome-less auth screens (reference parity) |
 | 📱 **Mobile navigation** | Left-sliding Radix Sheet (w-72) pinned by a dedicated E2E spec (the Tailwind v4 trap-log surface) |
-| 🧪 **103 automated tests** | 45 Vitest unit + 58 Playwright E2E, including a computed-style parity gate measured against the live reference |
+| 🧭 **Reference-exact edge states** | Chrome-less platform 404 (v3 slate palette, quoted path) and in-chrome "Product not found" block — both E2E-pinned |
+| 🧪 **107 automated tests** | 45 Vitest unit + 62 Playwright E2E, including a computed-style parity gate measured against the live reference |
 | 🌐 **SEO & ops** | Per-page metadata, `sitemap.xml`, `robots.txt`, `/api/health` probe |
 
 ## Architecture
@@ -83,12 +84,15 @@ flowchart TB
 │   ├── 📄 seed.ts                 ← catalog + demo user/orders (reference parity)
 │   └── 📄 e2e-reset.ts            ← transient-state reset for E2E runs
 ├── 📂 src/
-│   ├── 📂 app/                    ← RSC pages + 3 route handlers + sitemap/robots
-│   │   ├── 📄 layout.tsx          ← fonts, header/footer chrome, StoreProvider hydration
+│   ├── 📂 app/
+│   │   ├── 📄 layout.tsx          ← minimal root shell (fonts + metadata only)
 │   │   ├── 📄 globals.css         ← Tailwind v4 @theme with v3-parity pins (trap log)
-│   │   ├── 📂 product/[slug]/     ← PDP: buy box, tabs, related
-│   │   ├── 📂 shop/ · cart/ · wishlist/ · checkout/ (+ success/)
-│   │   ├── 📂 account/ · login/ · register/ · admin/ (orders, products)
+│   │   ├── 📄 not-found.tsx       ← reference's chrome-less platform 404 (slate)
+│   │   ├── 📂 (storefront)/       ← chrome layout + shopper pages (URL-neutral)
+│   │   │   ├── 📄 page.tsx        ← home
+│   │   │   ├── 📂 shop/ · product/[slug]/ · cart/ · checkout/ (+ success/)
+│   │   │   └── 📂 wishlist/ · account/ · admin/ (orders, products)
+│   │   ├── 📂 (auth)/             ← standalone login/register (no chrome)
 │   │   └── 📂 api/                ← health · search (typeahead) · newsletter
 │   ├── 📂 components/
 │   │   ├── 📂 ui/                 ← shadcn-style primitives (button…radio-group)
@@ -100,9 +104,9 @@ flowchart TB
 │       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts
 │       └── 📂 actions/            ← the mutation seam (ActionResult<T> + Zod)
 ├── 📂 tests/
-│   ├── 📂 e2e/                    ← 9 spec files (58 tests) + setup/global-setup
+│   ├── 📂 e2e/                    ← 9 spec files (62 tests) + setup/global-setup
 │   └── 📄 db-path.test.ts         ← URL-resolution contract
-└── 📄 AGENTS.md · CLAUDE.md · Project_Architecture_Document.md
+└── 📄 AGENTS.md · CLAUDE.md · Project_Architecture_Document.md · ecommerce-store_SKILL.md
 ```
 
 ## Quick Start
@@ -162,7 +166,7 @@ AUTH_SECRET=""
 | Suite | Command | Count | Scope |
 |---|---|---|---|
 | Unit (Vitest) | `bun run test` | 45 | Money math, scrypt hashing, Zod schemas, rate limiter, DB-path resolution |
-| E2E (Playwright) | `bun run test:e2e` | 58 | Smoke · computed-style parity · cart · checkout · account · auth · wishlist · search · mobile navigation |
+| E2E (Playwright) | `bun run test:e2e` | 62 | Smoke (404 · product-not-found · standalone auth) · computed-style parity · cart (incl. no-auto-open drawer pin) · checkout (incl. empty state) · account · auth · wishlist · search · mobile navigation |
 
 E2E boots the **production standalone build** on port 3100 against an isolated `db/e2e.db` (pushed, seeded, and reset by the global setup), so the suite never touches your dev database. Run a single spec with `bunx playwright test tests/e2e/checkout.spec.ts`.
 

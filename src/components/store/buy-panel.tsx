@@ -11,7 +11,7 @@ import { useStore } from "./store-provider";
 import { cn } from "@/lib/utils";
 
 export function BuyPanel({ productId, name, stock }: { productId: string; name: string; stock: number }) {
-  const { addToCart, toggleWishlist, wishlist, setCartOpen } = useStore();
+  const { addToCart, toggleWishlist, wishlist } = useStore();
   const [quantity, setQuantity] = React.useState(1);
   const [adding, setAdding] = React.useState(false);
   const inWishlist = wishlist.has(productId);
@@ -44,9 +44,11 @@ export function BuyPanel({ productId, name, stock }: { productId: string; name: 
           disabled={adding || soldOut}
           onClick={async () => {
             setAdding(true);
-            const ok = await addToCart(productId, quantity);
+            // Reference parity: a successful add only bumps the header
+            // badge — the drawer opens exclusively via the header cart
+            // button (verified live on the reference, 2026-10-07).
+            await addToCart(productId, quantity);
             setAdding(false);
-            if (ok) setCartOpen(true);
           }}
         >
           <ShoppingBag className="h-4 w-4" />

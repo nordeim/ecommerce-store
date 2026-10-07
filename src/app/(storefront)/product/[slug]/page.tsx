@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { Check, ChevronRight, RefreshCw, ShieldCheck, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StarRating } from "@/components/store/star-rating";
@@ -40,7 +40,21 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const product = await getProduct(slug);
-  if (!product) notFound();
+
+  // Reference parity (captured live 2026-10-07): an unknown product slug
+  // renders an in-chrome minimal block — h2 "Product not found" + the
+  // default Back to Shop button — NOT the platform 404 (that is reserved
+  // for unknown routes; see src/app/not-found.tsx).
+  if (!product) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+        <h2 className="text-2xl font-bold mb-4">Product not found</h2>
+        <Button asChild>
+          <Link href="/shop">Back to Shop</Link>
+        </Button>
+      </div>
+    );
+  }
 
   const related = await db.product.findMany({
     where: { isActive: true, id: { not: product.id }, category: { slug: product.category.slug } },

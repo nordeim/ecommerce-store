@@ -7,6 +7,11 @@
  * hydrated on mount through server actions and re-derived after every
  * mutation. The provider also owns the cart-drawer / mobile-nav / search
  * open state so any surface (header, product card, drawer) can open them.
+ *
+ * `setUser` exists because the provider's state survives client-side
+ * navigations inside the (storefront) layout: logout destroys the session
+ * server-side, and without an explicit clear the header would keep the
+ * stale logged-in icon (found by the route-group refactor, 2026-10-07).
  */
 import * as React from "react";
 import type { CartDto } from "@/lib/cart";
@@ -23,6 +28,7 @@ import { currentUserAction } from "@/lib/actions/auth";
 type StoreContextValue = {
   cart: CartDto;
   user: SessionUser | null;
+  setUser: (user: SessionUser | null) => void;
   wishlist: Set<string>;
   hydrated: boolean;
   cartOpen: boolean;
@@ -126,6 +132,7 @@ export function StoreProvider({
     () => ({
       cart,
       user,
+      setUser,
       wishlist,
       hydrated,
       cartOpen,

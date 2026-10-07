@@ -9,9 +9,9 @@ export const DEMO_PASSWORD = "Demo1234!";
 // doing it ONCE because the login action is rate-limited.
 setup("sign the demo user in", async ({ page }) => {
   await page.goto("/login");
-  await page.getByRole("main").getByLabel("Email").fill(DEMO_EMAIL);
-  await page.getByRole("main").getByLabel("Password").fill(DEMO_PASSWORD);
-  await page.getByRole("main").getByRole("button", { name: "Log in", exact: true }).click();
+  await page.getByLabel("Email").fill(DEMO_EMAIL);
+  await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
   await page.waitForURL("**/account");
   await expect(page.getByRole("heading", { name: "My Account" })).toBeVisible();
   await page.context().storageState({ path: "tests/e2e/.auth/user.json" });

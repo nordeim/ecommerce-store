@@ -27,8 +27,9 @@ export default function RegisterPage() {
   const fieldError = (field: string) => state && !state.ok ? state.error.fieldErrors?.[field] : undefined;
 
   return (
-    <main className="flex-1 flex items-center justify-center py-16 px-4">
-      <div className="w-full max-w-md">
+    // Centering + background come from the (auth) group layout (reference:
+    // standalone screen, no site chrome).
+    <div className="w-full max-w-md">
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-8">
           <h1 className="text-2xl font-bold text-center mb-2">Create your account</h1>
           <p className="text-muted-foreground text-center mb-8">Sign up to get started</p>
@@ -103,7 +104,6 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }

@@ -27,7 +27,7 @@ export type ProductCardData = {
 };
 
 export function ProductCard({ product, animate = true }: { product: ProductCardData; animate?: boolean }) {
-  const { addToCart, toggleWishlist, wishlist, setCartOpen } = useStore();
+  const { addToCart, toggleWishlist, wishlist } = useStore();
   const discount = discountPercent(product.price, product.compareAtPrice);
   const inWishlist = wishlist.has(product.id);
 
@@ -76,10 +76,10 @@ export function ProductCard({ product, animate = true }: { product: ProductCardD
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                void (async () => {
-                  const ok = await addToCart(product.id, 1);
-                  if (ok) setCartOpen(true);
-                })();
+                // Reference parity: a successful add only bumps the header
+                // badge — the drawer opens via the header cart button only
+                // (verified live on the reference, 2026-10-07).
+                void addToCart(product.id, 1);
               }}
             >
               <ShoppingBag className="h-3.5 w-3.5" />

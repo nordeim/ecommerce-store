@@ -83,3 +83,24 @@ Stage Summary:
 - Complete deliverable pushed to git@github.com:nordeim/ecommerce-store.git main @ e91d147
 - All gates green at push time: lint 0/0, tsc clean, vitest 45/45, playwright 58/58, production build OK
 - Deliverables: full app (19 routes), 4 root docs, 13 screenshots, 103 automated tests
+
+---
+Task ID: S2 (session-1 review + remediation)
+Agent: main
+Task: Post-push audit vs live reference; remediation plan; execute fixes; SKILL.md; docs; ship
+
+Work Log:
+- Refreshed workspace (git pull → 289df91); reviewed AGENTS/CLAUDE/README/PAD, docs/session_1.md, worklog.md; re-validated the full gate (lint 0/0, tsc clean, 45 unit, build, 58 E2E) — codebase matched the documented status
+- Live A/B differential testing (agent-browser dual sessions ref vs clone + VLM cross-checks): verified home/shop/PDP/account/mobile-menu parity; found 5 parity gaps — drawer auto-opens on add (reference: badge only), checkout empty state copy/ornamentation, themed 404 vs the reference's chrome-less slate platform 404, unknown product slug shows 404 instead of the in-chrome "Product not found" block, login/register rendered with site chrome (reference: standalone screens)
+- Diagnosed the sandbox DB hijack: shell-injected absolute DATABASE_URL (parent .env baked at workspace init) shadows the repo .env for every bun process; dev DB had silently lived at the workspace root (session-1's "ORD-2026-000004" residue explained). Fixed via parent-.env realignment + hard link onto <repo>/db/custom.db; clean reseed (3 reference orders); documented as AGENTS.md trap
+- Wrote docs/remediation-plan-session1.md (issue inventory w/ evidence, TDD ToDo list, validation plan, sign-off criteria) and validated it against the codebase before executing
+- Executed remediation TDD-first: pinned no-auto-open drawer (red→green), reference-exact checkout empty state, route-group refactor (minimal root layout + (storefront) chrome group + (auth) standalone group), chrome-less slate 404 w/ v3 slate palette pin (trap 7) + quoted-path-sans-slash, in-chrome product-not-found block, StoreProvider.setUser + logout clear (latent stale-state bug exposed by the refactor and fixed), .env.example rewrite, vitest.config comment fix, removed stale project-management_SKILL.md, devIndicators:false
+- E2E suite updated to mirror reference interactions (openCartDrawer helper; auth specs de-scoped from the nonexistent main landmark; p[role=alert] targeting) — 62/62 green; gate: lint 0/0, tsc clean, 45 unit, build OK
+- Live re-verification of every remediated surface vs the reference (computed styles + VLM): 404 colors byte-identical, mobile menu identical, drawer resting behavior identical, standalone auth screens confirmed
+- Distilled ecommerce-store_SKILL.md via skills/to-distill-project-into-skill (20 sections + appendices, all facts verified: versions, counts, tokens, paths)
+- Refreshed docs/screenshots (16 captures incl. the new 404/product-not-found/checkout-empty/standalone-login surfaces), VLM-verified
+
+Stage Summary:
+- Deliverable: 5 parity gaps closed + 1 latent client-state bug fixed + repo hygiene (env example, stale docs/skill removed) + SKILL.md + remediation plan + 16 screenshots
+- Gate at ship: lint 0/0 · tsc clean · 45 unit · build OK · 62 E2E (was 58; +4 parity pins, none removed)
+- docs/remediation-plan-session1.md records the full audit trail for future sessions

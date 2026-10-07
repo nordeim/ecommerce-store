@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SessionUser } from "@/lib/auth";
 import { changePasswordAction, saveAddressAction, updateProfileAction } from "@/lib/actions/account";
 import { logoutAction, type ActionResult } from "@/lib/actions/auth";
+import { useStore } from "@/components/store/store-provider";
 import { formatCents } from "@/lib/money";
 
 export type OrderRow = {
@@ -84,6 +85,7 @@ export function AccountTabs({
   addresses: AddressRow[];
 }) {
   const router = useRouter();
+  const { setUser } = useStore();
   const [profileState, profileAction, profilePending] = React.useActionState(updateProfileAction, null);
   const [passwordState, passwordAction, passwordPending] = React.useActionState(changePasswordAction, null);
   const [addressState, addressAction, addressPending] = React.useActionState(saveAddressAction, null);
@@ -421,6 +423,10 @@ export function AccountTabs({
                   className="rounded-xl gap-2"
                   onClick={async () => {
                     await logoutAction();
+                    // The (storefront) layout — and with it the client store
+                    // — survives client-side navigation, so clear the user
+                    // explicitly or the header keeps the logged-in icon.
+                    setUser(null);
                     router.refresh();
                     router.push("/");
                   }}
