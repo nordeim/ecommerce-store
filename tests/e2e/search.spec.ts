@@ -47,3 +47,56 @@ test.describe("search", () => {
     await expect(page.getByLabel("Search products")).toBeHidden();
   });
 });
+
+test.describe("shop active-filter chips (session-3 parity)", () => {
+  test("a search term renders a quoted chip that clears the search on click", async ({ page }) => {
+    await page.goto("/shop?search=watch");
+    const chip = page.getByRole("main").locator("a", { hasText: '"watch"' });
+    await expect(chip).toBeVisible();
+    // Chip row sits between the filter bar and the grid.
+    await expect(chip).toHaveCSS("border-radius", "3.35544e+07px"); // rounded-full, both engines
+    await chip.click();
+    await expect(page).toHaveURL(/\/shop$/);
+    await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();
+  });
+
+  test("a category filter renders a plain-name chip", async ({ page }) => {
+    await page.goto("/shop?category=accessories");
+    const chip = page.getByRole("main").locator("a", { hasText: "Accessories" }).first();
+    await expect(chip).toBeVisible();
+    await chip.click();
+    await expect(page).toHaveURL(/\/shop$/);
+  });
+
+  test("price and sort filters render NO chips (reference rule)", async ({ page }) => {
+    await page.goto("/shop?category=accessories&price=over-200&sort=newest");
+    // Only the category chip — price/sort never chip on the reference.
+    await expect(page.getByRole("main").locator(".flex.flex-wrap.gap-2.mb-6 a")).toHaveCount(1);
+  });
+
+  test("no chip row renders for an unfiltered shop", async ({ page }) => {
+    await page.goto("/shop");
+    await expect(page.getByRole("main").locator(".flex.flex-wrap.gap-2.mb-6")).toHaveCount(0);
+  });
+
+  test("the empty state matches the reference copy and structure", async ({ page }) => {
+    await page.goto("/shop?search=zzzqqq");
+    const empty = page.getByRole("main").locator(".py-20.text-center");
+    await expect(empty).toBeVisible();
+    // Reference: h3 text-lg (not h2 text-xl), icon circle mb-4, exact copy,
+    // and a "Clear all filters" primary action (the clone renders it as a
+    // button-styled link to /shop — navigation semantics).
+    await expect(empty.getByRole("heading", { name: "No products found" })).toHaveCSS(
+      "font-size",
+      "18px",
+    );
+    await expect(empty.locator(".h-20.w-20.rounded-full")).toHaveCSS("margin-bottom", "16px");
+    await expect(empty.getByText("Try adjusting your filters or search terms.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Clear all filters" })).toBeVisible();
+    // The search chip is present on the empty results page too.
+    await expect(page.getByRole("main").locator("a", { hasText: '"zzzqqq"' })).toBeVisible();
+    await page.getByRole("link", { name: "Clear all filters" }).click();
+    await expect(page).toHaveURL(/\/shop$/);
+    await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();
+  });
+});

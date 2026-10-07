@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addToCartSchema,
   checkoutSchema,
+  deriveDisplayName,
   loginSchema,
   newsletterSchema,
   registerSchema,
@@ -18,10 +19,20 @@ describe("loginSchema", () => {
   });
 });
 
-describe("registerSchema", () => {
-  const base = { name: "Jane Doe", email: "jane@example.com", password: "longenough1" };
-  it("accepts matching passwords", () => {
+describe("registerSchema (session-3: reference has no Name field)", () => {
+  const base = { email: "jane@example.com", password: "longenough1" };
+  it("accepts matching passwords WITHOUT a name (reference form)", () => {
     expect(registerSchema.safeParse({ ...base, confirmPassword: "longenough1" }).success).toBe(true);
+  });
+  it("still accepts an explicit name (internal/API callers)", () => {
+    expect(
+      registerSchema.safeParse({ ...base, name: "Jane Doe", confirmPassword: "longenough1" }).success,
+    ).toBe(true);
+  });
+  it("rejects a too-short explicit name", () => {
+    expect(
+      registerSchema.safeParse({ ...base, name: "J", confirmPassword: "longenough1" }).success,
+    ).toBe(false);
   });
   it("rejects mismatched passwords with a field error on confirmPassword", () => {
     const r = registerSchema.safeParse({ ...base, confirmPassword: "different" });
@@ -33,6 +44,26 @@ describe("registerSchema", () => {
   it("rejects short passwords", () => {
     expect(registerSchema.safeParse({ ...base, confirmPassword: "short" }).success).toBe(false);
     expect(registerSchema.safeParse({ ...base, password: "short", confirmPassword: "short" }).success).toBe(false);
+  });
+});
+
+describe("deriveDisplayName (session-3)", () => {
+  it("splits dotted local parts into capitalized words", () => {
+    expect(deriveDisplayName("john.doe@example.com")).toBe("John Doe");
+  });
+  it("splits dashed and underscored local parts", () => {
+    expect(deriveDisplayName("e2e-1728@example.com")).toBe("E2e 1728");
+    expect(deriveDisplayName("jane_doe@example.com")).toBe("Jane Doe");
+  });
+  it("capitalizes a single token", () => {
+    expect(deriveDisplayName("admin@example.com")).toBe("Admin");
+  });
+  it("falls back to Customer for empty local parts", () => {
+    expect(deriveDisplayName("@example.com")).toBe("Customer");
+  });
+  it("clamps to 80 characters", () => {
+    const long = "a".repeat(100);
+    expect(deriveDisplayName(`${long}@example.com`).length).toBeLessThanOrEqual(80);
   });
 });
 

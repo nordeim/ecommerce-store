@@ -132,9 +132,12 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
               type="button"
               aria-label={`Go to slide ${i + 1}: ${slide.title}`}
               aria-current={i === index}
+              // Reference dot classes (measured live): h-2 rounded-full
+              // transition-all duration-300; active w-8 bg-white, inactive
+              // w-2 bg-white/50 — NO hover variant.
               className={cn(
-                "h-2 rounded-full transition-all",
-                i === index ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/80",
+                "h-2 rounded-full transition-all duration-300",
+                i === index ? "w-8 bg-white" : "w-2 bg-white/50",
               )}
               onClick={() => {
                 go(i);

@@ -102,4 +102,17 @@ test.describe("storefront computed-style parity", () => {
     await expect(input).toHaveCSS("border-radius", "10px");
     await expect(input).toHaveCSS("height", "36px");
   });
+
+  test("hero dot pagination matches the reference geometry (session-3)", async ({ page }) => {
+    await page.goto("/");
+    const dots = page.locator("[aria-roledescription=\"carousel\"] button[aria-label^=\"Go to slide\"]");
+    await expect(dots).toHaveCount(3);
+    // Reference: active dot w-8 (32px) with the 300ms transition; inactive
+    // w-2 (8px). (The v3 measured values.)
+    await expect(dots.first()).toHaveCSS("width", "32px");
+    await expect(dots.nth(1)).toHaveCSS("width", "8px");
+    await expect(dots.nth(2)).toHaveCSS("width", "8px");
+    const duration = await dots.first().evaluate((el) => getComputedStyle(el).transitionDuration);
+    expect(duration).toBe("0.3s");
+  });
 });

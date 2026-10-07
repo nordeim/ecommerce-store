@@ -24,6 +24,17 @@ test.describe("account", () => {
     await expect(page.getByRole("main").getByLabel("Email")).toHaveValue("john@example.com");
   });
 
+  test("profile avatar is the reference User icon, not initials (session-3)", async ({ page }) => {
+    const avatar = page.locator("main .h-20.w-20.rounded-full");
+    await expect(avatar).toBeVisible();
+    // Reference renders a lucide user glyph inside the bg-primary/10 circle.
+    await expect(avatar.locator("svg")).toBeVisible();
+    await expect(avatar).not.toContainText("JD");
+    // bg-primary/10 — v4 serializes alpha utilities as lab() (trap log 6).
+    const bg = await avatar.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bg).toMatch(/rgba\(230, 107, 26, 0\.1\)|lab\([\d.]+ [\d.]+ [\d.]+ \/ 0\.1\)/);
+  });
+
   test("profile edits persist", async ({ page }) => {
     await page.getByRole("main").getByLabel("Phone").fill("+1 (555) 999-0000");
     await page.getByRole("button", { name: "Save Changes" }).click();
@@ -53,6 +64,32 @@ test.describe("account", () => {
     await expect(page.getByRole("main").getByText("United States").first()).toBeVisible();
   });
 
+  test("addresses tab matches the reference card + button anatomy (session-3)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Addresses" }).click();
+    // "Add New" is the reference's OUTLINE button (transparent bg, 1px border,
+    // shadcn rounded-lg = --radius = 12px) — not the primary fill.
+    const addNew = page.getByRole("button", { name: "Add New" });
+    await expect(addNew).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(addNew).toHaveCSS("border-width", "1px");
+    await expect(addNew).toHaveCSS("border-radius", "12px");
+    // The default address card is the reference's highlighted single card:
+    // 2px primary/20 border over the secondary/30 wash.
+    const card = page.getByRole("main").locator("div.border-2.border-primary\\/20");
+    await expect(card).toBeVisible();
+    await expect(card).toHaveCSS("border-width", "2px");
+    const borderColor = await card.evaluate((el) => getComputedStyle(el).borderColor);
+    // border-primary/20 — v4 serializes alpha utilities as lab() (trap log 6).
+    expect(borderColor).toMatch(
+      /rgba\(230, 107, 26, 0\.2\)|lab\([\d.]+ [\d.]+ [\d.]+ \/ 0\.2\)/,
+    );
+    // No "Home" label span next to the Default badge (reference has none).
+    await expect(page.getByRole("main").locator("span", { hasText: /^Home$/ })).toHaveCount(0);
+    // "Edit" is the reference's ghost button (transparent, borderless).
+    const edit = page.getByRole("button", { name: "Edit" });
+    await expect(edit).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(edit).toHaveCSS("border-width", "0px");
+  });
+
   test("a new address can be added and becomes selectable", async ({ page }) => {
     await page.getByRole("tab", { name: "Addresses" }).click();
     await page.getByRole("button", { name: "Add New" }).click();
@@ -71,6 +108,21 @@ test.describe("account", () => {
     await expect(page.getByRole("main").getByLabel("New Password")).toBeVisible();
     await expect(page.getByRole("main").getByLabel("Confirm Password")).toBeVisible();
     await expect(page.getByText("Email notification preferences coming soon.")).toBeVisible();
+  });
+
+  test("settings card carries the reference section headings (session-3)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    // Reference: "Change Password" h3 (font-medium mb-2) above the fields,
+    // "Notifications" h3 of the same style, card content spaced space-y-6.
+    const changeH3 = page.getByRole("main").getByRole("heading", { name: "Change Password" });
+    await expect(changeH3).toBeVisible();
+    await expect(changeH3).toHaveCSS("font-weight", "500");
+    await expect(changeH3).toHaveCSS("margin-bottom", "8px");
+    await expect(page.getByRole("main").getByRole("heading", { name: "Notifications" })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("heading", { name: "Session" })).toBeVisible(); // superset
+    // Fields sit in the reference's space-y-3 max-w-md column (not a grid).
+    const fields = page.getByRole("main").getByLabel("Current Password").locator("..");
+    await expect(fields).toHaveCSS("display", "block");
   });
 
   test("wrong current password is rejected with an inline error", async ({ page }) => {

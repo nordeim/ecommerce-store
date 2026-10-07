@@ -141,4 +141,25 @@ test.describe("product data parity", () => {
       await expect(page.getByText(description).first()).toBeVisible();
     }
   });
+
+  test("You May Also Like lists ALL same-category products excluding self (session-3)", async ({ page }) => {
+    // Reference rule (measured live): related = same category, minus self, in
+    // array order — NO cap at 4 and NO cross-category fill.
+    const cases: Array<[string, string[]]> = [
+      ["wireless-headphones", ["smart-speaker", "charging-pad"]],
+      ["ceramic-planter", ["linen-blanket"]],
+      ["titanium-sunglasses", ["leather-watch"]],
+    ];
+    for (const [slug, expected] of cases) {
+      await page.goto(`/product/${slug}`);
+      const section = page.getByRole("heading", { name: "You May Also Like" }).locator("..");
+      const links = section.locator("a[href*=\"/product/\"]");
+      const seen = new Set<string>();
+      const count = await links.count();
+      for (let i = 0; i < count; i++) {
+        seen.add((await links.nth(i).getAttribute("href"))!.split("/").pop()!);
+      }
+      expect([...seen]).toEqual(expected);
+    }
+  });
 });

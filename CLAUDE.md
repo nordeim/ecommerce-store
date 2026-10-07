@@ -26,7 +26,7 @@ Project-specific principles: never weaken a trap-log pin to make something pass;
 
 ### Next.js 16 (App Router)
 - Server Components by default; `"use client"` only for interactive islands (store chrome, checkout wizard, account tabs, admin rows).
-- **Route groups own the chrome**: `app/layout.tsx` is a minimal shell; `app/(storefront)/layout.tsx` carries the shopper chrome + store hydration; `app/(auth)/` renders login/register standalone (no header/footer — reference parity); the root `not-found.tsx` is the reference's chrome-less platform 404 (v3 slate palette, pinned). Unknown product slugs render an in-chrome "Product not found" block.
+- **Route groups own the chrome**: `app/layout.tsx` is a minimal shell; `app/(storefront)/layout.tsx` carries the shopper chrome + store hydration; `app/(auth)/` renders login/register/forgot-password standalone (no header/footer — reference parity), each as a server `page.tsx` owning `Metadata` + a `*-form.tsx` client island; the root `not-found.tsx` is the reference's chrome-less platform 404 (v3 slate palette, pinned). Unknown product slugs render an in-chrome "Product not found" block.
 - `params`/`searchParams`/`cookies()`/`headers()` are **async** — always `await`.
 - Server Actions for all UI mutations; route handlers only for `/api/health`, `/api/search`, `/api/newsletter`.
 - `export const dynamic = "force-dynamic"` on every DB-touching page/handler.
@@ -40,6 +40,7 @@ Project-specific principles: never weaken a trap-log pin to make something pass;
 ### Data
 - Prisma + SQLite (`db/custom.db`, schema-relative `file:../db/custom.db` — the resolution contract in `src/lib/db-path.ts` is test-pinned; don't inline it).
 - **Catalog order is a parity contract**: `Product.sortOrder` = the reference's array position (1:1); seed `createdAt` is staggered by array position (drives "Newest" = reverse array order); "Top Rated" ties break by sortOrder. Do not reorder the seed without re-measuring the reference.
+- **Auth forms are a parity contract (ADR-010)**: register collects exactly [Email, Password, Confirm Password] (no Name — the action derives a display name from the email local part via `deriveDisplayName`); password inputs show the `••••••••` placeholder; `/forgot-password` is anti-enumeration (same neutral confirmation for every email, rate-limited 5/15min, no email sent — `console.info` seam). PDP "You May Also Like" = ALL same-category products excluding self (no cap/fill); shop chips appear for category + search only.
 - Integer cents for all money; format only at display (`formatCents`).
 - SQLite has no enums — String columns + Zod union validation at the boundary.
 - Seed is idempotent (natural-key upserts); demo fixtures mirror the reference account page.
@@ -65,8 +66,8 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 | `bun run start` | Run the standalone production server |
 | `bun run lint` | ESLint 9 flat config — must be 0/0 |
 | `bun run typecheck` | `tsc --noEmit` — must be 0 errors |
-| `bun run test` | Vitest unit suite (45 tests) |
-| `bun run test:e2e` | Playwright E2E (72 tests; requires `bun run build` first) |
+| `bun run test` | Vitest unit suite (52 tests) |
+| `bun run test:e2e` | Playwright E2E (88 tests incl. the setup login; requires `bun run build` first) |
 | `bun run db:setup` | `db push` + seed |
 | `bun run db:reset` | `prisma migrate reset` |
 
@@ -75,7 +76,7 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 **Pyramid:** Vitest unit (pure domain seams, co-located `*.test.ts`) → Playwright E2E (production standalone server on :3100, isolated `db/e2e.db`, real UI flows).
 
 - Unit layer: `src/lib/*.test.ts` + `tests/db-path.test.ts` — money math, password hashing, Zod schemas, rate limiter, DB-path resolution. TDD red→green→refactor; bug fixes get a failing regression test first.
-- E2E layer: `tests/e2e/*.spec.ts` — smoke (incl. the standalone 404 + product-not-found + standalone auth screens), storefront-parity (computed-style gate), catalog-parity (array order, sort semantics, ratings, descriptions), cart (incl. the no-auto-open drawer pin + reference drawer anatomy), checkout (incl. the "No items in cart" empty state), account, auth, wishlist, search, mobile-navigation. `auth.setup.ts` signs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out for logged-out flows. `global-setup.ts` pushes/seeds/resets the e2e DB every run. `openCartDrawer` (helpers.ts) is the reference-mirroring way to open the drawer.
+- E2E layer: `tests/e2e/*.spec.ts` — smoke (incl. the standalone 404 + product-not-found + standalone auth screens), storefront-parity (computed-style gate incl. hero-dot geometry), catalog-parity (array order, sort semantics, ratings, descriptions, related-products membership), cart (incl. the no-auto-open drawer pin + reference drawer anatomy), checkout (incl. the "No items in cart" empty state), account (profile icon avatar, highlighted default address, Change-Password section), auth (login/register contract, nameless registration, forgot-password anti-enumeration flow), wishlist, search (incl. active-filter chips + empty state), mobile-navigation. `auth.setup.ts` signs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out for logged-out flows. `global-setup.ts` pushes/seeds/resets the e2e DB every run. `openCartDrawer` (helpers.ts) is the reference-mirroring way to open the drawer.
 - Assert behavior through the UI/API, never internals; scope selectors to `main` on chrome pages (footer text collisions); auth screens have NO `main` landmark — use page-level selectors and `p[role=alert]` for the inline error (the route announcer also carries `role=alert`). Close dialogs before asserting on header chrome (Radix `aria-hidden`).
 
 ## 6. Code Quality Standards
@@ -104,7 +105,7 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 ## 10. Project-Specific Standards
 
 ### Architecture
-Single Next.js app with route groups: `src/app/layout.tsx` (minimal shell) · `src/app/(storefront)/` (chrome + all shopper pages: home, shop, PDP, cart, checkout, wishlist, account, admin) · `src/app/(auth)/` (standalone login/register) · root `not-found.tsx` (chrome-less platform 404) · `src/app/api/` (3 route handlers) + sitemap/robots. `src/components/{ui,store,account,checkout}` · `src/lib` (domains + actions) · `prisma` (schema + seeds) · `tests` (vitest + playwright). Import direction: app → components → lib → db. `src/lib/db.ts` is server-only — never import it from a `"use client"` file.
+Single Next.js app with route groups: `src/app/layout.tsx` (minimal shell) · `src/app/(storefront)/` (chrome + all shopper pages: home, shop, PDP, cart, checkout, wishlist, account, admin) · `src/app/(auth)/` (standalone login/register/forgot-password) · root `not-found.tsx` (chrome-less platform 404) · `src/app/api/` (3 route handlers) + sitemap/robots. `src/components/{ui,store,account,checkout}` · `src/lib` (domains + actions) · `prisma` (schema + seeds) · `tests` (vitest + playwright). Import direction: app → components → lib → db. `src/lib/db.ts` is server-only — never import it from a `"use client"` file.
 
 ### API / Action Design
 Mutations: server actions with Zod + `ActionResult<T>`. Reads: RSC direct Prisma queries. Route handlers: GET `/api/search?q&limit` (429-limited), POST `/api/newsletter` (idempotent upsert), GET `/api/health`.

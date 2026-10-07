@@ -14,6 +14,7 @@
 | 1.0 | 2026-10-07 | Build agent (Super Z) | [RES]/[SYN]/[SAN] | Initial production blueprint after full-site recon, build, computed-style parity gate, and 103-test verification |
 | 1.1 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-1 remediation: route-group chrome split (ADR-008), reference-parity 404/auth/empty-states/drawer behavior, slate-palette pin (trap 7), stale-state logout fix, `.env.example` realignment, 107-test gate — see docs/remediation-plan-session1.md |
 | 1.2 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-2 remediation: catalog-order parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break), reference-exact seed data (3 ratings + 11 descriptions), cart-drawer item-row anatomy rewrite, /cart line-total consistency, deliberate-divergence register, 117-test gate — see docs/remediation-plan-session2.md |
+| 1.3 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-3 remediation: auth parity contract (ADR-010 — /forgot-password anti-enumeration flow, nameless registration with derived display name, •••••••• placeholders, per-route Metadata), account-tab anatomy (icon avatar, highlighted default address, Change-Password section), shop active-filter chips + reference empty state, PDP related-products rule (all same-category), hero-dot geometry, 140-test gate — see docs/remediation-plan-session3.md |
 
 ## Table of Contents
 
@@ -125,6 +126,13 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Consequences:** (+) All four order-sensitive surfaces match the reference exactly and are E2E-pinned (catalog-parity.spec.ts). (−) Reordering or adding products requires re-measuring the reference and updating sortOrder/createdAt together; the deliberate-divergence register documents the one order-adjacent behavior we do NOT replicate (the reference's mobile menu staying open after navigation).
 - **Alternatives Rejected:** computed rank columns (duplicates state, drifts); client-side re-sorting (fights RSC, breaks deep links).
 
+**ADR-010: Auth parity contract — nameless registration and anti-enumeration password reset**
+- **Context:** The reference register form collects exactly [Email, Password, Confirm Password] — no Name — and its login links to a real `/forgot-password` screen whose submit always shows the same neutral confirmation. The clone had an extra Name field, a disabled self-linking "Forgot password?", and no reset route; the reference also titles each auth page ("Login | Lumina") while the clone showed a bare "Lumina".
+- **Decision:** Each `(auth)` route is a server `page.tsx` owning `Metadata` (title only; the root template appends "| Lumina") delegating to a `*-form.tsx` client island. `registerSchema.name` is optional; `registerAction` derives the display name from the email local part (`deriveDisplayName`, `src/lib/validation.ts`) because `User.name` stays required in Prisma. New `requestPasswordResetAction`: Zod-validated email, rate-limited 5/15min/IP+email, user lookup feeds ONLY a `console.info` seam (never the response), identical neutral confirmation for known and unknown emails. Password inputs carry the reference's `••••••••` placeholder; the login "Forgot password?" link is enabled at `text-xs` → `/forgot-password`.
+- **Rationale:** Enumeration via the reset flow is the classic account-discovery vector — the reference's always-same copy is the correct pattern to replicate, now with real server-side enforcement. Deriving the name keeps the DB contract intact while matching the reference's 3-field form 1:1.
+- **Consequences:** (+) Whole reference auth surface at parity with production-grade security (rate limit + anti-enumeration); per-route titles correct; no Prisma migration. (−) No email is actually sent (documented seam — plug Resend/SES/Postmark at the `console.info` line); display names from odd local parts (`e2e-42@x` → "E2e 42") are cosmetic until Profile editing refines them.
+- **Alternatives Rejected:** keeping the Name field (visible form-structure divergence); a real reset token table + emailed link (no email infra; would still need the neutral response); revealing account existence (security regression vs the reference).
+
 ---
 
 ## 2. High-Level System Topology
@@ -193,7 +201,7 @@ ecommerce-store/
 │   │   │   ├── account/         ← dashboard (auth-gated, tabs)
 │   │   │   ├── wishlist/        ← hearts page
 │   │   │   └── admin/           ← role-gated console (superset)
-│   │   ├── (auth)/              ← STANDALONE login/register — no chrome (ADR-008)
+│   │   ├── (auth)/              ← STANDALONE login/register/forgot-password (ADR-008/010)
 │   │   ├── api/{health,search,newsletter}/route.ts   ← the 3-endpoint whitelist
 │   │   └── sitemap.ts · robots.ts
 │   ├── components/
@@ -340,7 +348,7 @@ Hover image zoom 500ms; slide-up Add-to-Cart 300ms; Sheet slide 500ms open / 300
 | SQL injection impossible | Prisma parameterized queries only; no `$queryRaw` with user input |
 | Passwords never stored/Logged | scrypt hashes only (`password.ts`); no secret ever appears in logs (actions log ids/status, not payloads) |
 | Sessions revocable + integrity | DB `Session` rows + HMAC-signed cookie (`auth.ts`); logout deletes the row |
-| Rate limiting | Login 10/15min/IP+email; checkout 10/10min; newsletter 10/10min/IP; search 60/min/IP (`rate-limit.ts`; in-memory — single-instance scope documented) |
+| Rate limiting | Login 10/15min/IP+email; password-reset 5/15min/IP+email (anti-enumeration, ADR-010); checkout 10/10min; newsletter 10/10min/IP; search 60/min/IP (`rate-limit.ts`; in-memory — single-instance scope documented) |
 | XSS | React escaping only; no `dangerouslySetInnerHTML` anywhere in the codebase |
 | Admin surface | `getCurrentUser()` + `isAdmin()` re-check INSIDE every admin action (never trust the UI gate); pages additionally `redirect()` |
 | Object ownership | Cart/wishlist/address mutations verify row ownership before writing (`account.ts`, `cart.ts`) |
@@ -377,25 +385,27 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 |---|---|---|---|---|
 | Unit — money | 1 | 10 | `src/lib/money.test.ts` | Vitest |
 | Unit — passwords | 1 | 4 | `src/lib/password.test.ts` | Vitest |
-| Unit — validation | 1 | 13 | `src/lib/validation.test.ts` | Vitest |
+| Unit — validation | 1 | 20 | `src/lib/validation.test.ts` | Vitest |
 | Unit — rate limit | 1 | 3 | `src/lib/rate-limit.test.ts` | Vitest |
 | Unit — db-path contract | 1 | 15 | `tests/db-path.test.ts` | Vitest |
-| E2E — smoke | 1 | 7 | `tests/e2e/smoke.spec.ts` | Playwright |
-| E2E — computed-style parity | 1 | 10 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
-| E2E — catalog-order parity | 1 | 9 | `tests/e2e/catalog-parity.spec.ts` | Playwright |
-| E2E — cart | 1 | 6 | `tests/e2e/cart.spec.ts` | Playwright |
-| E2E — checkout | 1 | 4 | `tests/e2e/checkout.spec.ts` | Playwright |
-| E2E — account | 1 | 8 | `tests/e2e/account.spec.ts` | Playwright |
-| E2E — auth | 1 | 7 | `tests/e2e/auth.spec.ts` | Playwright |
+| E2E — smoke | 1 | 9 | `tests/e2e/smoke.spec.ts` | Playwright |
+| E2E — computed-style parity | 1 | 11 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
+| E2E — catalog-order parity | 1 | 10 | `tests/e2e/catalog-parity.spec.ts` | Playwright |
+| E2E — cart | 1 | 7 | `tests/e2e/cart.spec.ts` | Playwright |
+| E2E — checkout | 1 | 5 | `tests/e2e/checkout.spec.ts` | Playwright |
+| E2E — account | 1 | 11 | `tests/e2e/account.spec.ts` | Playwright |
+| E2E — auth | 1 | 13 | `tests/e2e/auth.spec.ts` | Playwright |
 | E2E — wishlist | 1 | 4 | `tests/e2e/wishlist.spec.ts` | Playwright |
-| E2E — search | 1 | 5 | `tests/e2e/search.spec.ts` | Playwright |
+| E2E — search | 1 | 10 | `tests/e2e/search.spec.ts` | Playwright |
 | E2E — mobile navigation | 1 | 7 | `tests/e2e/mobile-navigation.spec.ts` | Playwright |
-| **Total** | **15** | **117** | | |
+| E2E — authenticated setup | 1 | 1 | `tests/e2e/auth.setup.ts` | Playwright |
+| **Total** | **16** | **140** | | |
 
 ### 8.2 Test Patterns
 
-- **Parity gate:** `storefront-parity.spec.ts` asserts computed styles against values measured live on the reference (colors, radii, the shadow pin, font). This is the objective "looks identical" gate — screenshots are not.
-- **Catalog-order gate:** `catalog-parity.spec.ts` pins the reference's product array order (Featured), the home On Sale membership, the Newest (reverse array) and Top Rated (stable rating-desc) sort semantics, the sort-dropdown option order, and the reference-exact ratings/descriptions.
+- **Parity gate:** `storefront-parity.spec.ts` asserts computed styles against values measured live on the reference (colors, radii, the shadow pin, font, hero-dot geometry). This is the objective "looks identical" gate — screenshots are not.
+- **Catalog-order gate:** `catalog-parity.spec.ts` pins the reference's product array order (Featured), the home On Sale membership, the Newest (reverse array) and Top Rated (stable rating-desc) sort semantics, the sort-dropdown option order, the reference-exact ratings/descriptions, and the related-products membership rule (all same-category, excluding self).
+- **Auth-contract gate:** `auth.spec.ts` pins the login/register form contract (3 fields, placeholders, enabled forgot-link), the nameless-registration flow, and the forgot-password anti-enumeration behavior (neutral confirmation for any email, field errors for invalid input, back-navigation).
 - **Isolation:** E2E global setup pushes/seeds/resets `db/e2e.db` (never the dev DB); `auth.setup.ts` logs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out with an empty state; cart specs start from a cleared cart (`clearCartViaDrawer`).
 - **Radix-aware selectors:** close dialogs before asserting on page chrome (aria-hidden); scope text/label lookups to `main` (footer collisions).
 - **TDD:** bugs get a failing regression test at the same seam before the fix; the suite asserts behavior through the UI/API only.
@@ -408,9 +418,9 @@ Numeric coverage gates are not configured; instead, every domain seam (money, va
 
 1. `bun run lint` — 0 errors, 0 warnings
 2. `bun run typecheck` — 0 errors
-3. `bun run test` — 45/45
+3. `bun run test` — 52/52
 4. `bun run build` — compiles (validates RSC boundaries + redirects)
-5. `bun run test:e2e` — 58/58 (after a fresh build)
+5. `bun run test:e2e` — 88/88 (after a fresh build; 87 spec tests + the setup login)
 6. No secrets/DB files/artifacts in `git status`
 
 ---
@@ -479,6 +489,7 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 | High | No real payment processor (cards are test-mode validated server-side; no funds move) | Checkout is functionally complete but not monetized | Documented next step — Stripe Payment Element integration (ADR-007 notes) |
 | Medium | In-memory rate limiter is per-instance | Multi-instance deploys would not share limits | Accepted at current scale; migrate to shared store before scaling out (ADR-002/§6) |
 | Medium | Product imagery served from the reference's public CDN | Availability dependency; not rebrandable | By design for parity; swap via `prisma/seed.ts` |
+| Low | Password-reset emails not sent (request is logged at a `console.info` seam; no token table) | Reset flow is anti-enumeration-correct but delivers nothing | Future: plug a transactional provider at the seam (ADR-010) |
 | Low | Order email notifications not sent | Confirmation is the success page + order history | Future outbox/worker (§7) |
 | Low | Reviews tab renders "coming soon" (reference parity) | No UGC surface | Deliberate parity decision |
 | Low | `typescript.ignoreBuildErrors: true` in next.config | Build does not type-check | `bun run typecheck` is the enforced gate; flip when the scaffold is retired |

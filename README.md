@@ -21,17 +21,17 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 |---|---|
 | 🛍️ **Full storefront** | Hero carousel (3 slides, auto-advance), feature bar, Trending / Shop by Category / New Arrivals / On Sale sections — byte-parity port of the reference |
 | 🔍 **Search** | Header dropdown with live typeahead (`/api/search`, 250 ms debounce, keyboard + click navigation) and `/shop?search=` results page |
-| 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params; sort semantics pinned to the reference (Featured = array order, Top Rated = stable rating-desc, Newest = reverse array order) |
-| 📦 **Product pages** | Badges, ratings, discount math, feature chips, quantity stepper, Description/Reviews/Shipping tabs, related products |
+| 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params; removable active-filter chips (category + search — clicking one clears it); reference-exact empty state; sort semantics pinned to the reference (Featured = array order, Top Rated = stable rating-desc, Newest = reverse array order) |
+| 📦 **Product pages** | Badges, ratings, discount math, feature chips, quantity stepper, Description/Reviews/Shipping tabs, related products (ALL same-category items excluding self — reference rule) |
 | 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with steppers, line totals, and server-re-derived totals. Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
 | ❤️ **Persistent wishlist** | Same guest→user identity pattern; hearts everywhere, dedicated page |
 | 💳 **3-step checkout** | Shipping → Payment (card/PayPal) → Review; server-validated, transactional order placement, confirmation page with the order number; reference-parity "No items in cart" empty state |
-| 👤 **Account dashboard** | Profile editing, real order history with status badges, address book CRUD, password change, logout |
+| 👤 **Account dashboard** | Profile editing (User-icon avatar, reference anatomy), real order history with status badges, address book CRUD with highlighted default card, Change Password + Notifications sections, logout |
 | 🛠️ **Admin console** | Role-gated `/admin`: revenue/orders/products/customers stats, order status transitions, stock + visibility management |
-| 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login; standalone chrome-less auth screens (reference parity) |
+| 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login; nameless registration (display name derived from the email); anti-enumeration password-reset flow; standalone chrome-less auth screens (reference parity) |
 | 📱 **Mobile navigation** | Left-sliding Radix Sheet (w-72) pinned by a dedicated E2E spec (the Tailwind v4 trap-log surface) |
 | 🧭 **Reference-exact edge states** | Chrome-less platform 404 (v3 slate palette, quoted path) and in-chrome "Product not found" block — both E2E-pinned |
-| 🧪 **117 automated tests** | 45 Vitest unit + 72 Playwright E2E, including computed-style + catalog-order parity gates measured against the live reference |
+| 🧪 **140 automated tests** | 52 Vitest unit + 88 Playwright E2E (incl. the authenticated setup), including computed-style + catalog-order + auth-contract parity gates measured against the live reference |
 | 🌐 **SEO & ops** | Per-page metadata, `sitemap.xml`, `robots.txt`, `/api/health` probe |
 
 ## Architecture
@@ -60,7 +60,7 @@ flowchart TB
         AT[Account tabs]
     end
     subgraph NextApp[Next.js 16 — RSC + actions]
-        PAGES[Pages: / /shop /product/... /cart<br/>/checkout /account /admin /wishlist /login /register]
+        PAGES[Pages: / /shop /product/... /cart<br/>/checkout /account /admin /wishlist<br/>/login /register /forgot-password]
         ACTIONS[Server actions<br/>auth · cart · account · checkout · admin]
         RH[Route handlers<br/>/api/health /api/search /api/newsletter]
         LIB[Domain libs<br/>cart · wishlist · auth · money · validation · rate-limit]
@@ -92,7 +92,7 @@ flowchart TB
 │   │   │   ├── 📄 page.tsx        ← home
 │   │   │   ├── 📂 shop/ · product/[slug]/ · cart/ · checkout/ (+ success/)
 │   │   │   └── 📂 wishlist/ · account/ · admin/ (orders, products)
-│   │   ├── 📂 (auth)/             ← standalone login/register (no chrome)
+│   │   ├── 📂 (auth)/             ← standalone login/register/forgot-password (no chrome)
 │   │   └── 📂 api/                ← health · search (typeahead) · newsletter
 │   ├── 📂 components/
 │   │   ├── 📂 ui/                 ← shadcn-style primitives (button…radio-group)
@@ -104,7 +104,7 @@ flowchart TB
 │       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts
 │       └── 📂 actions/            ← the mutation seam (ActionResult<T> + Zod)
 ├── 📂 tests/
-│   ├── 📂 e2e/                    ← 10 spec files (72 tests) + setup/global-setup
+│   ├── 📂 e2e/                    ← 10 spec files (87 tests) + setup/global-setup
 │   └── 📄 db-path.test.ts         ← URL-resolution contract
 └── 📄 AGENTS.md · CLAUDE.md · Project_Architecture_Document.md · ecommerce-store_SKILL.md
 ```
@@ -165,8 +165,8 @@ AUTH_SECRET=""
 
 | Suite | Command | Count | Scope |
 |---|---|---|---|
-| Unit (Vitest) | `bun run test` | 45 | Money math, scrypt hashing, Zod schemas, rate limiter, DB-path resolution |
-| E2E (Playwright) | `bun run test:e2e` | 62 | Smoke (404 · product-not-found · standalone auth) · computed-style parity · cart (incl. no-auto-open drawer pin) · checkout (incl. empty state) · account · auth · wishlist · search · mobile navigation |
+| Unit (Vitest) | `bun run test` | 52 | Money math, scrypt hashing, Zod schemas (incl. nameless-register + display-name derivation), rate limiter, DB-path resolution |
+| E2E (Playwright) | `bun run test:e2e` | 88 | Smoke (404 · product-not-found · standalone auth) · computed-style parity (incl. hero dots) · catalog parity (incl. related-products rule) · cart (incl. no-auto-open drawer pin) · checkout (incl. empty state) · account (avatar, default address, Change Password) · auth (form contract, nameless registration, forgot-password anti-enumeration) · wishlist · search (chips · empty state) · mobile navigation |
 
 E2E boots the **production standalone build** on port 3100 against an isolated `db/e2e.db` (pushed, seeded, and reset by the global setup), so the suite never touches your dev database. Run a single spec with `bunx playwright test tests/e2e/checkout.spec.ts`.
 

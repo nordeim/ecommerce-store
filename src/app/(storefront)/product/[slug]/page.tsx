@@ -56,28 +56,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     );
   }
 
+  // Reference rule (measured live 2026-10-07): "You May Also Like" lists ALL
+  // same-category products excluding self, in array order — NO cap and NO
+  // cross-category fill (headphones -> [speaker, pad]; planter -> [blanket]).
   const related = await db.product.findMany({
     where: { isActive: true, id: { not: product.id }, category: { slug: product.category.slug } },
     include: { category: true },
-    take: 4,
     orderBy: { sortOrder: "asc" },
   });
-  const relatedFallback =
-    related.length >= 4
-      ? related
-      : [
-          ...related,
-          ...(await db.product.findMany({
-            where: { isActive: true, id: { not: product.id }, category: { slug: { not: product.category.slug } } },
-            include: { category: true },
-            take: 4 - related.length,
-            orderBy: { sortOrder: "asc" },
-          })),
-        ];
 
   const discount = discountPercent(product.price, product.compareAtPrice);
   const features: string[] = JSON.parse(product.features || "[]");
-  const relatedCards: ProductCardData[] = relatedFallback.map((p) => ({
+  const relatedCards: ProductCardData[] = related.map((p) => ({
     id: p.id,
     slug: p.slug,
     name: p.name,

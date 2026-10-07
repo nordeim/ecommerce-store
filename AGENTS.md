@@ -46,13 +46,30 @@ from the injected location) — the repo contract itself is test-pinned in
 - **Route groups own the chrome.** `src/app/layout.tsx` is a minimal shell
   (html/body/font/metadata). `src/app/(storefront)/layout.tsx` carries the
   shopper chrome + `StoreProvider` hydration; `src/app/(auth)/` renders
-  login/register standalone (reference parity: no header/footer); the root
+  login/register/forgot-password standalone (reference parity: no
+  header/footer) — each route is a server `page.tsx` (owns `Metadata`:
+  "Login"/"Register"/"Forgot Password") delegating to a `*-form.tsx` client
+  island; the root
   `not-found.tsx` is the reference's chrome-less platform 404 (slate palette,
   pinned). Unknown PRODUCT slugs render an in-chrome "Product not found"
   block instead (`product/[slug]/page.tsx`).
 - **RSC by default.** Pages under `src/app/` are server components querying Prisma directly. `"use client"` only for interactive islands (`src/components/store/*`, `checkout-flow`, `account-tabs`).
 - **Catalog order is a parity contract.** `Product.sortOrder` mirrors the reference's product array position 1:1 (measured live 2026-10-07: headphones, watch, tee, speaker, planter, shoes, serum, blanket, sunglasses, mat, pad, pajama). "Featured" = sortOrder asc; "Top Rated" = `[{rating: desc}, {sortOrder: asc}]` (Prisma ties are otherwise undefined); "Newest" = createdAt desc with the seed's staggered createdAt (array position 1 = oldest). Home's On Sale section = first 4 `isOnSale` products in array order. Changing seed order requires re-measuring the reference.
-- **Deliberate divergences (superset behavior, do not "fix"):** the mobile nav auto-closes on navigation (the reference's Sheet stays open — verified live twice, a demo quirk); `/cart` renders real contents (the reference hardcodes its empty state); the checkout wizard writes real orders (the reference's checkout cannot see its own cart); the drawer keeps aria-labels + disabled-minus (the reference's stepper buttons are unlabeled).
+- **Auth parity contract (ADR-010).** The register form has exactly
+  [Email, Password, Confirm Password] — the reference collects NO name;
+  `registerAction` derives the display name from the email local part
+  (`deriveDisplayName` in `src/lib/validation.ts`; `john.doe@x` → "John Doe";
+  `User.name` stays required in Prisma). Password inputs carry the
+  `••••••••` placeholder. `/forgot-password` is a real anti-enumeration
+  action: Zod email, rate-limited 5/15min, ALWAYS the same neutral
+  confirmation (the user lookup only feeds a `console.info` seam — never the
+  response); no email is sent yet.
+- **PDP related products = ALL same-category products excluding self** in
+  array (sortOrder) order — no cap, no cross-category fill (measured live:
+  headphones → speaker + pad only). Shop active-filter chips render for
+  category (plain name) and search (quoted term) ONLY — price/sort never
+  chip; clicking a chip deep-links to the URL minus that param.
+- **Deliberate divergences (superset behavior, do not "fix"):** the mobile nav auto-closes on navigation (the reference's Sheet stays open — verified live twice, a demo quirk); the hero carousel pauses on hover (the reference keeps cycling — verified live 11s); the Settings tab keeps a Session/Log out card (the reference has NO logout anywhere); the newsletter form shows a real confirmation (the reference's submit is a no-op); `/cart` renders real contents (the reference hardcodes its empty state); the checkout wizard writes real orders (the reference's checkout cannot see its own cart); shop filters/sort are URL-deep-linkable (the reference's SPA never updates the URL); the drawer keeps aria-labels + disabled-minus (the reference's stepper buttons are unlabeled).
 - **Server actions are the only mutation seam** (`src/lib/actions/*.ts`): every action Zod-parses input and returns `ActionResult<T>` (`{ ok: true, data } | { ok: false, error: { message, fieldErrors? } }`). Never throw across the boundary.
 - Route-handler whitelist: `/api/health`, `/api/search` (typeahead), `/api/newsletter`. Adding more needs a reason.
 - Client commerce state lives in ONE place: `StoreProvider` (`src/components/store/store-provider.tsx`) — hydrated from the server on layout render, re-derived after every mutation. Totals are always server truth. The provider's state SURVIVES client-side navigation inside the `(storefront)` group — logout must call `setUser(null)` explicitly (the header otherwise keeps the logged-in icon).
@@ -63,7 +80,9 @@ from the injected location) — the repo contract itself is test-pinned in
 
 - Vitest matches `*.test.ts` only; Playwright matches `tests/e2e/*.spec.ts` — no double-pickup.
 - Playwright boots the **production standalone server** on port 3100 with the e2e DB. Build before `test:e2e` or the webServer times out.
-- The login action is rate-limited (10/15min/IP+email) — that's why `auth.setup.ts` logs in ONCE and saves `tests/e2e/.auth/user.json` as storageState. Don't add per-test logins.
+- The login action is rate-limited (10/15min/IP+email) and the password-reset action 5/15min — that's why `auth.setup.ts` logs in ONCE and saves `tests/e2e/.auth/user.json` as storageState. Don't add per-test logins.
+- Register specs do NOT fill a Name field (the reference form has none — the action derives it); register specs must use a fresh random email per run (`e2e-<ts>@example.com`) because the e2e-reset clears only `e2e-*` spec users.
+- Address-tab specs target the card via the `p` chain (`card >> p`), not `getByText("Home")` — the label span was removed for parity.
 - Login credentials for dev/E2E: `john@example.com` / `Demo1234!` (demo user, seeded order history) and `admin@luxestore.com` / `Admin1234!` (admin role).
 - Selector gotchas baked into the specs: the footer carries an "Email address" input and a "New York, NY 10001" text that collide with naive `getByLabel`/`getByText` — scope to `getByRole("main")`. The auth screens have NO `main` landmark and NO footer (reference parity) — use page-level selectors there, and target the card's error via `p[role=alert]` (Next's route announcer also carries `role=alert`). Radix `aria-hidden`s the page chrome while a dialog is open — close drawers before asserting on the header. Specs that inspect drawer contents open it via `openCartDrawer` (helpers.ts).
 

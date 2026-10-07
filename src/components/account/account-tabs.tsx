@@ -3,13 +3,13 @@
 /**
  * AccountTabs — the account dashboard: Profile / Orders / Addresses /
  * Settings. Byte-parity with the reference (pill TabsList, Personal
- * Information card with avatar block, order history rows with status
- * badges, address cards with Default badge, password form).
+ * Information card with the User-icon avatar block, order history rows with
+ * status badges, address cards with the highlighted Default card, password
+ * form under a "Change Password" heading).
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  Heart,
   LogOut,
   MapPin,
   Package,
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SessionUser } from "@/lib/auth";
 import { changePasswordAction, saveAddressAction, updateProfileAction } from "@/lib/actions/account";
@@ -64,15 +65,6 @@ const STATUS_LABELS: Record<string, string> = {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
 }
 
 export function AccountTabs({
@@ -141,8 +133,10 @@ export function AccountTabs({
           </div>
           <div className="p-6 pt-0 space-y-4">
             <div className="flex items-center gap-4 mb-6">
-              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-semibold text-primary">
-                {initials(user.name)}
+              {/* Reference parity: the avatar is the lucide User glyph in a
+                  bg-primary/10 circle (not initials). */}
+              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
+                <UserIcon className="h-8 w-8 text-primary" aria-hidden="true" />
               </div>
               <div>
                 <h3 className="font-semibold text-lg">{user.name}</h3>
@@ -237,11 +231,14 @@ export function AccountTabs({
 
       <TabsContent value="addresses" className="mt-2">
         <div className="border bg-card text-card-foreground shadow rounded-2xl">
-          <div className="flex items-center justify-between p-6">
+          <div className="space-y-1.5 p-6 flex flex-row items-center justify-between">
             <div className="font-semibold leading-none tracking-tight">Saved Addresses</div>
+            {/* Reference: outline "Add New" (transparent, 1px border, 8px
+                radius) — NOT the primary fill. */}
             <Button
+              variant="outline"
               size="sm"
-              className="rounded-xl"
+              className="rounded-lg"
               onClick={() => {
                 setEditingAddress(null);
                 setShowAddressForm((v) => !v || editingAddress !== null);
@@ -331,31 +328,40 @@ export function AccountTabs({
                 <p className="text-muted-foreground">No saved addresses yet.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 {addresses.map((a) => (
-                  <div key={a.id} className="p-4 rounded-xl border border-border/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      {a.isDefault && <Badge className="rounded-full">Default</Badge>}
-                      <span className="text-xs text-muted-foreground uppercase tracking-wide">{a.label}</span>
+                  <div
+                    key={a.id}
+                    className={
+                      a.isDefault
+                        ? // Reference: the default address is the highlighted
+                          // card — 2px primary/20 border over the secondary wash.
+                          "p-4 bg-secondary/30 rounded-xl border-2 border-primary/20"
+                        : "p-4 rounded-xl border border-border/50"
+                    }
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        {a.isDefault && <Badge className="rounded-full mb-2">Default</Badge>}
+                        <p className="font-medium">{a.fullName}</p>
+                        <p className="text-sm text-muted-foreground">{a.street}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {a.city}, {a.state} {a.zip}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{a.country}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingAddress(a);
+                          setShowAddressForm(false);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        Edit
+                      </Button>
                     </div>
-                    <p className="font-medium">{a.fullName}</p>
-                    <p className="text-sm text-muted-foreground">{a.street}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {a.city}, {a.state} {a.zip}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{a.country}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl mt-3"
-                      onClick={() => {
-                        setEditingAddress(a);
-                        setShowAddressForm(false);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                    >
-                      Edit
-                    </Button>
                   </div>
                 ))}
               </div>
@@ -370,52 +376,65 @@ export function AccountTabs({
             <div className="flex flex-col space-y-1.5 p-6">
               <div className="font-semibold leading-none tracking-tight">Account Settings</div>
             </div>
-            <div className="p-6 pt-0 space-y-4">
-              <form action={passwordAction} className="grid grid-cols-1 gap-4 max-w-md">
-                <div>
-                  <Label className="mb-2 block" htmlFor="acc-cp">Current Password</Label>
-                  <Input id="acc-cp" name="currentPassword" type="password" autoComplete="current-password" required />
-                  {fieldError(passwordState, "currentPassword") && (
-                    <p className="text-xs text-destructive mt-1">{fieldError(passwordState, "currentPassword")}</p>
+            {/* Reference anatomy: space-y-6 content, "Change Password" h3
+                (font-medium mb-2), fields in a space-y-3 max-w-md column
+                (labels plain, inputs mt-1.5), a full-width Separator between
+                sections. */}
+            <div className="p-6 pt-0 space-y-6">
+              <div>
+                <h3 className="font-medium mb-2">Change Password</h3>
+                <form action={passwordAction} className="space-y-3 max-w-md" noValidate>
+                  <div>
+                    <Label htmlFor="acc-cp">Current Password</Label>
+                    <Input id="acc-cp" name="currentPassword" type="password" autoComplete="current-password" required className="mt-1.5" />
+                    {fieldError(passwordState, "currentPassword") && (
+                      <p className="text-xs text-destructive mt-1">{fieldError(passwordState, "currentPassword")}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-np">New Password</Label>
+                    <Input id="acc-np" name="newPassword" type="password" autoComplete="new-password" required className="mt-1.5" />
+                    {fieldError(passwordState, "newPassword") && (
+                      <p className="text-xs text-destructive mt-1">{fieldError(passwordState, "newPassword")}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-cfp">Confirm Password</Label>
+                    <Input id="acc-cfp" name="confirmPassword" type="password" autoComplete="new-password" required className="mt-1.5" />
+                    {fieldError(passwordState, "confirmPassword") && (
+                      <p className="text-xs text-destructive mt-1">{fieldError(passwordState, "confirmPassword")}</p>
+                    )}
+                  </div>
+                  {passwordState && !passwordState.ok && !passwordState.error.fieldErrors && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {passwordState.error.message}
+                    </p>
                   )}
-                </div>
-                <div>
-                  <Label className="mb-2 block" htmlFor="acc-np">New Password</Label>
-                  <Input id="acc-np" name="newPassword" type="password" autoComplete="new-password" required />
-                  {fieldError(passwordState, "newPassword") && (
-                    <p className="text-xs text-destructive mt-1">{fieldError(passwordState, "newPassword")}</p>
+                  {passwordState?.ok && (
+                    <p role="status" aria-label="Password updated" className="text-sm text-emerald-600">
+                      Password updated.
+                    </p>
                   )}
-                </div>
-                <div>
-                  <Label className="mb-2 block" htmlFor="acc-cfp">Confirm Password</Label>
-                  <Input id="acc-cfp" name="confirmPassword" type="password" autoComplete="new-password" required />
-                  {fieldError(passwordState, "confirmPassword") && (
-                    <p className="text-xs text-destructive mt-1">{fieldError(passwordState, "confirmPassword")}</p>
-                  )}
-                </div>
-                {passwordState && !passwordState.ok && !passwordState.error.fieldErrors && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {passwordState.error.message}
-                  </p>
-                )}
-                {passwordState?.ok && (
-                  <p role="status" aria-label="Password updated" className="text-sm text-emerald-600">
-                    Password updated.
-                  </p>
-                )}
-                <Button type="submit" className="rounded-xl w-fit" disabled={passwordPending}>
-                  {passwordPending ? "Updating…" : "Update Password"}
-                </Button>
-              </form>
+                  <Button type="submit" className="rounded-xl" disabled={passwordPending}>
+                    {passwordPending ? "Updating…" : "Update Password"}
+                  </Button>
+                </form>
+              </div>
 
-              <div className="pt-6 border-t border-border">
-                <h3 className="font-semibold mb-1">Notifications</h3>
+              <Separator />
+
+              <div>
+                <h3 className="font-medium mb-2">Notifications</h3>
                 <p className="text-sm text-muted-foreground">Email notification preferences coming soon.</p>
               </div>
 
-              <div className="pt-6 border-t border-border flex items-center justify-between gap-4">
+              {/* Superset (documented divergence): the reference has NO logout
+                  anywhere on the account page — a production store needs one. */}
+              <Separator />
+
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-semibold mb-1">Session</h3>
+                  <h3 className="font-medium mb-2">Session</h3>
                   <p className="text-sm text-muted-foreground">Log out of this device.</p>
                 </div>
                 <Button

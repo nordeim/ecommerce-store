@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.0.0
+version: 1.3.0
 last_updated: "2026-10-07"
 tags:
   - e-commerce
@@ -28,7 +28,7 @@ tags:
 > Companion docs: `AGENTS.md` (agent cheat-sheet), `CLAUDE.md` (workflow),
 > `Project_Architecture_Document.md` (PAD — ADRs and rationale),
 > `docs/Tailwind-V4-Validation-Report.md` (trap log detail),
-> `docs/remediation-plan-session1.md` (post-push audit).
+> `docs/remediation-plan-session1.md` … `session3.md` (post-push audits).
 
 ---
 
@@ -246,21 +246,21 @@ app (routes) → components (ui/store/account/checkout) → lib (domains+actions
 |---|---|---|
 | — (root) | `src/app/layout.tsx` — html/body/font/metadata ONLY | `not-found.tsx` (chrome-less platform 404), `api/*`, `sitemap.ts`, `robots.ts` |
 | `(storefront)` | chrome + StoreProvider hydration | home, `shop/`, `product/[slug]/`, `cart/`, `checkout/` (+success), `wishlist/`, `account/`, `admin/` |
-| `(auth)` | `min-h-screen flex items-center justify-center bg-background px-4` | `login/`, `register/` — standalone cards, no chrome |
+| `(auth)` | `min-h-screen flex items-center justify-center bg-background px-4` | `login/`, `register/`, `forgot-password/` — standalone cards, no chrome. Each route = server `page.tsx` (owns `Metadata`: "Login"/"Register"/"Forgot Password"; root template appends "\| Lumina") + a `*-form.tsx` client island |
 
-Consequences: login/register are statically prerendered; unknown PRODUCT
+Consequences: the auth routes are statically prerendered; unknown PRODUCT
 slugs render an in-chrome "Product not found" block (`product/[slug]/page.tsx`)
 while unknown ROUTES hit the chrome-less 404; the StoreProvider instance
 survives client navigation inside `(storefront)` — logout MUST call
 `setUser(null)` (§6).
 
-### 5.3 Component inventory (46 tsx in src; 23 `"use client"`)
+### 5.3 Component inventory (50 tsx in src; 24 `"use client"`)
 
 | Directory | Contents |
 |---|---|
 | `src/components/ui/` | shadcn-style primitives with the reference's exact class strings: button, badge, input, label, separator, select, sheet, tabs, radio-group, toast |
 | `src/components/store/` | announcement-bar, header (nav + cart badge + account icon), search-bar (typeahead combobox), mobile-nav (left Sheet w-72), cart-drawer (right Sheet), product-card, hero-carousel, category-showcase, footer, star-rating, store-provider |
-| `src/components/account/` | account-tabs (4 tabs, useActionState forms), admin rows |
+| `src/components/account/` | account-tabs (4 tabs, useActionState forms; reference anatomy: User-icon avatar, highlighted default address card, Change Password/Notifications sections + Session superset), admin rows |
 | `src/components/checkout/` | checkout-flow (3-step wizard client island) |
 
 ### 5.4 Server/client decision tree
@@ -313,6 +313,22 @@ There are no custom hooks; one context covers all state:
   order; "Top Rated" = `[{rating: desc}, {sortOrder: asc}]` (Prisma ties
   are otherwise undefined). Home's On Sale = first 4 `isOnSale` products in
   array order. E2E-pinned by `tests/e2e/catalog-parity.spec.ts`.
+- **Auth forms are a parity contract (ADR-010):** register collects exactly
+  [Email, Password, Confirm Password] — the reference has NO Name field;
+  `registerSchema.name` is optional and `registerAction` derives the display
+  name from the email local part (`deriveDisplayName`, `src/lib/validation.ts`:
+  `john.doe@x` → "John Doe"; `User.name` stays required in Prisma). Password
+  inputs carry the `••••••••` placeholder. `/forgot-password` runs
+  `requestPasswordResetAction`: Zod email, rate-limited 5/15min/IP+email,
+  anti-enumeration (the user lookup feeds only a `console.info` seam — never
+  the response; every submit shows the same neutral confirmation). E2E-pinned
+  by `tests/e2e/auth.spec.ts`.
+- **PDP related products = ALL same-category products excluding self**, in
+  array (sortOrder) order — no cap, no cross-category fill (measured live:
+  headphones → speaker + pad; planter → blanket; sunglasses → watch). Shop
+  active-filter chips render for category (plain name) and search (quoted
+  term) ONLY — price/sort never chip; each chip deep-links to the URL minus
+  that param.
 - **Product imagery** loads from the reference's public CDN
   (`media.base44.com`, `images.unoptimized: true`, plain `<img>` for
   byte-parity). Swap to owned assets in the seed before rebranding.
@@ -361,6 +377,8 @@ There are no custom hooks; one context covers all state:
 | 11 | Escape "does nothing" in drawer tests | Escape fired before the async drawer mounted | `await dialog.waitFor({state:"visible"})` first |
 | 12 | Unhydrated page / native form fallbacks on 127.0.0.1 | Next 16 dev-origin protection | `allowedDevOrigins` in next.config (already set) |
 | 13 | Login page flashes logged-out header before redirect | — | Auth pages render chrome-less (ADR-008); nothing to flash |
+| 14 | Register E2E fails on `getByLabel("Name")` | The reference register form has NO Name field (ADR-010) | Don't fill one — the action derives the name; use a fresh `e2e-<ts>@example.com` email (the reset only clears `e2e-*`/`logout-*`/`mismatch-*` users) |
+| 15 | Live audit reads the wrong hero slide / hidden tab panel | Inactive slides stay in the DOM (`opacity-0`); Radix keeps all tab panels mounted | Filter by `checkVisibility()` / query the VISIBLE panel (`[data-state=active]`) |
 
 ## 10. Debugging Guide
 
@@ -380,9 +398,9 @@ There are no custom hooks; one context covers all state:
 ```bash
 bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
-bun run test          # 45 unit tests pass
-bun run build         # compiles; 19 routes
-bun run test:e2e      # 72 tests pass (requires the build)
+bun run test          # 52 unit tests pass
+bun run build         # compiles; 20 routes
+bun run test:e2e      # 88 tests pass (87 spec + the setup login; requires the build)
 ```
 
 Then:
@@ -418,6 +436,17 @@ Then:
    capabilities, not changing resting behaviors — the auto-opening drawer
    was a superset feature that still had to go because the reference rests
    differently.
+8. **Measure the VISIBLE state, not the DOM (L8).** The hero's inactive
+   slides stay mounted (opacity-0) and Radix keeps all tab panels in the
+   DOM — a naive `querySelector("h1")` reads slide 1 forever and
+   "proves" a working carousel is broken. Filter by `checkVisibility()` /
+   `[data-state=active]` before concluding anything about animated or
+   tabbed surfaces.
+9. **Security patterns can be parity requirements (L9).** The reference's
+   forgot-password copy is deliberately neutral — replicating the SCREEN
+   without the anti-enumeration/rate-limit behavior would be a visual clone
+   with a security hole. When a reference surface encodes a security
+   posture, port the posture, not just the pixels (ADR-010).
 
 ## 13. Pitfalls to Avoid
 
@@ -522,6 +551,27 @@ await logoutAction();
 setUser(null);        // the provider outlives client-side navigation
 router.refresh();
 router.push("/");
+```
+
+### 15.7 Auth forms (reference contract, ADR-010)
+
+```ts
+// Register: 3 fields only — no Name (the reference collects none)
+const parsed = registerSchema.safeParse({
+  name: formData.get("name") || undefined,   // optional
+  email: formData.get("email"),
+  password: formData.get("password"),
+  confirmPassword: formData.get("confirmPassword"),
+});
+const name = parsed.data.name ?? deriveDisplayName(email);
+// "john.doe@x.com" → "John Doe"; "e2e-42@x.com" → "E2e 42"
+
+// Password reset: anti-enumeration — NEVER reveal account existence
+const rl = rateLimit(`pwreset:${ip}:${email}`, 5, 15 * 60 * 1000);
+if (!rl.ok) return { ok: false, error: { message: "Too many reset requests…" } };
+const user = await db.user.findUnique({ where: { email }, select: { id: true } });
+console.info(`[password-reset] requested for ${user ? "known" : "unknown"} account ${email}`);
+return { ok: true, data: null };   // same neutral copy for every email
 ```
 
 ## 16. Coding Anti-Patterns
@@ -637,6 +687,7 @@ Full records with context/rationale/consequences in
 | 007 | Checkout = client wizard over one transactional server action |
 | 008 | Route-group chrome split (minimal root layout, standalone auth/404) |
 | 009 | Catalog order as a parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break) |
+| 010 | Auth parity contract (nameless registration + derived display name, anti-enumeration password reset) |
 
 ## Appendix B: The Meticulous Workflow
 
@@ -673,4 +724,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` | the post-push audit this skill distills |
+| `docs/remediation-plan-session1.md` … `session3.md` | the post-push audits this skill distills (latest: session-3) |

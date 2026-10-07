@@ -126,3 +126,24 @@ Stage Summary:
 - Deliverable: 4 parity gaps closed (catalog order ×3 surfaces, sort semantics, PDP data, drawer anatomy) + reference ground-truth transcribed + deliberate-divergence register + docs/SKILL refresh + 19 screenshots
 - Gate at ship: lint 0/0 · tsc clean · 45 unit · build OK · 72 E2E
 - docs/remediation-plan-session2.md records the full audit trail for future sessions
+- Committed 8187307 and pushed via the SSH wrapper (explicit --remote per session-2 lesson); remote main verified @ 8187307 == local HEAD; key shredded; tree clean
+
+---
+Task ID: S4 (session-3 review + remediation)
+Agent: main
+Task: Round-3 differential audit vs live reference; remediation plan; TDD execution; docs/SKILL/screenshots; ship (continuation of an interrupted session that had completed T1-T8 + T11)
+
+Work Log:
+- Interrupted session completed: round-3 live A/B audit (mobile menu deep-dive byte-identical + dismissal identical; hero auto-advance false positive resolved via checkVisibility; shop filters/filters-bar parity; 8 findings: AUTH-1/2/3 forgot-password flow + name field + placeholders, ACCT-1/2/3 avatar + address anatomy + settings structure, SEARCH-1 chips + empty state, PDP-1 related membership, HERO-2 dots), docs/remediation-plan-session3.md, TDD RED (17 failing) → GREEN (all fixes), 52 unit + 88 E2E, live A/B re-verification of every remediated surface, 26 screenshots (VLM-verified). It stopped at the start of T9 (docs)
+- This continuation: verified uncommitted state (lint 0/0, tsc clean, 52/52 unit), reviewed all code diffs (auth action + validation derive + reset action, shop chips, hero dots, forgot-password route, account tabs)
+- Ran the authoritative gate: build OK (20 routes, /forgot-password static) + full E2E = 88 passed; decoded the count via --list (87 spec tests + 1 setup login); unit per-file counts verified (validation 13→20)
+- T9 docs: AGENTS.md (auth routes + ADR-010 contract, expanded divergence register w/ hover-pause + logout card + newsletter + URL-sync, testing quirks: nameless register, e2e- user prefixes, address selector); CLAUDE.md (route groups, data contract, counts 52/88, spec scopes); README.md (features: chips/related-rule/forgot-password/nameless registration, 140-test row, mermaid + hierarchy, testing table incl. fixing the stale session-2 "62" row); PAD v1.3 (ADR-010 full record, §8.1 rebuilt 16-file/140-test table, §8.4 checklist, §6 rate-limit row, §11 reset-email seam; restored a swallowed section heading)
+- T10: ecommerce-store_SKILL.md → v1.3.0 (route-group table, 50 tsx/24 client recount, §7 auth contract + related/chip rules, §9 rows 14-15, §11 numbers, §12 lessons L8 visible-state measurement + L9 security-posture parity, §15.7 auth pattern, ADR-010 index, appendix C)
+- Checked off remediation-plan-session3.md T1-T12 with outcome notes; wrote docs/session_4.md
+- Swept all docs for stale counts (45/72/117/62/58) — clean after SKILL fix
+
+Stage Summary:
+- Deliverable: 8 parity gaps closed (forgot-password route + anti-enumeration action, nameless registration + deriveDisplayName, •••••••• placeholders, per-route auth Metadata, icon avatar, address anatomy, Settings structure, shop chips + empty state, related-products rule, hero dots) + 6 deliberate divergences formally registered
+- Gate at ship: lint 0/0 · tsc clean · 52 unit · build OK (20 routes) · 88 E2E (140 total; was 117)
+- docs/remediation-plan-session3.md + docs/session_4.md record the full audit trail
+- Committed and pushed to main via the SSH wrapper (explicit --remote, remote ref verified, key shredded) — see commit message for the hash

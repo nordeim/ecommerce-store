@@ -9,9 +9,12 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+// Session-3 parity: the reference register form has NO name field. The name
+// stays optional here so internal callers can still pass one; the register
+// ACTION derives a display name from the email local part when absent.
 export const registerSchema = z
   .object({
-    name: z.string().trim().min(2, "Name must be at least 2 characters").max(80),
+    name: z.string().trim().min(2, "Name must be at least 2 characters").max(80).optional(),
     email: z.string().trim().toLowerCase().email("Enter a valid email address"),
     password: z.string().min(8, "Password must be at least 8 characters").max(128),
     confirmPassword: z.string(),
@@ -20,6 +23,30 @@ export const registerSchema = z
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });
+
+export const passwordResetSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+});
+
+/**
+ * Derives a human display name from an email's local part
+ * ("john.doe@x.com" -> "John Doe", "e2e-42@x.com" -> "E2e 42").
+ * Used at registration because the reference form collects no name.
+ */
+export function deriveDisplayName(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const parts = local
+    .split(/[._+-]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "Customer";
+  const name = parts
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ")
+    .slice(0, 80)
+    .trim();
+  return name.length >= 2 ? name : "Customer";
+}
 
 export const addToCartSchema = z.object({
   productId: z.string().min(1),
