@@ -30,4 +30,11 @@ export default function globalSetup(): void {
   } catch {
     run("npx tsx prisma/seed.ts");
   }
+  // Clear transient state (carts, wishlists, spec users/addresses) so runs
+  // are reproducible — the cart/wishlist specs assert absolute counts.
+  try {
+    run("bun prisma/e2e-reset.ts");
+  } catch {
+    run("npx tsx prisma/e2e-reset.ts");
+  }
 }

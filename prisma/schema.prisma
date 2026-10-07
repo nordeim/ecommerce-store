@@ -1,0 +1,175 @@
+// LUXE Store — Prisma schema (SQLite)
+// Money is stored as INTEGER CENTS everywhere (see src/lib/money.ts).
+// SQLite has no native enums — status/role fields are Strings validated by
+// Zod schemas at the application boundary (src/lib/validation.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+  name         String
+  firstName    String?
+  lastName     String?
+  phone        String?
+  role         String    @default("user") // "user" | "admin" (validated in code)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  addresses    Address[]
+  orders       Order[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  icon      String // lucide icon component name rendered by the storefront
+  sortOrder Int       @default(0)
+  products  Product[]
+}
+
+model Product {
+  id             String          @id @default(cuid())
+  slug           String          @unique
+  name           String
+  description    String
+  categoryId     String
+  category       Category        @relation(fields: [categoryId], references: [id])
+  price          Int // cents
+  compareAtPrice Int? // cents; non-null drives the "-N%" badge
+  rating         Float           @default(0)
+  reviewCount    Int             @default(0)
+  badge          String? // "Best Seller" | "Top Rated" | "Popular" | ...
+  image          String
+  features       String          @default("[]") // JSON-encoded string[]
+  stock          Int             @default(25)
+  isTrending     Boolean         @default(false)
+  isNewArrival   Boolean         @default(false)
+  isOnSale       Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  cartItems      CartItem[]
+  wishlistItems  WishlistItem[]
+  orderItems     OrderItem[]
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  token     String     @unique
+  userId    String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([cartId, productId])
+}
+
+model Wishlist {
+  id        String         @id @default(cuid())
+  token     String         @unique
+  userId    String?        @unique
+  createdAt DateTime       @default(now())
+  items     WishlistItem[]
+}
+
+model WishlistItem {
+  id         String    @id @default(cuid())
+  wishlistId String
+  wishlist   Wishlist  @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@unique([wishlistId, productId])
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String  @default("Home")
+  fullName  String
+  street    String
+  city      String
+  state     String
+  zip       String
+  country   String  @default("United States")
+  isDefault Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id              String       @id @default(cuid())
+  number          String       @unique // ORD-YYYY-NNNNNN
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id])
+  email           String
+  status          String       @default("processing") // processing | in_transit | delivered | cancelled
+  subtotal        Int // cents
+  shipping        Int          @default(0)
+  total           Int // cents
+  shippingAddress String // JSON snapshot of the checkout address
+  paymentMethod   String       @default("card") // card | paypal
+  cardLast4       String?
+  placedAt        DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  items           OrderItem[]
+  events          OrderEvent[]
+}
+
+model OrderItem {
+  id            String  @id @default(cuid())
+  orderId       String
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id])
+  nameSnapshot  String
+  imageSnapshot String
+  unitPrice     Int // cents at purchase time
+  quantity      Int
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      String // "placed" | "status_changed"
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}

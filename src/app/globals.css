@@ -1,0 +1,98 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * LUXE Store — Tailwind v4 CSS-first theme, pinned to the reference app's
+ * computed values (recon: fuzzy-lumina-style-hub.base44.app).
+ *
+ * Tailwind v4 trap-log pins applied here (docs/Tailwind-V4-Validation-Report.md):
+ *  1. Theme colors are FULL hsl() values — never bare `H S% L%` triplets,
+ *     which silently resolve to transparent under `@theme inline`.
+ *  2. `--shadow-sm` is pinned to the v3 geometry: v4 moved v3's `shadow-sm`
+ *     up to `shadow` and inserted a heavier `shadow-sm`; the pin keeps every
+ *     byte-identical `shadow-sm` class rendering the v3 shadow.
+ *  3. The hero overlay uses the sRGB-interpolated arbitrary gradient form —
+ *     v4 interpolates `bg-gradient-to-*` in oklab (see HeroCarousel).
+ * ------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-background: hsl(30 25% 98%);
+  --color-foreground: hsl(240 10% 10%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(240 10% 10%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(240 10% 10%);
+  --color-primary: hsl(24 80% 50%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(30 15% 94%);
+  --color-secondary-foreground: hsl(240 10% 10%);
+  --color-muted: hsl(30 10% 94%);
+  --color-muted-foreground: hsl(240 5% 46%);
+  --color-accent: hsl(24 80% 96%);
+  --color-accent-foreground: hsl(24 80% 30%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(30 15% 90%);
+  --color-input: hsl(30 15% 90%);
+  --color-ring: hsl(24 80% 50%);
+  --color-chart-1: hsl(24 80% 50%);
+  --color-chart-2: hsl(173 58% 39%);
+  --color-chart-3: hsl(197 37% 24%);
+  --color-chart-4: hsl(43 74% 66%);
+  --color-chart-5: hsl(27 87% 67%);
+  --color-sidebar: hsl(30 25% 98%);
+  --color-sidebar-foreground: hsl(240 5% 46%);
+  --color-sidebar-primary: hsl(24 80% 50%);
+  --color-sidebar-primary-foreground: hsl(0 0% 100%);
+  --color-sidebar-accent: hsl(30 15% 94%);
+  --color-sidebar-accent-foreground: hsl(240 10% 10%);
+  --color-sidebar-border: hsl(30 15% 90%);
+  --color-sidebar-ring: hsl(24 80% 50%);
+
+  /* Radius scale pinned to the reference's v3 + shadcn(--radius: .75rem)
+   * computed values (recon-measured: rounded-md=10px, rounded-xl=12px,
+   * rounded-2xl=16px, rounded-3xl=24px). Tailwind v4 shifted the named
+   * scale up one notch (v4 2xl=20px, xl=16px) — trap log #6 — so every
+   * named radius the reference uses is pinned to its v3 geometry. */
+  --radius-xs: 0.125rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+
+  /* v3 shadow-scale pin — trap log #5 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  --font-sans: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* Utility used by the storefront horizontal feature rows (kept as a plain
+   rule so the compiled CSS matches the reference's overflow behavior). */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

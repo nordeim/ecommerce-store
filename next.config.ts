@@ -11,20 +11,21 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Path-based SPA routing: the reference app's views live at real paths
-  // (/goals, /goals/<id>, /my-tasks, /activity, /team, /settings). We keep
-  // ONE page (src/app/page.tsx) and rewrite those paths onto it; the client
-  // store syncs view state with location.pathname (see src/lib/router.ts).
-  async rewrites() {
-    return [
-      { source: "/goals", destination: "/" },
-      { source: "/goals/:goalId", destination: "/" },
-      { source: "/my-tasks", destination: "/" },
-      { source: "/tasks", destination: "/" },
-      { source: "/activity", destination: "/" },
-      { source: "/team", destination: "/" },
-      { source: "/settings", destination: "/" },
-    ];
+  // Next 16 dev-origin protection silently blocks dev chunks served to a
+  // 127.0.0.1 origin (unhydrated page / native form fallbacks) — allow both
+  // loopback hostnames during development. No effect on production builds.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  images: {
+    // Product/hero art is served from the reference app's public media CDN;
+    // optimization is disabled so the standalone server ships byte-identical
+    // sources without a sharp dependency.
+    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "media.base44.com",
+      },
+    ],
   },
 };
 

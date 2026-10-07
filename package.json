@@ -1,7 +1,7 @@
 {
-  "name": "orbital",
+  "name": "luxe-store",
   "version": "1.0.0",
-  "description": "ORBITAL — AI project management workspace (Next.js 16 + React 19 + Prisma/SQLite)",
+  "description": "LUXE Store — production-grade e-commerce storefront + admin (Next.js 16 + React 19 + Prisma/SQLite)",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -13,6 +13,7 @@
     "db:seed": "bun prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
+    "db:setup": "prisma db push --accept-data-loss && bun prisma/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -27,6 +28,7 @@
     "@radix-ui/react-radio-group": "^1.3.7",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.2.14",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -38,6 +40,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "z-ai-web-dev-sdk": "^0.0.18",
+    "zod": "^3.25.76",
     "zustand": "^5.0.6"
   },
   "devDependencies": {

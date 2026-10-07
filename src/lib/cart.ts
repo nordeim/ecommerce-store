@@ -1,0 +1,205 @@
+/**
+ * Cart domain — server-side reads + mutations over the Prisma store.
+ *
+ * Model: one cart per cookie token (`luxe_cart`, random 192-bit value), and
+ * at most one cart per user. Guest carts merge into the user cart on login
+ * (see actions/auth.ts). Reads NEVER mint carts — only mutations do, because
+ * a Server Component render cannot set cookies.
+ */
+import { randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
+import { db } from "./db";
+import { shippingForSubtotal } from "./money";
+
+export const CART_COOKIE = "luxe_cart";
+
+export type CartItemDto = {
+  id: string;
+  productId: string;
+  slug: string;
+  name: string;
+  image: string;
+  price: number; // cents
+  quantity: number;
+  lineTotal: number; // cents
+};
+
+export type CartDto = {
+  items: CartItemDto[];
+  itemCount: number;
+  subtotal: number; // cents
+  shipping: number; // cents
+  total: number; // cents
+};
+
+export const EMPTY_CART: CartDto = { items: [], itemCount: 0, subtotal: 0, shipping: 0, total: 0 };
+
+function toDto(items: { id: string; quantity: number; product: { id: string; slug: string; name: string; image: string; price: number } }[]): CartDto {
+  const dtoItems: CartItemDto[] = items.map((i) => ({
+    id: i.id,
+    productId: i.product.id,
+    slug: i.product.slug,
+    name: i.product.name,
+    image: i.product.image,
+    price: i.product.price,
+    quantity: i.quantity,
+    lineTotal: i.product.price * i.quantity,
+  }));
+  const subtotal = dtoItems.reduce((s, i) => s + i.lineTotal, 0);
+  const shipping = dtoItems.length === 0 ? 0 : shippingForSubtotal(subtotal);
+  return {
+    items: dtoItems,
+    itemCount: dtoItems.reduce((s, i) => s + i.quantity, 0),
+    subtotal,
+    shipping,
+    total: subtotal + shipping,
+  };
+}
+
+/** Read the cart for the current visitor WITHOUT creating one. */
+export async function getCart(userId: string | null): Promise<CartDto> {
+  const store = await cookies();
+  const token = store.get(CART_COOKIE)?.value;
+  const cart = await resolveCartRow(token, userId, false);
+  if (!cart) return EMPTY_CART;
+  return toDto(cart.items);
+}
+
+/**
+ * Resolve (and optionally create) the cart row for this visitor.
+ * Order of preference: the user's own cart, then the guest cookie cart.
+ */
+async function resolveCartRow(
+  token: string | undefined,
+  userId: string | null,
+  create: boolean,
+): Promise<{ id: string; items: { id: string; productId: string; quantity: number; product: { id: string; slug: string; name: string; image: string; price: number } }[] } | null> {
+  if (userId) {
+    const userCart = await db.cart.findUnique({
+      where: { userId },
+      include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+    });
+    if (userCart) return userCart;
+    if (create) {
+      // Adopt the guest cart if one exists, else mint a user cart.
+      if (token) {
+        const guest = await db.cart.findUnique({ where: { token } });
+        if (guest && !guest.userId) {
+          return db.cart.update({
+            where: { id: guest.id },
+            data: { userId },
+            include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+          });
+        }
+      }
+      return db.cart.create({
+        data: { token: randomBytes(24).toString("base64url"), userId },
+        include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+      });
+    }
+    return null;
+  }
+  if (!token) {
+    if (!create) return null;
+    const newToken = randomBytes(24).toString("base64url");
+    const store = await cookies();
+    store.set(CART_COOKIE, newToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 90,
+    });
+    return db.cart.create({
+      data: { token: newToken },
+      include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+    });
+  }
+  const existing = await db.cart.findUnique({
+    where: { token },
+    include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+  });
+  if (existing) return existing;
+  if (!create) return null;
+  return db.cart.create({
+    data: { token },
+    include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+  });
+}
+
+/** Merge a guest cart into the user's cart after login (quantity-max union). */
+export async function mergeGuestCartIntoUserCart(token: string | undefined, userId: string): Promise<void> {
+  if (!token) return;
+  const guest = await db.cart.findUnique({ where: { token } });
+  if (!guest || guest.userId === userId) return;
+  const userCart =
+    (await db.cart.findUnique({ where: { userId } })) ??
+    (await db.cart.create({ data: { token: randomBytes(24).toString("base64url"), userId } }));
+  for (const item of await db.cartItem.findMany({ where: { cartId: guest.id } })) {
+    const existing = await db.cartItem.findUnique({
+      where: { cartId_productId: { cartId: userCart.id, productId: item.productId } },
+    });
+    if (existing) {
+      await db.cartItem.update({
+        where: { id: existing.id },
+        data: { quantity: Math.min(99, Math.max(existing.quantity, item.quantity)) },
+      });
+    } else {
+      await db.cartItem.create({
+        data: { cartId: userCart.id, productId: item.productId, quantity: item.quantity },
+      });
+    }
+  }
+  await db.cart.delete({ where: { id: guest.id } });
+}
+
+export async function addItem(userId: string | null, productId: string, quantity: number): Promise<CartDto> {
+  const product = await db.product.findUnique({ where: { id: productId } });
+  if (!product || !product.isActive) throw new Error("Product not found");
+  const cart = await resolveCartRow(undefined, userId, true);
+  if (!cart) throw new Error("Cart unavailable");
+  const existing = cart.items.find((i) => i.productId === productId);
+  if (existing) {
+    await db.cartItem.update({
+      where: { id: existing.id },
+      data: { quantity: Math.min(99, existing.quantity + quantity) },
+    });
+  } else {
+    await db.cartItem.create({ data: { cartId: cart.id, productId, quantity } });
+  }
+  return toDto(
+    await db.cartItem.findMany({
+      where: { cartId: cart.id },
+      include: { product: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  );
+}
+
+export async function updateItem(userId: string | null, itemId: string, quantity: number): Promise<CartDto> {
+  const cart = await resolveCartRow(undefined, userId, false);
+  if (!cart) return EMPTY_CART;
+  const item = cart.items.find((i) => i.id === itemId);
+  if (!item) return toDto(cart.items);
+  if (quantity <= 0) {
+    await db.cartItem.delete({ where: { id: itemId } });
+  } else {
+    await db.cartItem.update({ where: { id: itemId }, data: { quantity } });
+  }
+  return toDto(
+    await db.cartItem.findMany({
+      where: { cartId: cart.id },
+      include: { product: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  );
+}
+
+export async function clearCart(cartId: string): Promise<void> {
+  await db.cartItem.deleteMany({ where: { cartId } });
+}
+
+export async function getCartId(userId: string | null): Promise<string | null> {
+  const row = await resolveCartRow(undefined, userId, false);
+  return row?.id ?? null;
+}
