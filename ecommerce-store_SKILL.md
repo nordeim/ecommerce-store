@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.5.0
+version: 1.6.0
 last_updated: "2026-10-07"
 tags:
   - e-commerce
@@ -451,6 +451,10 @@ There are no custom hooks; one context covers all state:
 | 19 | Header badge keeps the old count after placing an order | `useState(initialCart)` never re-reads the fresh prop a `router.refresh()` delivers | Adjust-state-during-render re-sync in StoreProvider (ADR-012); checkout spec asserts exact-name "Cart" |
 | 20 | Wishlist-heart spec fails with "element not found" right after a successful toggle | The aria-label flipped Add→Remove, orphaning a state-anchored locator | State-stable locators: `/«Product» (from|to) wishlist/` or `aria-pressed` |
 | 21 | PDP spec hits the related-products heart/ATC instead of the buy panel's | Cards below the buy panel carry the same button roles | Scope to `main .flex.items-center.gap-4.mb-4` (the action row) |
+| 22 | Form fills silently wiped on a client-island page (button never enables, action never fires) | Values typed before React hydration get reset when React adopts the server DOM | `page.waitForLoadState("networkidle")` after every full `goto` into a client island (checkout wizard, login form) |
+| 23 | Checkout spec re-enters the wizard and clicks Continue immediately | The wizard REMOUNTS fresh on every navigation into `/checkout` — step 1, empty fields | Refill the shipping/payment form after re-entering checkout |
+| 24 | Admin stock form Save appears to lose the write | The server action + `router.refresh()` land asynchronously; a racing reload reads stale truth | Wait ~800ms after Save, then reload + assert the input value |
+| 25 | Orders keep succeeding against products the admin just zeroed | Nothing server-side validated stock (UI-only enforcement) | ADR-013: `clampToStock` on cart mutations + in-transaction rejection + atomic decrement at placement (`stock.spec.ts`) |
 
 ## 10. Debugging Guide
 
@@ -543,6 +547,22 @@ Then:
     failure reads "element not found" which looks like the bug, not the
     success. Match state-stable patterns (`/«Product» (from|to) wishlist/`)
     or assert on `aria-pressed` instead.
+
+14. **Hydrate before you type (L14).** On a full page load of a
+    client-island page, input values set before React hydrates are wiped
+    when React adopts the server DOM — the spec then hangs on a forever-
+    disabled Continue button. `waitForLoadState("networkidle")` after
+    `goto` is the cheap vaccine; the checkout wizard additionally remounts
+    fresh (step 1, empty fields) on every entry into `/checkout`.
+
+15. **Enforce invariants at the deepest seam that can still affect the
+    outcome (L15).** The stock contract is enforced three times — PDP UI
+    (stepper cap), cart mutations (server clamp), placement (in-transaction
+    rejection + atomic decrement) — because each layer catches what the
+    ones above cannot (API callers, mid-session stock drops). The
+    session-4 guest-cart bug hid for three rounds because only one seam
+    had coverage; `stock.spec.ts` and `guest-checkout.spec.ts` exist so no
+    seam is untested again.
 
 ## 13. Pitfalls to Avoid
 

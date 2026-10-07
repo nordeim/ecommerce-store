@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default async function AdminProductsPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?redirect=/admin");
   if (!isAdmin(user)) redirect("/");
 
   const products = await db.product.findMany({

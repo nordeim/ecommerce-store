@@ -17,6 +17,7 @@
 | 1.3 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-3 remediation: auth parity contract (ADR-010 — /forgot-password anti-enumeration flow, nameless registration with derived display name, •••••••• placeholders, per-route Metadata), account-tab anatomy (icon avatar, highlighted default address, Change-Password section), shop active-filter chips + reference empty state, PDP related-products rule (all same-category), hero-dot geometry, 140-test gate — see docs/remediation-plan-session3.md |
 | 1.4 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-4 remediation: money/interaction parity round (ADR-011 — $9.99 flat shipping, reference-exact toast subsystem, transactional delta steppers fixing a lost-update race, cart-mutation guest-token fix, auth-screen anatomy rebuild incl. tinted error boxes + native validation + pinned copy, env-gated email-verification machinery, humanized-slug PDP titles, Reviews/Shipping tab panels, feature-bar cards, footer Join/separator), 170-test gate — see docs/remediation-plan-session4.md |
 | 1.5 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-5 remediation: buy-panel/home parity round (ADR-012 — StoreProvider server-truth re-sync fixing the stale post-order cart badge; wishlist heart color contract: red `fill-destructive` active + muted card hearts + the 82px px-8 PDP heart incl. the reference's mobile clipped-heart geometry; home section hairline dividers), reference quirk register (cosmetic wishlist, base44 Google OAuth), 173-test gate — see docs/remediation-plan-session5.md |
+| 1.6 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-6 remediation: superset correctness round (ADR-013 — server-side stock enforcement: clamped cart mutations + in-transaction overselling rejection + atomic placement decrement; ADR-014 — redirect-after-login with `validateRedirectPath` open-redirect hardening; `/login` becomes dynamic), first admin-console E2E coverage + guest-checkout E2E, dead-code removal, 188-test gate — see docs/remediation-plan-session6.md |
 
 ## Table of Contents
 
@@ -148,6 +149,24 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Rationale:** Server truth must win whenever the server re-renders the chrome — the badge, hearts, and account icon are all derived from the same provider state, and any server-side mutation followed by a refresh would show stale UI otherwise. The heart colors/geometry and home dividers follow the standing rule: parity surfaces are measured, not guessed.
 - **Consequences:** (+) The post-order badge (and any future refresh-delivered mutation) reflects server truth without a reload — pinned by the checkout spec's exact-name "Cart" assertion; three parity gaps closed with tests at the same seams. (−) One more nuance for contributors: props re-sync only on identity change, so the layout must actually re-render server-side (any `router.refresh()` does). The reference's mobile clipped-heart overflow is now replicated byte-exactly (a visual defect inherited for parity's sake).
 - **Alternatives Rejected:** an effect-based sync (`set-state-in-effect` is an error under the repo's React Compiler lint); a `key`-based provider remount (resets drawer/toast/UI state on every refresh); wrapping the heart in a container query or responsive px (diverges from the reference DOM); registering the mobile overflow as a divergence and shrinking the heart (breaks the measured desktop parity).
+
+---
+
+**ADR-013: Server-side stock enforcement — clamp in the cart, reject and decrement at placement**
+- **Context:** The round-6 audit found the clone's inventory was cosmetic server-side: only the PDP UI capped quantity at stock (`buy-panel.tsx` disables the stepper and renders "Out of Stock"); `addItem`/`changeQuantityBy` accepted any quantity (cap 99), and `placeOrderAction` neither validated stock nor decremented it. A cart assembled before an admin stock drop could oversell a sold-out product, and the admin console's stock numbers never moved with sales — operationally meaningless. (The reference has no inventory concept at all — this is pure superset territory, so no parity constraint applies.)
+- **Decision:** Three enforcement layers. (1) Cart mutations CLAMP increases at the product's current stock via the pure seam `clampToStock(next, current, stock)` in `src/lib/cart-quantity.ts` — decreases and deletes always pass through, an existing line is never reduced below its current quantity, and a new line on a sold-out product clamps to 0 (skipped). (2) `placeOrderAction` re-reads every line's stock INSIDE the placement transaction and rejects overselling with a customer-safe message ("Sorry, «name» only has N left in stock. Please update your quantity.") — the cart stays intact for the shopper to adjust. (3) On success, each product's stock is DECREMENTED atomically with the order write. Seeded demo orders are fixtures created directly by the seed (never decremented); the seed upsert restores `stock: 25` on every `db:setup`/E2E global-setup run, and `prisma/dev-cleanup.ts` restores 25 on the dev DB.
+- **Rationale:** Overselling is the cardinal correctness bug of an e-commerce superset; the admin's stock forms only mean something if placement moves them. Clamping (not rejecting) at the cart layer keeps parity surfaces free of error states the reference never shows, while rejection at placement is where the customer can still act on the information.
+- **Consequences:** (+) Inventory is trustworthy end-to-end; the admin stock form, the PDP sold-out state, and placement now form one consistent system — pinned by `tests/e2e/stock.spec.ts` (clamp, rejection, decrement, sold-out PDP) which also gives the admin console its first E2E coverage. (−) Stock decrements make per-run E2E state drift without the reseed (mitigated: the global-setup reseed restores 25 per run, and run volumes are ~10 units/product — far under 25). No visible UI was added (the reference shows no stock indicators).
+- **Alternatives Rejected:** rejecting at the cart layer too (surfaces error states the reference never shows on parity surfaces); optimistic client-side reservation (no persistence guarantee); decrement-on-ship (the admin's stock column would misrepresent sellable inventory between placement and fulfillment); a separate `Reservation` table (overkill for a single-writer SQLite storefront with no concurrent-worker requirement).
+
+---
+
+**ADR-014: Redirect-after-login with validated same-origin targets**
+- **Context:** The round-6 audit found gated pages dropped visitor intent: `/account` redirected guests to bare `/login`, and the login form always pushed `/account` after success — a guest clicking "View Orders" on the order-success page, or following a deep link to a gated page, lost their destination. Standard e-commerce UX (and the scandihaven reference stack's `validateRedirectPath` hardening pattern) carries the intent through.
+- **Decision:** `/account` and every `/admin*` page gate anonymous visitors to `/login?redirect=<their path>`. The login server page reads `searchParams` (the route is therefore DYNAMIC — it was static before) and passes `redirectTo` into the client form island, which computes `validateRedirectPath(redirectTo) ?? "/account"` and pushes that after a successful login. `validateRedirectPath` (pure, in `src/lib/validation.ts`, unit-pinned) accepts ONLY same-origin relative paths: must start with `/`, must not start with `//` or `/\`, no backslashes, no scheme-bearing colon-before-slash, no bare `/`, length ≤ 512. Register keeps its existing post-signup landing (` /account`, or `/verify-email` when the gate is on).
+- **Rationale:** Carrying intent is table-stakes UX for a production storefront; honoring an unvalidated URL is the classic open-redirect vulnerability (phishing via `?redirect=//evil.com`), so the validator is deliberately conservative — unknown shapes fall through to the safe default rather than being "fixed up".
+- **Consequences:** (+) Guests land where they started after authenticating; open-redirect payloads are inert (pinned by `tests/e2e/auth.spec.ts`: honored-target and ignored-payload cases). (−) `/login` loses its static prerender (now `ƒ` in the build output — acceptable for an auth page); the redirect param appears in the URL (matches standard practice).
+- **Alternatives Rejected:** `useSearchParams()` in the client island (needs a Suspense boundary to keep the static prerender — more churn for no user value); POST-body redirect carrying (breaks deep-link sharing); storing intent in a cookie (survives the session, surprising users who abandoned the flow).
 
 ---
 
@@ -404,10 +423,10 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 |---|---|---|---|---|
 | Unit — money | 1 | 10 | `src/lib/money.test.ts` | Vitest |
 | Unit — passwords | 1 | 4 | `src/lib/password.test.ts` | Vitest |
-| Unit — validation | 1 | 20 | `src/lib/validation.test.ts` | Vitest |
+| Unit — validation | 1 | 25 | `src/lib/validation.test.ts` | Vitest |
 | Unit — rate limit | 1 | 3 | `src/lib/rate-limit.test.ts` | Vitest |
 | Unit — db-path contract | 1 | 15 | `tests/db-path.test.ts` | Vitest |
-| Unit — cart delta-quantity | 1 | 5 | `src/lib/cart-quantity.test.ts` | Vitest |
+| Unit — cart delta-quantity + stock clamp | 1 | 10 | `src/lib/cart-quantity.test.ts` | Vitest |
 | Unit — slug/code format | 1 | 5 | `src/lib/format.test.ts` | Vitest |
 | Unit — verification codes | 1 | 4 | `src/lib/verification.test.ts` | Vitest |
 | E2E — smoke | 1 | 11 | `tests/e2e/smoke.spec.ts` | Playwright |
@@ -416,14 +435,16 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | E2E — cart | 1 | 10 | `tests/e2e/cart.spec.ts` | Playwright |
 | E2E — checkout | 1 | 5 | `tests/e2e/checkout.spec.ts` | Playwright |
 | E2E — account | 1 | 11 | `tests/e2e/account.spec.ts` | Playwright |
-| E2E — auth | 1 | 15 | `tests/e2e/auth.spec.ts` | Playwright |
+| E2E — auth | 1 | 17 | `tests/e2e/auth.spec.ts` | Playwright |
 | E2E — wishlist | 1 | 6 | `tests/e2e/wishlist.spec.ts` | Playwright |
 | E2E — search | 1 | 10 | `tests/e2e/search.spec.ts` | Playwright |
 | E2E — mobile navigation | 1 | 7 | `tests/e2e/mobile-navigation.spec.ts` | Playwright |
 | E2E — guest cart | 1 | 2 | `tests/e2e/guest-cart.spec.ts` | Playwright |
+| E2E — guest checkout | 1 | 1 | `tests/e2e/guest-checkout.spec.ts` | Playwright |
+| E2E — stock enforcement (incl. admin seam) | 1 | 2 | `tests/e2e/stock.spec.ts` | Playwright |
 | E2E — verify email | 1 | 3 | `tests/e2e/verify-email.spec.ts` | Playwright |
 | E2E — authenticated setup | 1 | 1 | `tests/e2e/auth.setup.ts` | Playwright |
-| **Total** | **21** | **173** | | |
+| **Total** | **23** | **188** | | |
 
 ### 8.2 Test Patterns
 
@@ -519,6 +540,8 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 | Low | Verification codes not emailed — logged at the `console.info` seam; the gate env-defaults OFF | The verification machinery is complete and E2E-tested but inert until a provider lands | Flip `AUTH_REQUIRE_EMAIL_VERIFICATION=true` when a provider is wired (ADR-011) |
 | Low | Order email notifications not sent | Confirmation is the success page + order history | Future outbox/worker (§7) |
 | Low | Reviews tab renders "coming soon" (reference parity) | No UGC surface | Deliberate parity decision |
+| Low | `OrderEvent` rows are written (placed/status_changed) but displayed nowhere — no admin order-detail view | Operational audit trail exists only in the DB | Round-7 candidate: admin order-detail page rendering the event timeline |
+| Low | Admin console E2E coverage is stock-form-only (`stock.spec.ts`'s admin seam) — status transitions and stats are live-verified only | Regressions in admin mutations beyond stock would not fail CI | Round-7 candidate: dedicated `admin.spec.ts` (dashboard stats, order-status combobox, visibility toggle) |
 | Low | `typescript.ignoreBuildErrors: true` in next.config | Build does not type-check | `bun run typecheck` is the enforced gate; flip when the scaffold is retired |
 | Resolved | Sandbox env shadowing (parent `.env`/shell inject overriding `DATABASE_URL`) diverted the dev DB outside the repo | Stale rows survived reseeds; repo-root `db/` stayed empty | Documented in AGENTS.md; sandbox paths hard-linked onto the repo DB; repo contract test-pinned |
 

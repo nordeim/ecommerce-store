@@ -25,6 +25,9 @@ async function nextOrderNumber(): Promise<string> {
   return `${prefix}${String(count + 1).padStart(3, "0")}`;
 }
 
+/** Customer-safe rejection thrown INSIDE the placement transaction. */
+class StockRejectedError extends Error {}
+
 export async function placeOrderAction(
   _prev: ActionResult<{ orderNumber: string }> | null,
   formData: FormData,
@@ -91,6 +94,23 @@ export async function placeOrderAction(
 
   try {
     const orderNumber = await db.$transaction(async (tx) => {
+      // Session-6 (STOCK-1): re-read each line's stock INSIDE the
+      // transaction — a cart assembled before an admin stock drop must not
+      // oversell. Reject with a customer-safe message naming the product
+      // and the remaining units; the cart stays intact for the shopper to
+      // adjust. (The steppers already clamp, so this only fires when stock
+      // moved AFTER the cart was assembled.)
+      for (const item of cart.items) {
+        const row = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { name: true, stock: true },
+        });
+        if (row && row.stock < item.quantity) {
+          throw new StockRejectedError(
+            `Sorry, ${row.name} only has ${row.stock} left in stock. Please update your quantity.`,
+          );
+        }
+      }
       const number = await nextOrderNumber();
       const order = await tx.order.create({
         data: {
@@ -119,16 +139,23 @@ export async function placeOrderAction(
           events: { create: { type: "placed", note: `Placed via ${input.paymentMethod}` } },
         },
       });
+      // Decrement inventory atomically with the order write (STOCK-1) —
+      // the admin console's stock numbers now move with real sales.
+      for (const item of cart.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity } },
+        });
+      }
       await tx.cartItem.deleteMany({ where: { cartId } });
       return number;
     });
     return { ok: true, data: { orderNumber } };
   } catch (e) {
+    if (e instanceof StockRejectedError) {
+      return { ok: false, error: { message: e.message } };
+    }
     console.error("[placeOrderAction]", e);
     return { ok: false, error: { message: "We could not place your order. Please try again." } };
   }
-}
-
-export async function subscribeNewsletterAction(_prev: ActionResult<null> | null, formData: FormData): Promise<ActionResult<null>> {
-  return { ok: false, error: { message: "Use the newsletter API route" } };
 }

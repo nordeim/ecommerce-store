@@ -54,6 +54,28 @@ export function deriveDisplayName(email: string): string {
   return name.length >= 2 ? name : "Customer";
 }
 
+/**
+ * Redirect-after-login target validation (session-6, REDIRECT-1).
+ * `/account` and `/admin` send anonymous visitors to
+ * `/login?redirect=<their path>`; the login form may only honor a
+ * SAME-ORIGIN relative path. Everything else — protocol-relative URLs
+ * (`//evil.com`), backslash tricks (`/\evil.com`), absolute/scheme-bearing
+ * strings, bare roots, oversized values — falls through to null so the
+ * caller uses its safe default (`/account`).
+ */
+export function validateRedirectPath(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  if (raw.length > 512) return null;
+  if (!raw.startsWith("/")) return null;
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return null;
+  if (raw.includes("\\")) return null;
+  // A colon before any "/" (other than the leading one) implies a scheme.
+  const body = raw.slice(1);
+  if (body.includes(":") && body.indexOf(":") < body.indexOf("/")) return null;
+  if (raw === "/") return null; // no bare root — the caller's default is better
+  return raw;
+}
+
 export const addToCartSchema = z.object({
   productId: z.string().min(1),
   quantity: z.number().int().min(1).max(99).default(1),

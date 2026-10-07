@@ -190,3 +190,26 @@ Stage Summary:
 - Gate at ship: lint 0/0 · tsc clean · 66 unit · build OK (21 routes) · 107 E2E (173 total; was 170)
 - docs/remediation-plan-session5.md + docs/session_8.md record the full audit trail
 - Committed to main and pushed via the SSH wrapper (explicit --remote, remote ref verified, key shredded)
+
+---
+Task ID: S7 (session-6 review + remediation, round 6)
+Agent: main
+Task: Round-6 differential audit vs live reference (superset-correctness focus + 5th mobile-nav verification); remediation plan; TDD execution; docs/SKILL/screenshots; ship
+
+Work Log:
+- Baseline verified at main @ f4204d9: full gate green (66 unit / 107 E2E / 173 total) matching the session-5 ship state; DB contract verified (hard link, inode 274771)
+- Round-6 live A/B audit (agent-browser ref + clone + admin + guest sessions): mobile nav parity (5th verification — dialog 288×844 @ (0,0), nav flex flex-col gap-4 mt-8, 5 byte-identical links, no Tailwind v4 regression); drift re-check of home/shop/PDP/login all at parity; reference checkout still permanently "No items in cart" (demo quirk; recon's 23-order-success.png is actually a homepage capture); superset sweeps green (card checkout, PayPal checkout, guest checkout ORD-2026-006, admin stats/orders/products + mobile sweep, account, wishlist, SEO)
+- 4 findings: STOCK-1 (High — stock neither validated nor decremented server-side; overselling possible; admin stock numbers never moved), REDIRECT-1 (Medium — gated pages dropped visitor intent; no redirect-after-login), DEAD-1 (Low — dead subscribeNewsletterAction stub), GUEST-CHECKOUT-COV (checkout specs all authenticated — the exact coverage gap that hid the session-4 guest-cart bug)
+- docs/remediation-plan-session6.md written and validated against the codebase (dependency sweeps: no spec pins stock/admin, seed upsert restores stock 25 per E2E run, /login static-ness pinned nowhere)
+- TDD: RED (10 unit — clampToStock + validateRedirectPath seams undefined; 2 E2E stock assertions failing for the right reasons) → GREEN (clampToStock pure seam + addItem/changeQuantityBy clamping incl. in-transaction stock re-read; placeOrderAction in-transaction validation + StockRejectedError + atomic decrement; validateRedirectPath + /account + /admin* gating + login page/form wiring (route now dynamic); stub deleted; guest-checkout.spec.ts added). Four test bugs fixed during GREEN (admin-login URL, strict-mode money strings, wizard-remount refill, async admin Save) — documented as lessons
+- Tooling: prisma/dev-cleanup.ts extended to restore canonical stock 25; scripts/verify-session6.ts (live dev-server verification) + scripts/capture-session6.ts (screenshots) added; en route discovered that some agent-browser sessions route through the sandbox preview proxy and Next 16 aborts those Server-Action POSTs (x-forwarded-host mismatch) — drive action flows with Playwright instead (documented)
+- Gate at ship: lint 0/0 · tsc clean · 76/76 unit · build OK (21 routes, /login dynamic) · 112/112 E2E = 188 total (was 173)
+- Live re-verification (scripts/verify-session6.ts): guest /account → /login?redirect=/account → login lands on /account; //evil.com payload ignored; live order placement decremented stock 25 → 24; dev DB restored to canonical afterward
+- Docs: AGENTS.md (stock + redirect contracts, testing quirks: admin-login pattern, hydration races, wizard remount, guest specs list), CLAUDE.md (ADR-013/014 bullets, 76/112 counts, spec list), README.md (188 tests, inventory-integrity + redirect + guest-checkout feature rows, testing table), PAD v1.6 (ADR-013/014 full records, §8.1 23-file/188-test table, §11 round-7 candidates: admin order-detail view + admin E2E expansion), SKILL v1.6.0 (§9 rows 22-25, §12 lessons L14-L15), plan checked off with outcome notes, docs/session_10.md
+- Screenshots: 4 new (37-redirect-gate, 38-admin-stock-editing, 39-pdp-out-of-stock, 40-checkout-stock-rejected; VLM-verified) → 40 total; .env.example verified current (no new env plumbing)
+
+Stage Summary:
+- Deliverable: server-side inventory integrity (clamp + reject + atomic decrement — ADR-013) + redirect-after-login with open-redirect hardening (ADR-014) + dead-code removal + first admin-console E2E coverage + guest-checkout E2E pin
+- Gate at ship: lint 0/0 · tsc clean · 76 unit · build (21 routes) · 112 E2E (188 total; was 173)
+- docs/remediation-plan-session6.md + docs/session_10.md record the full audit trail
+- Committed to main and pushed via the SSH wrapper (explicit --remote, remote ref verified, key shredded)

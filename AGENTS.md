@@ -101,6 +101,25 @@ from the injected location) — the repo contract itself is test-pinned in
   passing `undefined` silently minted a new cart per guest add and made
   guest steppers read as empty (the session-4 live-audit bug; pinned by
   `tests/e2e/guest-cart.spec.ts`, which opts out of storageState).
+- **Stock is enforced SERVER-side, silently clamped in the cart and rejected
+  at placement (ADR-013, session-6).** The PDP UI caps the stepper at stock
+  (`buy-panel.tsx`); the server does too: `addItem`/`changeQuantityBy` clamp
+  increases at the product's current stock (never reject — no error state on
+  parity surfaces; decreases/deletes always pass; the pure seam is
+  `clampToStock` in `src/lib/cart-quantity.ts`). `placeOrderAction` re-reads
+  every line's stock INSIDE the transaction and rejects overselling with a
+  customer-safe message ("Sorry, «name» only has N left in stock. …"), then
+  decrements stock atomically with the order write. Seeded demo orders are
+  fixtures (never decremented); the seed upsert restores `stock: 25` on
+  every `db:setup`/global-setup run; `prisma/dev-cleanup.ts` restores 25 on
+  the dev DB. Pinned by `tests/e2e/stock.spec.ts` (which also drives the
+  admin stock form — the admin console's first E2E coverage).
+- **Redirect-after-login (ADR-014, session-6):** `/account` and `/admin*`
+  gate anonymous visitors to `/login?redirect=<their path>`; the login
+  server page passes the param into the form island, which only honors a
+  `validateRedirectPath`-validated same-origin relative path (open-redirect
+  payloads fall through to `/account`). `/login` is therefore a DYNAMIC
+  route (was static). Pinned by `tests/e2e/auth.spec.ts`.
 - **Steppers post DELTAS, not absolutes** (ADR-011): the drawer and /cart
   steppers call `adjustQuantity(itemId, ±1)`; the server applies them inside
   `db.$transaction` (`changeQuantityBy`) so rapid clicks each land exactly
@@ -119,7 +138,21 @@ from the injected location) — the repo contract itself is test-pinned in
 - Playwright boots the **production standalone server** on port 3100 with the e2e DB. Build before `test:e2e` or the webServer times out.
 - The login action is rate-limited (10/15min/IP+email) and the password-reset action 5/15min — that's why `auth.setup.ts` logs in ONCE and saves `tests/e2e/.auth/user.json` as storageState. Don't add per-test logins.
 - Register specs do NOT fill a Name field (the reference form has none — the action derives it); register specs must use a fresh random email per run (`e2e-<ts>@example.com`) because the e2e-reset clears only `e2e-*` spec users.
-- `guest-cart.spec.ts` opts OUT of storageState (`test.use({ storageState: { cookies: [], origins: [] } })`) — it is the only spec exercising the cookie-token cart path; every other cart/wishlist spec runs authenticated.
+- The stock spec logs in as the seeded ADMIN through a second browser
+  context (`adminLogin(browser)`) — the admin email draws from its own
+  rate-limit bucket, so it coexists with the demo-user setup login. Its
+  `setStock` helper clicks the admin form's Save then WAITS (~800ms + reload)
+  before asserting — the server action + `router.refresh()` land
+  asynchronously and a reload that races the write reads stale truth.
+- **Client-island hydration races (session-6 lesson, hit twice):** after a
+  FULL page load (`page.goto`) of a client-island page (checkout wizard,
+  login form), values typed before React hydrates get WIPED by React's
+  adoption of the server DOM — the action then never fires or the Continue
+  button never enables. Wait for `page.waitForLoadState("networkidle")`
+  after `goto` before filling. Also: the checkout wizard REMOUNTS fresh on
+  every navigation into `/checkout` (step 1, empty address fields) — specs
+  that re-enter checkout must refill the form.
+- `guest-cart.spec.ts` and `guest-checkout.spec.ts` opt OUT of storageState (`test.use({ storageState: { cookies: [], origins: [] } })`) — they are the only specs exercising the cookie-token cart path (the latter end-to-end through a guest order placement); every other cart/wishlist/checkout spec runs authenticated.
 - The verify-email happy path consumes the seeded `unverified@example.com` fixture (code `123456`); `prisma/e2e-reset.ts` restores its unverified state + code every run, so specs can rely on it.
 - Toast specs: assert position only after the enter spring settles (~450ms) and with ±2px tolerance (the reference's own live values oscillate mid-spring); `getByText("… added to cart!")` resolves to the toast ITEM itself — do not climb to the parent (that's the region).
 - Drawer specs cannot assert the header badge while the Radix dialog is open (aria-hidden hides it from the role tree) — assert the drawer's own totals instead.

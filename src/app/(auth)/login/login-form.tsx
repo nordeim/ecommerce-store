@@ -17,19 +17,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthErrorBox } from "@/app/(auth)/auth-error";
 import { loginAction } from "@/lib/actions/auth";
+import { validateRedirectPath } from "@/lib/validation";
 
-export function LoginForm() {
+export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   const router = useRouter();
   const [state, formAction, pending] = React.useActionState(loginAction, null);
+  // Session-6 (REDIRECT-1): after login, return the shopper to the page
+  // that gated them here — but only a validated same-origin relative path
+  // (open-redirect payloads fall through to the account default).
+  const target = validateRedirectPath(redirectTo) ?? "/account";
 
   // On success, refresh so the layout re-renders with the session, then go
-  // to the account dashboard (the reference logs in to the storefront).
+  // to the redirect target (the reference logs in to the storefront — the
+  // account dashboard is the default landing).
   React.useEffect(() => {
     if (state?.ok) {
       router.refresh();
-      router.push("/account");
+      router.push(target);
     }
-  }, [state, router]);
+  }, [state, router, target]);
 
   return (
     // Centering + background come from the (auth) group layout (reference:

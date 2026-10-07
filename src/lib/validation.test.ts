@@ -7,6 +7,7 @@ import {
   newsletterSchema,
   registerSchema,
   searchSchema,
+  validateRedirectPath,
 } from "./validation";
 
 describe("loginSchema", () => {
@@ -120,5 +121,42 @@ describe("newsletterSchema / searchSchema", () => {
     expect(searchSchema.safeParse({ q: "x", limit: 6 }).success).toBe(true);
     expect(searchSchema.safeParse({ q: "", limit: 6 }).success).toBe(false);
     expect(searchSchema.safeParse({ q: "x", limit: 11 }).success).toBe(false);
+  });
+});
+
+// Redirect-after-login (session-6, REDIRECT-1): /account and /admin send
+// guests to /login?redirect=<their path>; the login form may only send the
+// user back to a SAME-ORIGIN relative path — everything else (open-redirect
+// payloads, protocol-relative URLs, backslash tricks, oversized strings)
+// must fall through to null so the caller uses its safe default.
+describe("validateRedirectPath (session-6)", () => {
+  it("accepts same-origin relative paths", () => {
+    expect(validateRedirectPath("/account")).toBe("/account");
+    expect(validateRedirectPath("/admin")).toBe("/admin");
+    expect(validateRedirectPath("/shop?category=electronics")).toBe("/shop?category=electronics");
+    expect(validateRedirectPath("/product/wireless-headphones")).toBe("/product/wireless-headphones");
+  });
+
+  it("rejects protocol-relative and backslash payloads", () => {
+    expect(validateRedirectPath("//evil.com")).toBeNull();
+    expect(validateRedirectPath("/\\evil.com")).toBeNull();
+    expect(validateRedirectPath("\\/evil.com")).toBeNull();
+  });
+
+  it("rejects absolute URLs and scheme-bearing strings", () => {
+    expect(validateRedirectPath("https://evil.com")).toBeNull();
+    expect(validateRedirectPath("http://localhost:3000/account")).toBeNull();
+    expect(validateRedirectPath("javascript:alert(1)")).toBeNull();
+  });
+
+  it("rejects empty, missing, and non-path input", () => {
+    expect(validateRedirectPath("")).toBeNull();
+    expect(validateRedirectPath(undefined)).toBeNull();
+    expect(validateRedirectPath("account")).toBeNull();
+    expect(validateRedirectPath("/")).toBeNull(); // no bare root — use the default
+  });
+
+  it("rejects oversized values", () => {
+    expect(validateRedirectPath("/shop?x=" + "a".repeat(600))).toBeNull();
   });
 });

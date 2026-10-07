@@ -34,6 +34,10 @@ async function main() {
     await db.order.deleteMany({ where: { id: { in: strayIds } } });
   }
 
+  // Session-6 (STOCK-1): placements now DECREMENT stock — restore the
+  // canonical 25 so post-audit dev state matches the seed.
+  const stockReset = await db.product.updateMany({ where: { stock: { not: 25 } }, data: { stock: 25 } });
+
   await db.newsletterSubscriber.deleteMany({ where: { email: { in: TEST_SUBSCRIBERS } } });
 
   // Wishlist + cart residue on every user (the seed starts both empty; the
@@ -49,6 +53,7 @@ async function main() {
     db.newsletterSubscriber.count(),
   ]);
   console.log(`[dev-cleanup] removed ${strayIds.length} stray order(s)`);
+  console.log(`[dev-cleanup] reset ${stockReset.count} product stock value(s) to 25`);
   console.log(`[dev-cleanup] orders: ${orders.map((o) => o.number).join(", ")}`);
   console.log(`[dev-cleanup] wishlist items: ${wish}, newsletter: ${subs}`);
 }

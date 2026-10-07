@@ -9,7 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "./db";
-import { nextQuantity } from "./cart-quantity";
+import { clampToStock, nextQuantity } from "./cart-quantity";
 import { shippingForSubtotal } from "./money";
 
 export const CART_COOKIE = "luxe_cart";
@@ -167,13 +167,19 @@ export async function addItem(userId: string | null, productId: string, quantity
   const cart = await resolveCartRow(token, userId, true);
   if (!cart) throw new Error("Cart unavailable");
   const existing = cart.items.find((i) => i.productId === productId);
+  // Session-6 (STOCK-1): the server — not just the PDP UI — enforces stock.
+  // Increases clamp at the available stock (never reject: the resting UI
+  // shows no error state the reference never shows); a new line on a
+  // sold-out product clamps to 0 and is skipped entirely.
+  const current = existing?.quantity ?? 0;
+  const target = clampToStock(current + quantity, current, product.stock);
+  if (target <= 0) return toDto(cart.items);
   if (existing) {
-    await db.cartItem.update({
-      where: { id: existing.id },
-      data: { quantity: Math.min(99, existing.quantity + quantity) },
-    });
+    if (target !== current) {
+      await db.cartItem.update({ where: { id: existing.id }, data: { quantity: target } });
+    }
   } else {
-    await db.cartItem.create({ data: { cartId: cart.id, productId, quantity } });
+    await db.cartItem.create({ data: { cartId: cart.id, productId, quantity: target } });
   }
   return toDto(
     await db.cartItem.findMany({
@@ -192,6 +198,10 @@ export async function addItem(userId: string | null, productId: string, quantity
  * overwrote the first (lost update). Deltas are applied inside a
  * transaction against the row's CURRENT quantity, so SQLite's single-writer
  * serialization makes every +1 land exactly once.
+ *
+ * Session-6 (STOCK-1): increases clamp at the product's CURRENT stock —
+ * re-read inside the transaction so an admin stock drop is honored — while
+ * decreases and deletes always pass through.
  */
 export async function changeQuantityBy(userId: string | null, itemId: string, delta: number): Promise<CartDto> {
   const store = await cookies();
@@ -202,9 +212,12 @@ export async function changeQuantityBy(userId: string | null, itemId: string, de
   if (!item) return toDto(cart.items);
 
   await db.$transaction(async (tx) => {
-    const row = await tx.cartItem.findUnique({ where: { id: itemId }, select: { quantity: true } });
+    const row = await tx.cartItem.findUnique({
+      where: { id: itemId },
+      select: { quantity: true, product: { select: { stock: true } } },
+    });
     if (!row) return; // removed concurrently — nothing to adjust
-    const next = nextQuantity(row.quantity, delta);
+    const next = clampToStock(nextQuantity(row.quantity, delta), row.quantity, row.product.stock);
     if (next <= 0) {
       await tx.cartItem.delete({ where: { id: itemId } });
     } else if (next !== row.quantity) {

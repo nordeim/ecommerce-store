@@ -100,7 +100,30 @@ test.describe("auth", () => {
 
   test("the account page redirects anonymous visitors to login", async ({ page }) => {
     await page.goto("/account");
-    await expect(page).toHaveURL(/\/login/);
+    // Session-6 (REDIRECT-1): the gate carries the intent — the shopper
+    // returns to /account after logging in, not the generic landing.
+    // (Next.js does not percent-encode the slash in the query value.)
+    await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)account$/);
+  });
+
+  test("login honors a valid redirect target (session-6)", async ({ page }) => {
+    await page.goto("/login?redirect=%2Fshop%3Fcategory%3Delectronics");
+    await page.getByLabel("Email").fill("john@example.com");
+    await page.getByLabel("Password").fill("Demo1234!");
+    await page.getByRole("button", { name: "Log in", exact: true }).click();
+    await page.waitForURL("**/shop?category=electronics");
+    await expect(page.getByRole("heading", { name: "Electronics" })).toBeVisible();
+  });
+
+  test("login ignores open-redirect payloads (session-6)", async ({ page }) => {
+    await page.goto("/login?redirect=%2F%2Fevil.com");
+    await page.getByLabel("Email").fill("john@example.com");
+    await page.getByLabel("Password").fill("Demo1234!");
+    await page.getByRole("button", { name: "Log in", exact: true }).click();
+    // The payload was ignored — the default account landing, and the
+    // browser never leaves the origin.
+    await page.waitForURL("**/account");
+    await expect(page).toHaveURL(/\/account$/);
   });
 
   test("logout returns to the storefront", async ({ page }) => {

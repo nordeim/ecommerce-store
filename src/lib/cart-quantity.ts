@@ -23,3 +23,17 @@ export function nextQuantity(current: number, delta: number): number {
   if (next <= 0) return 0;
   return Math.min(next, MAX_LINE_QUANTITY);
 }
+
+/**
+ * Cap a proposed quantity at the product's available stock (session-6,
+ * STOCK-1). Only INCREASES are capped — decreases and the delete signal
+ * pass through untouched, and an existing line is never reduced below its
+ * current quantity by clamping (a shopper must be able to keep — and
+ * reduce — a line even after an admin drops its stock; placement, not the
+ * stepper, is where overselling is rejected).
+ */
+export function clampToStock(next: number, current: number, stock: number): number {
+  if (next <= current) return next;
+  if (stock <= current) return current;
+  return Math.min(next, stock);
+}

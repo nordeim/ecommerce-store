@@ -12,7 +12,9 @@ export const metadata: Metadata = {
 
 export default async function AccountPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // Session-6 (REDIRECT-1): carry the intent — after login the shopper
+  // returns here instead of the generic account landing.
+  if (!user) redirect("/login?redirect=/account");
 
   const [orders, addresses] = await Promise.all([
     db.order.findMany({

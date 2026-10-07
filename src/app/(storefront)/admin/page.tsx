@@ -16,7 +16,9 @@ export const metadata: Metadata = {
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // Session-6 (REDIRECT-1): carry the intent for the anonymous admin too
+  // (a non-admin landing on /admin after login bounces to / — no loop).
+  if (!user) redirect("/login?redirect=/admin");
   if (!isAdmin(user)) redirect("/");
 
   const [orderCount, productCount, userCount, revenueAgg, recentOrders] = await Promise.all([
