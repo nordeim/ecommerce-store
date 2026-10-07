@@ -50,7 +50,10 @@ export function NewsletterForm() {
           aria-label="Email address"
           className="flex h-9 w-full rounded-md border px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-background/10 border-background/20 text-background placeholder:text-background/40"
         />
-        <Button type="submit" disabled={state === "loading"}>
+        {/* Reference parity (session-4): the reference's Join button is the
+            SMALL variant — h-8 px-3 text-xs (32px tall, 12px font), not the
+            default h-9 text-sm. Measured live. */}
+        <Button type="submit" size="sm" disabled={state === "loading"}>
           {state === "loading" ? "Joining…" : "Join"}
         </Button>
       </form>

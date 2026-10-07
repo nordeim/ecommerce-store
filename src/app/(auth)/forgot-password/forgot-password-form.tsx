@@ -15,6 +15,7 @@ import { ArrowLeft, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthErrorBox } from "@/app/(auth)/auth-error";
 import { requestPasswordResetAction } from "@/lib/actions/auth";
 
 export function ForgotPasswordForm() {
@@ -37,39 +38,38 @@ export function ForgotPasswordForm() {
             If an account exists with that email, you&apos;ll receive a password reset link shortly.
           </p>
         ) : (
-          <form action={formAction} className="space-y-4" noValidate>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  required
-                  className="pl-10 h-12"
-                />
-              </div>
-              {state && !state.ok && state.error.fieldErrors?.email && (
-                <p role="alert" className="text-sm text-destructive">
-                  {state.error.fieldErrors.email}
-                </p>
-              )}
-            </div>
-            {state && !state.ok && !state.error.fieldErrors && (
-              <p role="alert" className="text-sm text-destructive">
-                {state.error.message}
-              </p>
+          <>
+            {state && !state.ok && (
+              <AuthErrorBox
+                message={state.error.message ?? Object.values(state.error.fieldErrors ?? {})[0] ?? "Something went wrong"}
+              />
             )}
-            <Button type="submit" className="w-full h-12 font-medium" disabled={pending}>
-              {pending ? "Sending…" : "Send reset link"}
-            </Button>
-          </form>
+            {/* No noValidate — native type=email validation, like the
+                reference (session-4, FP-VALID-1). */}
+            <form action={formAction} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email address</Label>
+                <div className="relative">
+                  <Mail
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    required
+                    className="pl-10 h-12"
+                  />
+                </div>
+              </div>
+              <Button type="submit" className="w-full h-12 font-medium" disabled={pending}>
+                {pending ? "Sending…" : "Send reset link"}
+              </Button>
+            </form>
+          </>
         )}
       </div>
 

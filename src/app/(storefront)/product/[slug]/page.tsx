@@ -10,6 +10,7 @@ import { StarRating } from "@/components/store/star-rating";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
 import { BuyPanel } from "@/components/store/buy-panel";
 import { discountPercent, formatCents } from "@/lib/money";
+import { humanizeSlug } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const product = await getProduct(slug);
   if (!product) return { title: "Product Not Found" };
+  // Reference parity (session-4, TITLE-2): the reference's PDP title is the
+  // HUMANIZED SLUG ("wireless-headphones" -> "Wireless Headphones | Lumina"),
+  // NOT the product name — measured live across all 11 catalog slugs. The
+  // h1 keeps the full product name; og:title follows the product name for
+  // richer social cards (superset).
   return {
-    title: product.name,
+    title: humanizeSlug(slug),
     description: product.description,
     openGraph: {
       title: product.name,
@@ -181,27 +187,22 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
         </TabsContent>
         <TabsContent value="reviews">
-          <p className="text-muted-foreground">Customer reviews coming soon.</p>
+          {/* Reference parity (session-4): a centered, py-10 wrapper with a
+              bare paragraph inside — measured live. */}
+          <div className="text-center py-10 text-muted-foreground">
+            <p>Customer reviews coming soon.</p>
+          </div>
         </TabsContent>
         <TabsContent value="shipping">
-          <ul className="space-y-2 text-muted-foreground">
-            <li className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-primary" />
-              Free standard shipping on orders over $100
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-primary" />
-              Express delivery available (2-3 business days)
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-primary" />
-              International shipping to 50+ countries
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-primary" />
-              30-day hassle-free returns
-            </li>
-          </ul>
+          {/* Reference parity (session-4): plain paragraphs with a literal
+              check character and space-y-3 — NO list, NO icons (only the
+              Description tab's Key Features uses icons on the reference). */}
+          <div className="space-y-3 text-muted-foreground">
+            <p>&#10003; Free standard shipping on orders over $100</p>
+            <p>&#10003; Express delivery available (2-3 business days)</p>
+            <p>&#10003; International shipping to 50+ countries</p>
+            <p>&#10003; 30-day hassle-free returns</p>
+          </div>
         </TabsContent>
       </Tabs>
 

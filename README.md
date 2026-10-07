@@ -23,15 +23,16 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 | 🔍 **Search** | Header dropdown with live typeahead (`/api/search`, 250 ms debounce, keyboard + click navigation) and `/shop?search=` results page |
 | 🧭 **Shop with filters** | Category / price-band / sort selects + search, all deep-linkable via URL params; removable active-filter chips (category + search — clicking one clears it); reference-exact empty state; sort semantics pinned to the reference (Featured = array order, Top Rated = stable rating-desc, Newest = reverse array order) |
 | 📦 **Product pages** | Badges, ratings, discount math, feature chips, quantity stepper, Description/Reviews/Shipping tabs, related products (ALL same-category items excluding self — reference rule) |
-| 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with steppers, line totals, and server-re-derived totals. Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
+| 🛒 **Real cart** | DB-backed guest cart (cookie token) that merges into the account on login; drawer + full-page cart with transactional delta steppers (rapid clicks each land exactly once), line totals, and server-re-derived totals ($9.99 flat shipping under $100 — reference parity). Adds bump the badge only — the drawer opens via the header cart button, exactly like the reference |
 | ❤️ **Persistent wishlist** | Same guest→user identity pattern; hearts everywhere, dedicated page |
 | 💳 **3-step checkout** | Shipping → Payment (card/PayPal) → Review; server-validated, transactional order placement, confirmation page with the order number; reference-parity "No items in cart" empty state |
 | 👤 **Account dashboard** | Profile editing (User-icon avatar, reference anatomy), real order history with status badges, address book CRUD with highlighted default card, Change Password + Notifications sections, logout |
 | 🛠️ **Admin console** | Role-gated `/admin`: revenue/orders/products/customers stats, order status transitions, stock + visibility management |
-| 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login; nameless registration (display name derived from the email); anti-enumeration password-reset flow; standalone chrome-less auth screens (reference parity) |
+| 🔐 **Auth** | Register / login / logout with scrypt hashing, DB sessions, HMAC-signed cookies, rate-limited login; nameless registration (display name derived from the email); anti-enumeration password-reset flow; standalone chrome-less auth screens with reference-exact anatomy (header tile, icon-led inputs, tinted error box, native email validation); full email-verification machinery (6-digit "Verify your email" screen + unverified-login gate) env-gated off until an email provider is wired |
+| 🔔 **Action feedback** | Reference-exact toast subsystem — cart adds and wishlist adds fire a dark bottom-right "«Product» added to cart!" toast (accent check icon, 3 s lifetime, stacks); wishlist remove stays silent |
 | 📱 **Mobile navigation** | Left-sliding Radix Sheet (w-72) pinned by a dedicated E2E spec (the Tailwind v4 trap-log surface) |
 | 🧭 **Reference-exact edge states** | Chrome-less platform 404 (v3 slate palette, quoted path) and in-chrome "Product not found" block — both E2E-pinned |
-| 🧪 **140 automated tests** | 52 Vitest unit + 88 Playwright E2E (incl. the authenticated setup), including computed-style + catalog-order + auth-contract parity gates measured against the live reference |
+| 🧪 **170 automated tests** | 66 Vitest unit + 104 Playwright E2E (incl. the authenticated setup), including computed-style + catalog-order + auth-contract + money/toast parity gates measured against the live reference |
 | 🌐 **SEO & ops** | Per-page metadata, `sitemap.xml`, `robots.txt`, `/api/health` probe |
 
 ## Architecture
@@ -48,7 +49,7 @@ The reference app is a beautiful but client-side demo — its `/cart` page alway
 | Database | SQLite | — | `db/custom.db` at repo root |
 | Auth | node:crypto scrypt + DB sessions | — | HMAC-signed `luxe_session` cookie |
 | State | React context (`StoreProvider`) | — | Server-hydrated cart/wishlist/user + UI open-states |
-| Unit tests | Vitest | ^5 | Money, passwords, validation, rate limit, db-path |
+| Unit tests | Vitest | ^5 | Money, passwords, validation, rate limit, db-path, cart deltas, slug format, verification codes |
 | E2E tests | Playwright (Chromium) | ^1.63 | Production server + isolated `db/e2e.db` |
 | Runtime | Bun | ≥1.3 | Package manager, seed/test runner |
 
@@ -60,7 +61,7 @@ flowchart TB
         AT[Account tabs]
     end
     subgraph NextApp[Next.js 16 — RSC + actions]
-        PAGES[Pages: / /shop /product/... /cart<br/>/checkout /account /admin /wishlist<br/>/login /register /forgot-password]
+        PAGES[Pages: / /shop /product/... /cart<br/>/checkout /account /admin /wishlist<br/>/login /register /forgot-password /verify-email]
         ACTIONS[Server actions<br/>auth · cart · account · checkout · admin]
         RH[Route handlers<br/>/api/health /api/search /api/newsletter]
         LIB[Domain libs<br/>cart · wishlist · auth · money · validation · rate-limit]
@@ -90,9 +91,9 @@ flowchart TB
 │   │   ├── 📄 not-found.tsx       ← reference's chrome-less platform 404 (slate)
 │   │   ├── 📂 (storefront)/       ← chrome layout + shopper pages (URL-neutral)
 │   │   │   ├── 📄 page.tsx        ← home
-│   │   │   ├── 📂 shop/ · product/[slug]/ · cart/ · checkout/ (+ success/)
+│   │   │   ├── 📂 shop/ · product/[slug]/ · cart/ (page + client island) · checkout/ (+ success/)
 │   │   │   └── 📂 wishlist/ · account/ · admin/ (orders, products)
-│   │   ├── 📂 (auth)/             ← standalone login/register/forgot-password (no chrome)
+│   │   ├── 📂 (auth)/             ← standalone login/register/forgot-password/verify-email (no chrome)
 │   │   └── 📂 api/                ← health · search (typeahead) · newsletter
 │   ├── 📂 components/
 │   │   ├── 📂 ui/                 ← shadcn-style primitives (button…radio-group)
@@ -101,10 +102,10 @@ flowchart TB
 │   │   └── 📂 checkout/           ← 3-step checkout-flow
 │   └── 📂 lib/
 │       ├── 📄 db.ts · db-path.ts  ← Prisma singleton + schema-relative SQLite URL
-│       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts
+│       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts · cart-quantity.ts · format.ts · verification.ts
 │       └── 📂 actions/            ← the mutation seam (ActionResult<T> + Zod)
 ├── 📂 tests/
-│   ├── 📂 e2e/                    ← 10 spec files (87 tests) + setup/global-setup
+│   ├── 📂 e2e/                    ← 12 spec files (103 tests) + setup/global-setup
 │   └── 📄 db-path.test.ts         ← URL-resolution contract
 └── 📄 AGENTS.md · CLAUDE.md · Project_Architecture_Document.md · ecommerce-store_SKILL.md
 ```
@@ -159,14 +160,18 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 # Session-cookie HMAC secret. REQUIRED in production: openssl rand -hex 32.
 # Falls back to an insecure dev-only constant when unset.
 AUTH_SECRET=""
+
+# Email-verification gate ("true" = require the 6-digit code after signup).
+# OFF by default: no email provider is wired — codes log at a console seam.
+AUTH_REQUIRE_EMAIL_VERIFICATION=""
 ```
 
 ## Testing
 
 | Suite | Command | Count | Scope |
 |---|---|---|---|
-| Unit (Vitest) | `bun run test` | 52 | Money math, scrypt hashing, Zod schemas (incl. nameless-register + display-name derivation), rate limiter, DB-path resolution |
-| E2E (Playwright) | `bun run test:e2e` | 88 | Smoke (404 · product-not-found · standalone auth) · computed-style parity (incl. hero dots) · catalog parity (incl. related-products rule) · cart (incl. no-auto-open drawer pin) · checkout (incl. empty state) · account (avatar, default address, Change Password) · auth (form contract, nameless registration, forgot-password anti-enumeration) · wishlist · search (chips · empty state) · mobile navigation |
+| Unit (Vitest) | `bun run test` | 66 | Money math (incl. the $9.99 flat-rate pin), scrypt hashing, Zod schemas (incl. nameless-register + display-name derivation), rate limiter, DB-path resolution, cart delta-quantity, slug humanization, email-verification codes |
+| E2E (Playwright) | `bun run test:e2e` | 104 | Smoke (404 · product-not-found · standalone auth · per-route titles) · computed-style parity (incl. hero dots · feature-bar cards · footer Join/separator) · catalog parity (incl. related-products rule) · cart (incl. no-auto-open drawer pin · $9.99 shipping · toasts · rapid-stepper race) · checkout (incl. empty state) · account (avatar, default address, Change Password) · auth (form contract incl. error box + native validation, nameless registration, forgot-password anti-enumeration) · wishlist (toast asymmetry) · search (chips · empty state) · mobile navigation · guest-cart (cookie-token path) · verify-email (fixture happy path · attempts · login gate) |
 
 E2E boots the **production standalone build** on port 3100 against an isolated `db/e2e.db` (pushed, seeded, and reset by the global setup), so the suite never touches your dev database. Run a single spec with `bunx playwright test tests/e2e/checkout.spec.ts`.
 
@@ -191,7 +196,7 @@ Typography: **Plus Jakarta Sans** (400–800) via `next/font`. Rating stars: amb
 ## Local Context
 
 - Currency: **USD**, displayed as `$X.XX`; money stored as integer cents.
-- Shipping: free ≥ $100 (per the announcement bar), flat `$5.99` below — both server-derived.
+- Shipping: free ≥ $100 (per the announcement bar), flat `$9.99` below — both server-derived and pinned to the reference (measured live at $34.99 and $79.99 subtotals).
 - Order numbers: `ORD-YYYY-NNN` (e.g. `ORD-2026-004`).
 - Product imagery is served from the reference app's public media CDN (`media.base44.com`) for pixel parity; swap to owned assets in `prisma/seed.ts` before rebranding.
 

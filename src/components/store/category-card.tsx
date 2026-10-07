@@ -49,15 +49,22 @@ const FEATURES = [
 export function FeatureBar() {
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Reference parity (session-4): grid gap-4 (not gap-6) and each
+          feature is a bordered card — p-6 rounded-2xl bg-card border
+          border-border/50 — with a rounded-2xl icon tile (mb-3), a
+          text-primary icon, and an mb-1 heading. Measured live. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {FEATURES.map((f) => (
-          <div key={f.title} className="flex flex-col items-center text-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center">
-              <f.icon className="h-5 w-5 text-accent-foreground" />
+          <div
+            key={f.title}
+            className="flex flex-col items-center text-center p-6 rounded-2xl bg-card border border-border/50"
+          >
+            <div className="h-12 w-12 rounded-2xl bg-accent flex items-center justify-center mb-3">
+              <f.icon className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm">{f.title}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{f.text}</p>
+              <h3 className="text-sm font-semibold mb-1">{f.title}</h3>
+              <p className="text-xs text-muted-foreground">{f.text}</p>
             </div>
           </div>
         ))}

@@ -16,7 +16,7 @@ export const registerSchema = z
   .object({
     name: z.string().trim().min(2, "Name must be at least 2 characters").max(80).optional(),
     email: z.string().trim().toLowerCase().email("Enter a valid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters").max(128),
+    password: z.string().min(8, "Password must be at least 8 characters long").max(128),
     confirmPassword: z.string(),
   })
   .refine((v) => v.password === v.confirmPassword, {
@@ -26,6 +26,12 @@ export const registerSchema = z
 
 export const passwordResetSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+});
+
+/** Session-4 (AUTH-VERIFY-1): the 6-digit one-time code form. */
+export const verifyEmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
 });
 
 /**
@@ -53,9 +59,14 @@ export const addToCartSchema = z.object({
   quantity: z.number().int().min(1).max(99).default(1),
 });
 
-export const updateCartItemSchema = z.object({
+/** Session-4 (CART-RACE-1): steppers post signed deltas, not absolutes. */
+export const cartItemDeltaSchema = z.object({
   itemId: z.string().min(1),
-  quantity: z.number().int().min(0).max(99),
+  delta: z.number().int().min(-99).max(99).refine((d) => d !== 0, "Delta must be non-zero"),
+});
+
+export const cartItemSchema = z.object({
+  itemId: z.string().min(1),
 });
 
 export const wishlistToggleSchema = z.object({

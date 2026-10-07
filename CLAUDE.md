@@ -40,7 +40,12 @@ Project-specific principles: never weaken a trap-log pin to make something pass;
 ### Data
 - Prisma + SQLite (`db/custom.db`, schema-relative `file:../db/custom.db` — the resolution contract in `src/lib/db-path.ts` is test-pinned; don't inline it).
 - **Catalog order is a parity contract**: `Product.sortOrder` = the reference's array position (1:1); seed `createdAt` is staggered by array position (drives "Newest" = reverse array order); "Top Rated" ties break by sortOrder. Do not reorder the seed without re-measuring the reference.
-- **Auth forms are a parity contract (ADR-010)**: register collects exactly [Email, Password, Confirm Password] (no Name — the action derives a display name from the email local part via `deriveDisplayName`); password inputs show the `••••••••` placeholder; `/forgot-password` is anti-enumeration (same neutral confirmation for every email, rate-limited 5/15min, no email sent — `console.info` seam). PDP "You May Also Like" = ALL same-category products excluding self (no cap/fill); shop chips appear for category + search only.
+- **Money is a parity contract**: flat shipping below the $100 threshold is **$9.99** (`FLAT_SHIPPING_CENTS = 999`, unit-pinned); seeded demo orders store their own totals.
+- **Auth forms are a parity contract (ADR-010/011)**: register collects exactly [Email, Password, Confirm Password] (no Name — the action derives a display name from the email local part via `deriveDisplayName`); password inputs show the `••••••••` placeholder (8-char minimum, no complexity rule); all three auth screens share the reference anatomy — header block OUTSIDE the card, `h-12` icon-led inputs, line-and-label "or" divider, tinted error BOX (`div.mb-4.p-3.rounded-lg.bg-destructive/10`) as the card's first child; forms rely on NATIVE `type=email` validation (no `noValidate`); error copy pinned ("Invalid email or password", "A user with this email already exists", "Passwords do not match"). `/forgot-password` is anti-enumeration (same neutral confirmation for every email, rate-limited 5/15min, no email sent — `console.info` seam). **Email verification (ADR-011)**: the reference gates registration behind a 6-digit "Verify your email" screen and blocks unverified logins — the clone ships the full machinery env-gated behind `AUTH_REQUIRE_EMAIL_VERIFICATION` (default OFF; no email provider is wired, codes log at the seam; E2E drives it via the seeded `unverified@example.com` fixture, code `123456`).
+- **Toasts are part of the interaction contract (ADR-011)**: cart adds and wishlist ADDS toast "«name» added to cart!" / "… added to wishlist!" (dark bottom-right `ToastViewport`, CircleCheckBig accent, 3000ms, stacks); NO toast on wishlist remove. The region is `pointer-events-none` + `aria-live=polite` (registered divergences).
+- **Cart steppers post DELTAS** (`adjustQuantity(itemId, ±1)` → `adjustCartItemAction` → transactional `changeQuantityBy`); remove is its own action. The old absolute-quantity API lost updates when two rapid clicks raced one re-render. Cart mutations resolve the guest token from the cookie (pinned by `guest-cart.spec.ts`).
+- **PDP document.title = humanized slug** ("Wireless Headphones | Lumina", not the product name); the h1 keeps the full name. The Reviews tab's empty panel is `div.text-center.py-10`; the Shipping tab is plain `p` elements with a literal `✓` prefix.
+- PDP "You May Also Like" = ALL same-category products excluding self (no cap/fill); shop chips appear for category + search only.
 - Integer cents for all money; format only at display (`formatCents`).
 - SQLite has no enums — String columns + Zod union validation at the boundary.
 - Seed is idempotent (natural-key upserts); demo fixtures mirror the reference account page.
@@ -66,8 +71,8 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 | `bun run start` | Run the standalone production server |
 | `bun run lint` | ESLint 9 flat config — must be 0/0 |
 | `bun run typecheck` | `tsc --noEmit` — must be 0 errors |
-| `bun run test` | Vitest unit suite (52 tests) |
-| `bun run test:e2e` | Playwright E2E (88 tests incl. the setup login; requires `bun run build` first) |
+| `bun run test` | Vitest unit suite (66 tests) |
+| `bun run test:e2e` | Playwright E2E (104 tests incl. the setup login; requires `bun run build` first) |
 | `bun run db:setup` | `db push` + seed |
 | `bun run db:reset` | `prisma migrate reset` |
 
@@ -75,9 +80,9 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 
 **Pyramid:** Vitest unit (pure domain seams, co-located `*.test.ts`) → Playwright E2E (production standalone server on :3100, isolated `db/e2e.db`, real UI flows).
 
-- Unit layer: `src/lib/*.test.ts` + `tests/db-path.test.ts` — money math, password hashing, Zod schemas, rate limiter, DB-path resolution. TDD red→green→refactor; bug fixes get a failing regression test first.
-- E2E layer: `tests/e2e/*.spec.ts` — smoke (incl. the standalone 404 + product-not-found + standalone auth screens), storefront-parity (computed-style gate incl. hero-dot geometry), catalog-parity (array order, sort semantics, ratings, descriptions, related-products membership), cart (incl. the no-auto-open drawer pin + reference drawer anatomy), checkout (incl. the "No items in cart" empty state), account (profile icon avatar, highlighted default address, Change-Password section), auth (login/register contract, nameless registration, forgot-password anti-enumeration flow), wishlist, search (incl. active-filter chips + empty state), mobile-navigation. `auth.setup.ts` signs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out for logged-out flows. `global-setup.ts` pushes/seeds/resets the e2e DB every run. `openCartDrawer` (helpers.ts) is the reference-mirroring way to open the drawer.
-- Assert behavior through the UI/API, never internals; scope selectors to `main` on chrome pages (footer text collisions); auth screens have NO `main` landmark — use page-level selectors and `p[role=alert]` for the inline error (the route announcer also carries `role=alert`). Close dialogs before asserting on header chrome (Radix `aria-hidden`).
+- Unit layer: `src/lib/*.test.ts` + `tests/db-path.test.ts` — money math (incl. the $9.99 flat-rate pin), passwords, Zod schemas (incl. nameless-register + display-name derivation), rate limiter, DB-path resolution, cart delta-quantity, slug humanization, email-verification codes. TDD red→green→refactor; bug fixes get a failing regression test first.
+- E2E layer: `tests/e2e/*.spec.ts` — smoke (incl. the standalone 404 + product-not-found + standalone auth screens + per-route titles), storefront-parity (computed-style gate incl. hero-dot geometry + feature-bar cards + footer Join/separator), catalog-parity (array order, sort semantics, ratings, descriptions, related-products membership), cart (incl. the no-auto-open drawer pin + $9.99 shipping + toasts + transactional steppers), checkout (incl. the "No items in cart" empty state), account (profile icon avatar, highlighted default address, Change-Password section), auth (form contract incl. the error BOX + native validation, nameless registration, forgot-password anti-enumeration), wishlist (incl. add/remove toast asymmetry), search (incl. active-filter chips + empty state), mobile navigation, guest-cart (cookie-token path, opts out of storageState), verify-email (fixture-driven happy path + attempts + login gate). `auth.setup.ts` signs in once (rate limiter) and shares storageState; `auth.spec.ts` + `guest-cart.spec.ts` + `verify-email.spec.ts` opt out for logged-out flows. `global-setup.ts` pushes/seeds/resets the e2e DB every run (restoring the unverified fixture). `openCartDrawer` (helpers.ts) is the reference-mirroring way to open the drawer.
+- Assert behavior through the UI/API, never internals; scope selectors to `main` on chrome pages (footer text collisions); auth screens have NO `main` landmark — use page-level selectors and the error BOX locator (`div.mb-4.p-3.rounded-lg`) for inline errors. Close dialogs before asserting on header chrome (Radix `aria-hidden`); the drawer hides the header badge while open — assert the drawer's own totals. Toast assertions wait out the enter spring (~450ms) with ±2px tolerance.
 
 ## 6. Code Quality Standards
 
@@ -105,13 +110,13 @@ Demo accounts (seeded): `john@example.com` / `Demo1234!` (order history) · `adm
 ## 10. Project-Specific Standards
 
 ### Architecture
-Single Next.js app with route groups: `src/app/layout.tsx` (minimal shell) · `src/app/(storefront)/` (chrome + all shopper pages: home, shop, PDP, cart, checkout, wishlist, account, admin) · `src/app/(auth)/` (standalone login/register/forgot-password) · root `not-found.tsx` (chrome-less platform 404) · `src/app/api/` (3 route handlers) + sitemap/robots. `src/components/{ui,store,account,checkout}` · `src/lib` (domains + actions) · `prisma` (schema + seeds) · `tests` (vitest + playwright). Import direction: app → components → lib → db. `src/lib/db.ts` is server-only — never import it from a `"use client"` file.
+Single Next.js app with route groups: `src/app/layout.tsx` (minimal shell) · `src/app/(storefront)/` (chrome + all shopper pages: home, shop, PDP, cart [server page + `cart-client.tsx` island], checkout, wishlist, account, admin) · `src/app/(auth)/` (standalone login/register/forgot-password/verify-email + the shared `auth-error.tsx` box) · root `not-found.tsx` (chrome-less platform 404) · `src/app/api/` (3 route handlers) + sitemap/robots. `src/components/{ui,store,account,checkout}` · `src/lib` (domains + actions) · `prisma` (schema + seeds) · `tests` (vitest + playwright). Import direction: app → components → lib → db. `src/lib/db.ts` is server-only — never import it from a `"use client"` file.
 
 ### API / Action Design
 Mutations: server actions with Zod + `ActionResult<T>`. Reads: RSC direct Prisma queries. Route handlers: GET `/api/search?q&limit` (429-limited), POST `/api/newsletter` (idempotent upsert), GET `/api/health`.
 
 ### Database / Data Layer
-13 models (User/Session/Category/Product/Cart/CartItem/Wishlist/WishlistItem/Address/Order/OrderItem/OrderEvent/NewsletterSubscriber). Guest identity = signed-cookie tokens merged into user rows on login. Order numbers `ORD-YYYY-NNN` (count-based, single-writer SQLite).
+13 models (User/Session/Category/Product/Cart/CartItem/Wishlist/WishlistItem/Address/Order/OrderItem/OrderEvent/NewsletterSubscriber). Guest identity = signed-cookie tokens merged into user rows on login — cart MUTATIONS resolve the guest token from the cookie (a session-4 bug fix; passing `undefined` minted a new cart per guest add). Order numbers `ORD-YYYY-NNN` (count-based, single-writer SQLite). `User` carries the email-verification columns (`emailVerified`, `verificationCodeHash`, `verificationAttempts`, `verificationExpiresAt`).
 
 ### Environment Variables
 
@@ -120,6 +125,7 @@ Mutations: server actions with Zod + `ActionResult<T>`. Reads: RSC direct Prisma
 | `DATABASE_URL` | SQLite location, schema-relative `file:` URL | `file:../db/custom.db` |
 | `NEXT_PUBLIC_SITE_URL` | Canonical origin for metadata/sitemap/robots | `http://localhost:3000` |
 | `AUTH_SECRET` | HMAC secret for session cookie integrity (required in prod) | `openssl rand -hex 32` |
+| `AUTH_REQUIRE_EMAIL_VERIFICATION` | Gate registration behind the 6-digit "Verify your email" flow (requires an email provider — codes currently log at the `console.info` seam) | `""` (off) |
 
 ## Success Metrics
 

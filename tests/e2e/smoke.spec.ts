@@ -49,6 +49,40 @@ test.describe("smoke", () => {
     await expect(page.getByRole("heading", { name: "Your wishlist is empty" })).toBeVisible();
   });
 
+  test("document titles match the reference per route", async ({ page }) => {
+    // Measured live on the reference 2026-10-07: every route suffixes
+    // " | Lumina"; the PDP title is the HUMANIZED SLUG (wireless-headphones
+    // -> "Wireless Headphones"), NOT the product name (which stays the h1).
+    await page.goto("/cart");
+    await expect(page).toHaveTitle("Cart | Lumina");
+    await page.goto("/product/wireless-headphones");
+    await expect(page).toHaveTitle("Wireless Headphones | Lumina");
+    await expect(page.getByRole("heading", { name: "Wireless Noise-Cancelling Headphones" })).toBeVisible();
+    await page.goto("/product/yoga-mat");
+    await expect(page).toHaveTitle("Yoga Mat | Lumina");
+    await page.goto("/product/vitamin-c-serum");
+    await expect(page).toHaveTitle("Vitamin C Serum | Lumina");
+  });
+
+  test("PDP Reviews and Shipping panels match the reference anatomy", async ({ page }) => {
+    await page.goto("/product/wireless-headphones");
+    // Reviews: the empty panel is a centered, padded block (the clone must
+    // keep the wrapper div, not a bare left-aligned paragraph).
+    await page.getByRole("tab", { name: /Reviews/ }).click();
+    const reviews = page.locator("[role=tabpanel] >> div.text-center.py-10");
+    await expect(reviews).toBeVisible();
+    await expect(reviews).toContainText("Customer reviews coming soon.");
+    // Shipping: plain paragraphs with a literal check character — NO list,
+    // NO lucide icons (measured live; only the Description tab's Key
+    // Features list uses icons on the reference).
+    await page.getByRole("tab", { name: "Shipping" }).click();
+    const panel = page.locator("[role=tabpanel]:visible");
+    await expect(panel.locator("p").filter({ hasText: /^✓/ })).toHaveCount(4);
+    await expect(panel.locator("ul")).toHaveCount(0);
+    await expect(panel).toContainText("✓ Free standard shipping on orders over $100");
+    await expect(panel).toContainText("✓ 30-day hassle-free returns");
+  });
+
   test("unknown routes render the reference's standalone 404", async ({ page }) => {
     await page.goto("/this-page-does-not-exist");
     await expect(page.getByText("404")).toBeVisible();

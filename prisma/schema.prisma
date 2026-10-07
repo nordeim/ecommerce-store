@@ -21,6 +21,12 @@ model User {
   lastName     String?
   phone        String?
   role         String    @default("user") // "user" | "admin" (validated in code)
+  // Email verification (session-4, AUTH-VERIFY-1 — reference parity
+  // machinery, env-gated: AUTH_REQUIRE_EMAIL_VERIFICATION).
+  emailVerified          Boolean   @default(false)
+  verificationHash       String? // scrypt hash of the 6-digit code
+  verificationExpiresAt  DateTime?
+  verificationAttempts   Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]

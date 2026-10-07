@@ -43,7 +43,10 @@ describe("shippingForSubtotal", () => {
   });
   it("is the flat fee below the threshold", () => {
     expect(shippingForSubtotal(FREE_SHIPPING_THRESHOLD_CENTS - 1)).toBe(FLAT_SHIPPING_CENTS);
-    expect(shippingForSubtotal(3499)).toBe(599);
+    // $9.99 flat fee — measured live on the reference 2026-10-07 (session-4):
+    // a $34.99 cart shows Shipping $9.99 / Total $44.98, same at $79.99.
+    expect(FLAT_SHIPPING_CENTS).toBe(999);
+    expect(shippingForSubtotal(3499)).toBe(999);
   });
   it("totals never invert: subtotal + shipping >= subtotal", () => {
     for (const subtotal of [0, 1, 9999, 10000, 99999]) {

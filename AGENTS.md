@@ -55,21 +55,57 @@ from the injected location) — the repo contract itself is test-pinned in
   block instead (`product/[slug]/page.tsx`).
 - **RSC by default.** Pages under `src/app/` are server components querying Prisma directly. `"use client"` only for interactive islands (`src/components/store/*`, `checkout-flow`, `account-tabs`).
 - **Catalog order is a parity contract.** `Product.sortOrder` mirrors the reference's product array position 1:1 (measured live 2026-10-07: headphones, watch, tee, speaker, planter, shoes, serum, blanket, sunglasses, mat, pad, pajama). "Featured" = sortOrder asc; "Top Rated" = `[{rating: desc}, {sortOrder: asc}]` (Prisma ties are otherwise undefined); "Newest" = createdAt desc with the seed's staggered createdAt (array position 1 = oldest). Home's On Sale section = first 4 `isOnSale` products in array order. Changing seed order requires re-measuring the reference.
-- **Auth parity contract (ADR-010).** The register form has exactly
+- **Money is a parity contract (ADR-011).** Flat shipping below the $100 threshold is **$9.99** (`FLAT_SHIPPING_CENTS = 999` in `src/lib/money.ts`, unit-pinned) — measured live at $34.99 and $79.99 subtotals; Free at/above $100. The seeded demo orders store their own totals and are unaffected.
+- **Toast subsystem (session-4).** Successful cart adds and wishlist ADDS toast "«name» added to cart!" / "… added to wishlist!" in the reference's dark bottom-right box (`ToastViewport` — `fixed bottom-6 right-6 z-[100]`, `bg-foreground text-background px-4 py-3 rounded-xl shadow-2xl`, CircleCheckBig `text-primary`, 3000ms lifetime, stacks without dedupe; NO toast on wishlist remove — all measured live). Enter/exit are CSS approximations of the reference's JS spring (`@starting-style` + bouncy bezier in `globals.css`). The region is `pointer-events-none` and `aria-live=polite` (registered divergences: the reference's toasts are inert-on-click; click-through keeps drawer-Checkout clicks deterministic).
+- **Auth parity contract (ADR-010 + ADR-011).** The register form has exactly
   [Email, Password, Confirm Password] — the reference collects NO name;
   `registerAction` derives the display name from the email local part
   (`deriveDisplayName` in `src/lib/validation.ts`; `john.doe@x` → "John Doe";
   `User.name` stays required in Prisma). Password inputs carry the
-  `••••••••` placeholder. `/forgot-password` is a real anti-enumeration
-  action: Zod email, rate-limited 5/15min, ALWAYS the same neutral
-  confirmation (the user lookup only feeds a `console.info` seam — never the
-  response); no email is sent yet.
+  `••••••••` placeholder; password minimum is 8 chars with NO complexity
+  rule (measured live). All three auth screens share the reference anatomy:
+  header block OUTSIDE the card (primary tile + `text-3xl` h1 + sub — LogIn /
+  UserPlus / Mail icons), `border-border` card, h-12 icon-led inputs,
+  line-and-label "or" divider, and the tinted error BOX
+  (`div.mb-4.p-3.rounded-lg.bg-destructive/10.text-destructive.text-sm`,
+  first child of the card above the form). Auth forms carry NO `noValidate` —
+  the reference relies on native `type=email` validation. Error copy is
+  pinned: "Invalid email or password", "A user with this email already
+  exists", "Passwords do not match".
+  `/forgot-password` is a real anti-enumeration action: Zod email,
+  rate-limited 5/15min, ALWAYS the same neutral confirmation (the user lookup
+  only feeds a `console.info` seam — never the response); no email is sent
+  yet. **Email verification (ADR-011)**: the reference gates registration
+  behind a 6-digit "Verify your email" screen and blocks unverified logins
+  ("Please verify your email before logging in. Check your email for the
+  verification code."). The clone ships the full machinery env-gated behind
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` (default OFF — no email provider is
+  wired; codes log at the `console.info` seam; flipping the flag without one
+  would lock out every new user). The screen + `verifyEmailAction` work
+  regardless of the gate; E2E drives them via the seeded
+  `unverified@example.com` fixture (code 123456, restored by e2e-reset).
 - **PDP related products = ALL same-category products excluding self** in
   array (sortOrder) order — no cap, no cross-category fill (measured live:
   headphones → speaker + pad only). Shop active-filter chips render for
   category (plain name) and search (quoted term) ONLY — price/sort never
-  chip; clicking a chip deep-links to the URL minus that param.
-- **Deliberate divergences (superset behavior, do not "fix"):** the mobile nav auto-closes on navigation (the reference's Sheet stays open — verified live twice, a demo quirk); the hero carousel pauses on hover (the reference keeps cycling — verified live 11s); the Settings tab keeps a Session/Log out card (the reference has NO logout anywhere); the newsletter form shows a real confirmation (the reference's submit is a no-op); `/cart` renders real contents (the reference hardcodes its empty state); the checkout wizard writes real orders (the reference's checkout cannot see its own cart); shop filters/sort are URL-deep-linkable (the reference's SPA never updates the URL); the drawer keeps aria-labels + disabled-minus (the reference's stepper buttons are unlabeled).
+  chip; clicking a chip deep-links to the URL minus that param. The PDP
+  document.title is the **humanized slug** ("Wireless Headphones | Lumina"),
+  NOT the product name (measured live across all 11 slugs); the h1 keeps
+  the full name. The Reviews tab's empty panel is `div.text-center.py-10`;
+  the Shipping tab is plain `p` elements with a literal `✓` prefix (NO
+  icons — only the Description tab's Key Features uses lucide checks).
+- **Cart mutations resolve the guest token from the cookie** (`src/lib/cart.ts`).
+  The mutation seam (`addItem`/`changeQuantityBy`/`removeItem`) reads
+  `cookies().get(CART_COOKIE)` and passes the token to `resolveCartRow` —
+  passing `undefined` silently minted a new cart per guest add and made
+  guest steppers read as empty (the session-4 live-audit bug; pinned by
+  `tests/e2e/guest-cart.spec.ts`, which opts out of storageState).
+- **Steppers post DELTAS, not absolutes** (ADR-011): the drawer and /cart
+  steppers call `adjustQuantity(itemId, ±1)`; the server applies them inside
+  `db.$transaction` (`changeQuantityBy`) so rapid clicks each land exactly
+  once. The old absolute API lost updates when two clicks raced one
+  re-render. Remove is its own action (`removeCartItemAction`).
+- **Deliberate divergences (superset behavior, do not "fix"):** the mobile nav auto-closes on navigation (the reference's Sheet stays open — verified live twice, a demo quirk); the hero carousel pauses on hover (the reference keeps cycling — verified live 11s); the Settings tab keeps a Session/Log out card (the reference has NO logout anywhere); the newsletter form shows a real confirmation (the reference's submit is a no-op); `/cart` renders real contents (the reference hardcodes its empty state); the checkout wizard writes real orders (the reference's checkout cannot see its own cart); shop filters/sort are URL-deep-linkable (the reference's SPA never updates the URL); the drawer keeps aria-labels + disabled-minus (the reference's stepper buttons are unlabeled); the footer's Shop-column links deep-link category filters (the reference's all point at plain `/shop` — its header links DO filter); the toast region is pointer-events-none + aria-live (the reference's toasts are inert on click); the toast spring is a CSS approximation; `/verify-email` is titled "Verify Email | Lumina" (the reference keeps the SPA's stale "Register | Lumina"); verification is env-gated off by default (the reference always gates — no email provider is wired here).
 - **Server actions are the only mutation seam** (`src/lib/actions/*.ts`): every action Zod-parses input and returns `ActionResult<T>` (`{ ok: true, data } | { ok: false, error: { message, fieldErrors? } }`). Never throw across the boundary.
 - Route-handler whitelist: `/api/health`, `/api/search` (typeahead), `/api/newsletter`. Adding more needs a reason.
 - Client commerce state lives in ONE place: `StoreProvider` (`src/components/store/store-provider.tsx`) — hydrated from the server on layout render, re-derived after every mutation. Totals are always server truth. The provider's state SURVIVES client-side navigation inside the `(storefront)` group — logout must call `setUser(null)` explicitly (the header otherwise keeps the logged-in icon).
@@ -82,9 +118,13 @@ from the injected location) — the repo contract itself is test-pinned in
 - Playwright boots the **production standalone server** on port 3100 with the e2e DB. Build before `test:e2e` or the webServer times out.
 - The login action is rate-limited (10/15min/IP+email) and the password-reset action 5/15min — that's why `auth.setup.ts` logs in ONCE and saves `tests/e2e/.auth/user.json` as storageState. Don't add per-test logins.
 - Register specs do NOT fill a Name field (the reference form has none — the action derives it); register specs must use a fresh random email per run (`e2e-<ts>@example.com`) because the e2e-reset clears only `e2e-*` spec users.
+- `guest-cart.spec.ts` opts OUT of storageState (`test.use({ storageState: { cookies: [], origins: [] } })`) — it is the only spec exercising the cookie-token cart path; every other cart/wishlist spec runs authenticated.
+- The verify-email happy path consumes the seeded `unverified@example.com` fixture (code `123456`); `prisma/e2e-reset.ts` restores its unverified state + code every run, so specs can rely on it.
+- Toast specs: assert position only after the enter spring settles (~450ms) and with ±2px tolerance (the reference's own live values oscillate mid-spring); `getByText("… added to cart!")` resolves to the toast ITEM itself — do not climb to the parent (that's the region).
+- Drawer specs cannot assert the header badge while the Radix dialog is open (aria-hidden hides it from the role tree) — assert the drawer's own totals instead.
 - Address-tab specs target the card via the `p` chain (`card >> p`), not `getByText("Home")` — the label span was removed for parity.
 - Login credentials for dev/E2E: `john@example.com` / `Demo1234!` (demo user, seeded order history) and `admin@luxestore.com` / `Admin1234!` (admin role).
-- Selector gotchas baked into the specs: the footer carries an "Email address" input and a "New York, NY 10001" text that collide with naive `getByLabel`/`getByText` — scope to `getByRole("main")`. The auth screens have NO `main` landmark and NO footer (reference parity) — use page-level selectors there, and target the card's error via `p[role=alert]` (Next's route announcer also carries `role=alert`). Radix `aria-hidden`s the page chrome while a dialog is open — close drawers before asserting on the header. Specs that inspect drawer contents open it via `openCartDrawer` (helpers.ts).
+- Selector gotchas baked into the specs: the footer carries an "Email address" input and a "New York, NY 10001" text that collide with naive `getByLabel`/`getByText` — scope to `getByRole("main")`. The auth screens have NO `main` landmark and NO footer (reference parity) — use page-level selectors there, and target the card's error via the box locator `div.mb-4.p-3.rounded-lg` (session-4; the old `p[role=alert]` form is gone). Radix `aria-hidden`s the page chrome while a dialog is open — close drawers before asserting on the header. Specs that inspect drawer contents open it via `openCartDrawer` (helpers.ts).
 
 ## Tailwind v4 trap log (violations here silently break visual parity)
 

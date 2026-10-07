@@ -18,12 +18,14 @@ import type { CartDto } from "@/lib/cart";
 import type { SessionUser } from "@/lib/auth";
 import {
   addToCartAction,
+  adjustCartItemAction,
   getCartAction,
   getWishlistIdsAction,
+  removeCartItemAction,
   toggleWishlistAction,
-  updateCartItemAction,
 } from "@/lib/actions/cart";
 import { currentUserAction } from "@/lib/actions/auth";
+import { ToastViewport, type ToastItem } from "./toast-viewport";
 
 type StoreContextValue = {
   cart: CartDto;
@@ -38,9 +40,11 @@ type StoreContextValue = {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   addToCart: (productId: string, quantity?: number) => Promise<boolean>;
-  updateQuantity: (itemId: string, quantity: number) => Promise<void>;
+  adjustQuantity: (itemId: string, delta: number) => Promise<void>;
+  removeItem: (itemId: string) => Promise<void>;
   toggleWishlist: (productId: string) => Promise<boolean>;
   refreshCart: () => Promise<void>;
+  notify: (message: string) => void;
 };
 
 const StoreContext = React.createContext<StoreContextValue | null>(null);
@@ -102,12 +106,19 @@ export function StoreProvider({
     return false;
   }, []);
 
-  const updateQuantity = React.useCallback(async (itemId: string, quantity: number) => {
-    const res = await updateCartItemAction(itemId, quantity);
+  // Session-4 (CART-RACE-1): steppers send DELTAS — the server applies them
+  // transactionally, so rapid clicks each land exactly once.
+  const adjustQuantity = React.useCallback(async (itemId: string, delta: number) => {
+    const res = await adjustCartItemAction(itemId, delta);
     if (res.ok) setCart(res.data);
-    else console.error("[updateQuantity]", res.error.message);
+    else console.error("[adjustQuantity]", res.error.message);
   }, []);
 
+  const removeItem = React.useCallback(async (itemId: string) => {
+    const res = await removeCartItemAction(itemId);
+    if (res.ok) setCart(res.data);
+    else console.error("[removeItem]", res.error.message);
+  }, []);
   const toggleWishlist = React.useCallback(async (productId: string) => {
     const res = await toggleWishlistAction(productId);
     if (res.ok) {
@@ -128,6 +139,21 @@ export function StoreProvider({
     setCart(c);
   }, []);
 
+  // Toast subsystem (session-4, TOAST-1): 3000ms lifetime, ~350ms exit rise,
+  // stacking without dedupe — the reference's measured behavior.
+  const [toasts, setToasts] = React.useState<ToastItem[]>([]);
+  const toastSeq = React.useRef(0);
+  const notify = React.useCallback((message: string) => {
+    const id = ++toastSeq.current;
+    setToasts((prev) => [...prev, { id, message, exiting: false }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+    }, 3000);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3400);
+  }, []);
+
   const value = React.useMemo<StoreContextValue>(
     () => ({
       cart,
@@ -142,14 +168,21 @@ export function StoreProvider({
       searchOpen,
       setSearchOpen,
       addToCart,
-      updateQuantity,
+      adjustQuantity,
+      removeItem,
       toggleWishlist,
       refreshCart,
+      notify,
     }),
-    [cart, user, wishlist, hydrated, cartOpen, mobileNavOpen, searchOpen, addToCart, updateQuantity, toggleWishlist, refreshCart],
+    [cart, user, wishlist, hydrated, cartOpen, mobileNavOpen, searchOpen, addToCart, adjustQuantity, removeItem, toggleWishlist, refreshCart, notify],
   );
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={value}>
+      {children}
+      <ToastViewport toasts={toasts} />
+    </StoreContext.Provider>
+  );
 }
 
 export function useStore(): StoreContextValue {

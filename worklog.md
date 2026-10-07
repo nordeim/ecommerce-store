@@ -147,3 +147,23 @@ Stage Summary:
 - Gate at ship: lint 0/0 · tsc clean · 52 unit · build OK (20 routes) · 88 E2E (140 total; was 117)
 - docs/remediation-plan-session3.md + docs/session_4.md record the full audit trail
 - Committed and pushed to main via the SSH wrapper (explicit --remote, remote ref verified, key shredded) — see commit message for the hash
+
+---
+Task ID: S5 (session-4 review + remediation, round 4)
+Agent: main
+Task: Round-4 differential audit vs live reference (money/interaction/auth-anatomy surfaces); remediation plan; TDD execution; two latent bug fixes; docs/SKILL/screenshots; ship (continuation of an interrupted session that had completed T1-T8b, T10, T11 and most of T9)
+
+Work Log:
+- Baseline verified at main @ 2134652: full gate green (52 unit / 88 E2E / 140 total) matching the session-3 ship state; one E2E flake (cart stepper) root-caused instead of dismissed — exposed the absolute-quantity lost-update race (CART-RACE-1)
+- Round-4 live A/B audit: 12 findings — TITLE-1/2 (/cart title + humanized-slug PDP titles), PDP-TABS-1/2 (Reviews/Shipping panel anatomy), SHIP-1 ($9.99 flat shipping under $100), TOAST-1 (full toast subsystem spec: copy, dark box, accent icon, 3s, stacking, spring, silence-on-wishlist-remove), FOOT-1/2 (Join 32px/12px + separator 40/1/40), FEATURES-1 (feature bar = bordered cards, gap-4, rounded-2xl icon tiles — long-missed), AUTH-ERR-1/2 (tinted error box + duplicate copy), FP-VALID-1 (native validation, no noValidate), AUTH-VERIFY-1 (email-verification flow: 6-digit OTP screen + unverified-login block + 5-attempt budget), CART-RACE-1 (stepper race); footer-link + toast-click divergences registered as supersets
+- docs/remediation-plan-session4.md written and validated against the codebase (dependency sweeps: no $5.99 pins, single FLAT_SHIPPING_CENTS consumer, demo orders store own totals, both add-to-cart call sites hold product.name)
+- TDD: RED (3 new unit files + money pin + 13 E2E cases, verified failing) → GREEN (surgical fixes: shipping 999, FeatureBar cards, footer Join/separator, /cart server-page + cart-client island, humanizeSlug titles, PDP panels, auth-error.tsx box + copy + noValidate removal; subsystems: ToastViewport + notify + CSS spring approximations, transactional delta steppers (adjustCartItemAction → changeQuantityBy) + removeCartItemAction, email-verification machinery env-gated behind AUTH_REQUIRE_EMAIL_VERIFICATION with seeded unverified@example.com fixture + e2e-reset restore; auth screens rebuilt to header-outside-card anatomy with h-12 icon-led inputs)
+- Two latent bugs found in live re-verification and fixed: (1) guest-token cart mutations passed undefined — every guest add minted a new cart (all E2E ran authenticated, so it hid for 3 rounds); all call sites now read the cookie; guest-cart.spec.ts (storageState opt-out) pins it; (2) stale Prisma client in the long-running dev server after schema push (restart dev after db push)
+- Gate at ship: lint 0/0 · tsc clean · 66 unit · build OK · 104 E2E = 170 total (was 140); live A/B re-verification of every remediated surface incl. the reproduced rapid-stepper race (3 × $34.99 = $104.97 Free); VLM auth-screen comparison essentially identical (focus-state false flag re-verified computationally 48/48/48)
+- T9/T10 (completed by the continuation session): AGENTS.md + CLAUDE.md + README.md + PAD v1.4 (ADR-011, 21-file/170-test table) + SKILL v1.4.0 (rows 16-18, L10-L11, §15.8) updated; remediation plan checked off with outcomes; docs/session_6.md written; 33 screenshots (7 new + 3 refreshed, VLM-verified); .env.example gained AUTH_REQUIRE_EMAIL_VERIFICATION
+
+Stage Summary:
+- Deliverable: 12 parity gaps closed + 2 latent correctness bugs fixed (stepper race, guest-cart identity) + reference-exact toast subsystem + env-gated email-verification machinery (full ADR-011 record in PAD)
+- Gate at ship: lint 0/0 · tsc clean · 66 unit · build OK · 104 E2E (170 total; was 140)
+- docs/remediation-plan-session4.md + docs/session_6.md record the full audit trail
+- Committed to main and pushed via the SSH wrapper (explicit --remote, remote ref verified, key shredded)

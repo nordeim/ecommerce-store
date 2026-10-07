@@ -61,9 +61,16 @@ test.describe("auth", () => {
     await page.getByLabel("Email").fill("john@example.com");
     await page.getByLabel("Password", { exact: true }).fill("wrong-password");
     await page.getByRole("button", { name: "Log in", exact: true }).click();
-    // Target the card's inline error paragraph — Next's route announcer
-    // also carries role=alert, so scope to the <p>.
-    await expect(page.locator("p[role=alert]")).toContainText("Invalid email or password");
+    // Reference parity (session-4): auth errors render as the tinted alert
+    // BOX (div.mb-4.p-3.rounded-lg.bg-destructive/10.text-destructive.text-sm)
+    // directly inside the card, above the form — copy unchanged.
+    const box = page.locator("div.mb-4.p-3.rounded-lg");
+    await expect(box).toContainText("Invalid email or password");
+    // bg-destructive/10 — alpha utility (trap 6): v3 rgba() vs v4 lab().
+    const boxBg = await box.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(boxBg).toMatch(/rgba\(219, 63, 63, 0\.1\)|lab\(55\.\d+ [\d.-]+ [\d.-]+ \/ 0\.1\)/);
+    await expect(box).toHaveCSS("border-radius", "12px"); // rounded-lg = --radius
+    await expect(box).toHaveCSS("font-size", "14px");
   });
 
   test("a fresh registration creates the account and lands on /account", async ({ page }) => {
@@ -81,7 +88,7 @@ test.describe("auth", () => {
     await expect(page.getByText(email).first()).toBeVisible();
   });
 
-  test("mismatched passwords are rejected client-side", async ({ page }) => {
+  test("mismatched passwords keep the user on /register", async ({ page }) => {
     await page.goto("/register");
     await page.getByLabel("Email").fill(`mismatch-${Date.now()}@example.com`);
     await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
@@ -149,14 +156,45 @@ test.describe("forgot password (session-3 parity)", () => {
     ).toBeVisible();
   });
 
-  test("an invalid email is rejected with a field error", async ({ page }) => {
+  test("an invalid email is blocked by NATIVE browser validation (reference parity, session-4)", async ({ page }) => {
+    // The reference has NO noValidate on its auth forms — the type=email
+    // input blocks submission with the browser's own bubble and the server
+    // never sees the malformed value. The clone must match: no custom
+    // error, no confirmation copy.
     await page.goto("/forgot-password");
     await page.getByLabel("Email address").fill("not-an-email");
     await page.getByRole("button", { name: "Send reset link" }).click();
-    await expect(page.locator("p[role=alert]")).toContainText(/valid email/i);
+    const valid = await page
+      .getByLabel("Email address")
+      .evaluate((el) => (el as HTMLInputElement).checkValidity());
+    expect(valid).toBe(false);
     await expect(
       page.getByText("If an account exists with that email"),
     ).toHaveCount(0);
+    await expect(page.locator("div.mb-4.p-3.rounded-lg")).toHaveCount(0);
+  });
+
+  test("duplicate registration shows the reference's box + copy (session-4)", async ({ page }) => {
+    await page.goto("/register");
+    await page.getByLabel("Email").fill("john@example.com");
+    await page.getByLabel("Password", { exact: true }).fill("Demo1234!");
+    await page.getByLabel("Confirm Password").fill("Demo1234!");
+    await page.getByRole("button", { name: "Create account" }).click();
+    // Reference copy (measured live): "A user with this email already
+    // exists" — rendered in the shared alert box.
+    const box = page.locator("div.mb-4.p-3.rounded-lg");
+    await expect(box).toContainText("A user with this email already exists");
+    await expect(page).toHaveURL(/\/register$/);
+  });
+
+  test("mismatched passwords render in the shared alert box (session-4)", async ({ page }) => {
+    await page.goto("/register");
+    await page.getByLabel("Email").fill(`mismatch-box-${Date.now()}@example.com`);
+    await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
+    await page.getByLabel("Confirm Password").fill("different!");
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page.locator("div.mb-4.p-3.rounded-lg")).toContainText("Passwords do not match");
+    await expect(page).toHaveURL(/\/register$/);
   });
 
   test("Back to log in returns to the login screen", async ({ page }) => {

@@ -301,7 +301,9 @@ async function main() {
   const demoHash = scryptHash("Demo1234!");
   const demo = await db.user.upsert({
     where: { email: "john@example.com" },
-    update: {},
+    // Session-4: seeded accounts are pre-verified (they predate the
+    // verification gate; an unverified demo user would lock the demo).
+    update: { emailVerified: true },
     create: {
       email: "john@example.com",
       passwordHash: demoHash,
@@ -310,6 +312,7 @@ async function main() {
       lastName: "Doe",
       phone: "+1 (555) 123-4567",
       role: "user",
+      emailVerified: true,
     },
   });
 
@@ -333,7 +336,7 @@ async function main() {
   // ---- Admin user (superset: staff console) --------------------------------
   await db.user.upsert({
     where: { email: "admin@luxestore.com" },
-    update: { role: "admin" },
+    update: { role: "admin", emailVerified: true },
     create: {
       email: "admin@luxestore.com",
       passwordHash: scryptHash("Admin1234!"),
@@ -341,6 +344,32 @@ async function main() {
       firstName: "Store",
       lastName: "Admin",
       role: "admin",
+      emailVerified: true,
+    },
+  });
+
+  // ---- Unverified fixture (session-4, AUTH-VERIFY-1) -----------------------
+  // A deterministic 6-digit code (123456) so E2E can drive the verify-email
+  // happy path WITHOUT the AUTH_REQUIRE_EMAIL_VERIFICATION flag: the screen
+  // and verifyEmailAction work regardless of the gate. The upsert always
+  // refreshes the hash + expiry so repeated seeds never go stale.
+  await db.user.upsert({
+    where: { email: "unverified@example.com" },
+    update: {
+      passwordHash: demoHash,
+      emailVerified: false,
+      verificationHash: scryptHash("123456"),
+      verificationExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      verificationAttempts: 0,
+    },
+    create: {
+      email: "unverified@example.com",
+      passwordHash: demoHash,
+      name: "Unverified Fixture",
+      emailVerified: false,
+      verificationHash: scryptHash("123456"),
+      verificationExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      verificationAttempts: 0,
     },
   });
 

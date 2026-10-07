@@ -11,7 +11,7 @@ import { useStore } from "./store-provider";
 import { cn } from "@/lib/utils";
 
 export function BuyPanel({ productId, name, stock }: { productId: string; name: string; stock: number }) {
-  const { addToCart, toggleWishlist, wishlist } = useStore();
+  const { addToCart, toggleWishlist, wishlist, notify } = useStore();
   const [quantity, setQuantity] = React.useState(1);
   const [adding, setAdding] = React.useState(false);
   const inWishlist = wishlist.has(productId);
@@ -46,8 +46,10 @@ export function BuyPanel({ productId, name, stock }: { productId: string; name: 
             setAdding(true);
             // Reference parity: a successful add only bumps the header
             // badge — the drawer opens exclusively via the header cart
-            // button (verified live on the reference, 2026-10-07).
-            await addToCart(productId, quantity);
+            // button, and the dark bottom-right toast confirms the add
+            // (both verified live on the reference, 2026-10-07).
+            const ok = await addToCart(productId, quantity);
+            if (ok) notify(`${name} added to cart!`);
             setAdding(false);
           }}
         >
@@ -59,7 +61,13 @@ export function BuyPanel({ productId, name, stock }: { productId: string; name: 
           className="h-10 px-4 rounded-xl"
           aria-label={inWishlist ? `Remove ${name} from wishlist` : `Add ${name} to wishlist`}
           aria-pressed={inWishlist}
-          onClick={() => void toggleWishlist(productId)}
+          onClick={() => {
+            // Toast on ADD only — the reference shows no toast when a
+            // product is removed from the wishlist (verified live).
+            void toggleWishlist(productId).then((added) => {
+              if (added) notify(`${name} added to wishlist!`);
+            });
+          }}
         >
           <Heart className={cn("h-4 w-4", inWishlist && "fill-primary text-primary")} />
         </Button>

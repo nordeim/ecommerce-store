@@ -96,6 +96,59 @@ test.describe("storefront computed-style parity", () => {
     await expect(footer).toHaveCSS("color", "rgb(251, 250, 249)");
   });
 
+  test("feature bar items are the reference's bordered cards (session-4)", async ({ page }) => {
+    // Measured live 2026-10-07: item = p-6 rounded-2xl bg-card border
+    // border-border/50 (bg white, 1px border, 16px radius, 24px padding);
+    // grid gap-4 (16px); icon tile rounded-2xl with a text-primary icon.
+    await page.goto("/");
+    const heading = page.locator("h3").filter({ hasText: "Free Shipping" }).first();
+    // The item is the heading's grandparent (item > div > h3).
+    const item = heading.locator("xpath=../..");
+    await expect(item).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(item).toHaveCSS("border-top-width", "1px");
+    await expect(item).toHaveCSS("border-radius", "16px");
+    await expect(item).toHaveCSS("padding", "24px");
+    const grid = item.locator("xpath=..");
+    await expect(grid).toHaveCSS("gap", "16px");
+    // Icon tile: rounded-2xl (16px), icon painted in the primary orange.
+    const tile = item.locator("div.h-12");
+    await expect(tile).toHaveCSS("border-radius", "16px");
+    const icon = tile.locator("svg");
+    await expect(icon).toHaveCSS("color", "rgb(230, 107, 26)");
+  });
+
+  test("footer Join button is the small 32px variant (session-4)", async ({ page }) => {
+    // Measured live: h-8 (32px) · text-xs (12px) · px-3 (12px).
+    await page.goto("/");
+    const join = page.getByRole("contentinfo").getByRole("button", { name: "Join" });
+    await expect(join).toHaveCSS("height", "32px");
+    await expect(join).toHaveCSS("font-size", "12px");
+    await expect(join).toHaveCSS("padding", "0px 12px");
+  });
+
+  test("footer bottom bar separator is the 40px hairline rhythm (session-4)", async ({ page }) => {
+    // Measured live: a standalone 1px separator with my-10 (40px above and
+    // below) between the link grid and the bottom row — not a border-t on
+    // the row itself (which produced 48px/32px).
+    await page.goto("/");
+    const footer = page.getByRole("contentinfo");
+    const grid = footer.locator("div.grid").first();
+    const separator = footer.locator("div.h-\\[1px\\]");
+    await expect(separator).toHaveCount(1);
+    const gridBottom = await grid.evaluate((el) => el.getBoundingClientRect().bottom);
+    const gapAbove = await separator.evaluate((el) => el.getBoundingClientRect().top) - gridBottom;
+    expect(Math.round(gapAbove)).toBe(40);
+    // Alpha utility (trap 6): v3 serializes rgba(), v4's color-mix lab().
+    const sepColor = await separator.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(sepColor).toMatch(/rgba\(251, 250, 249, 0\.1\)|lab\(98\.3\d+ [\d.-]+ [\d.-]+ \/ 0\.1\)/);
+    const sepBottom = await separator.evaluate((el) => el.getBoundingClientRect().bottom);
+    // Scope to the © line (the LAST text-xs paragraph — the newsletter
+    // column's Privacy note also matches p.text-xs).
+    const bottomRow = footer.locator("p.text-xs").last().locator("..");
+    const gapBelow = await bottomRow.evaluate((el) => el.getBoundingClientRect().top) - sepBottom;
+    expect(Math.round(gapBelow)).toBe(40);
+  });
+
   test("inputs carry the shadcn 10px radius (rounded-md pin)", async ({ page }) => {
     await page.goto("/shop");
     const input = page.getByLabel("Search products");

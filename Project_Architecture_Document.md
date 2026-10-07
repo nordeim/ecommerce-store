@@ -1,4 +1,4 @@
-# LUXE Store — Master Project Architecture Document (PAD) v1.0
+# LUXE Store — Master Project Architecture Document (PAD) v1.4
 
 **Classification:** Internal Engineering Reference
 **Status:** DEFINITIVE, PRODUCTION-LOCKED BLUEPRINT
@@ -15,6 +15,7 @@
 | 1.1 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-1 remediation: route-group chrome split (ADR-008), reference-parity 404/auth/empty-states/drawer behavior, slate-palette pin (trap 7), stale-state logout fix, `.env.example` realignment, 107-test gate — see docs/remediation-plan-session1.md |
 | 1.2 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-2 remediation: catalog-order parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break), reference-exact seed data (3 ratings + 11 descriptions), cart-drawer item-row anatomy rewrite, /cart line-total consistency, deliberate-divergence register, 117-test gate — see docs/remediation-plan-session2.md |
 | 1.3 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-3 remediation: auth parity contract (ADR-010 — /forgot-password anti-enumeration flow, nameless registration with derived display name, •••••••• placeholders, per-route Metadata), account-tab anatomy (icon avatar, highlighted default address, Change-Password section), shop active-filter chips + reference empty state, PDP related-products rule (all same-category), hero-dot geometry, 140-test gate — see docs/remediation-plan-session3.md |
+| 1.4 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-4 remediation: money/interaction parity round (ADR-011 — $9.99 flat shipping, reference-exact toast subsystem, transactional delta steppers fixing a lost-update race, cart-mutation guest-token fix, auth-screen anatomy rebuild incl. tinted error boxes + native validation + pinned copy, env-gated email-verification machinery, humanized-slug PDP titles, Reviews/Shipping tab panels, feature-bar cards, footer Join/separator), 170-test gate — see docs/remediation-plan-session4.md |
 
 ## Table of Contents
 
@@ -133,6 +134,13 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Consequences:** (+) Whole reference auth surface at parity with production-grade security (rate limit + anti-enumeration); per-route titles correct; no Prisma migration. (−) No email is actually sent (documented seam — plug Resend/SES/Postmark at the `console.info` line); display names from odd local parts (`e2e-42@x` → "E2e 42") are cosmetic until Profile editing refines them.
 - **Alternatives Rejected:** keeping the Name field (visible form-structure divergence); a real reset token table + emailed link (no email infra; would still need the neutral response); revealing account existence (security regression vs the reference).
 
+**ADR-011: Money & interaction parity round — shipping, toasts, transactional steppers, and env-gated email verification**
+- **Context:** Round-4 live A/B audit measured money and interaction surfaces the earlier rounds had not: the reference charges a **flat $9.99** shipping below $100 (measured at $34.99 and $79.99 subtotals; the clone charged $5.99); it fires a dark bottom-right toast ("«Product» added to cart!", accent check icon, ~3000 ms, stacks without dedupe, spring enter/exit) on cart adds and wishlist ADDS but not wishlist removes; its auth screens carry a header tile OUTSIDE the card, `h-12` icon-led inputs, and a tinted error BOX (the clone had plain red text + `noValidate`); its register flow gates behind a 6-digit "Verify your email" screen and blocks unverified logins; its PDP document.title is the humanized slug. Separately, the audit found two latent correctness bugs: cart steppers posted ABSOLUTE quantities computed from stale render state (two rapid clicks both sent `qty+1` — a lost-update race), and cart MUTATIONS passed `undefined` as the guest token (each guest add minted a new cart; guest steppers read as empty).
+- **Decision:** `FLAT_SHIPPING_CENTS = 999` (unit-pinned). New `ToastViewport` + `notify` in `StoreProvider` wired at the two `addToCart`/`toggleWishlist` call sites (region `pointer-events-none` + `aria-live=polite`; CSS `@starting-style` approximation of the reference's JS spring — both registered divergences). Steppers now post DELTAS: `adjustQuantity(itemId, ±1)` → `adjustCartItemAction` → transactional `changeQuantityBy` (`db.$transaction`); remove is its own action; pure delta math lives in `src/lib/cart-quantity.ts`. Cart mutations resolve the guest token from the cookie (`src/lib/cart.ts`), pinned by `guest-cart.spec.ts`. Auth screens rebuilt to the reference anatomy with a shared `auth-error.tsx` box, native `type=email` validation (no `noValidate`), and pinned error copy. Email verification ships the full machinery — Prisma columns (`emailVerified`, `verificationHash`, `verificationExpiresAt`, `verificationAttempts`), `/verify-email` route, `verifyEmailAction`/`resendVerificationAction`, 5-attempt budget, 15-min TTL, scrypt-hashed codes — but env-GATES enforcement behind `AUTH_REQUIRE_EMAIL_VERIFICATION` (default OFF): with no transactional email provider wired (the repo's documented posture), an always-on gate would lock every new user out; codes log at the `console.info` seam and E2E drives the flow via the seeded `unverified@example.com` fixture (code `123456`). PDP titles use `humanizeSlug` (`src/lib/format.ts`); the Reviews/Shipping tab panels and the feature-bar/footer anatomy were restyled to measured classes.
+- **Rationale:** Money values and interaction feedback are parity surfaces like colors and radii — measured, not guessed. Delta steppers are the correct server-authoritative pattern regardless of parity (idempotent increments survive races and stale renders). The env gate honors both the reference's behavior and the clone's no-email-provider reality; shipping the machinery now means flipping one flag when a provider lands.
+- **Consequences:** (+) Two real correctness bugs fixed (race + guest-cart identity) with regression tests; the interaction surface (toasts) and money surface now match the reference; the verification flow is fully tested even while off. (−) Two more documented divergences (toast spring approximation; verification off by default — the reference always gates); one additive schema change (`db push` — nullable/defaulted columns, no migration file); `«name»` interpolation means product names render verbatim inside the toast copy.
+- **Alternatives Rejected:** absolute-quantity steppers with optimistic locking (complexity for no parity gain); a queue-based toast library (the reference's is a 30-line stack — a subsystem would be over-engineering); enabling verification unconditionally (bricks signup with no provider); sending real emails via a dev SMTP (secrets/infra out of scope for a clone).
+
 ---
 
 ## 2. High-Level System Topology
@@ -201,7 +209,7 @@ ecommerce-store/
 │   │   │   ├── account/         ← dashboard (auth-gated, tabs)
 │   │   │   ├── wishlist/        ← hearts page
 │   │   │   └── admin/           ← role-gated console (superset)
-│   │   ├── (auth)/              ← STANDALONE login/register/forgot-password (ADR-008/010)
+│   │   ├── (auth)/              ← STANDALONE login/register/forgot-password/verify-email (ADR-008/010/011)
 │   │   ├── api/{health,search,newsletter}/route.ts   ← the 3-endpoint whitelist
 │   │   └── sitemap.ts · robots.ts
 │   ├── components/
@@ -213,14 +221,17 @@ ecommerce-store/
 │       ├── db.ts · db-path.ts   ← client singleton + URL contract (test-pinned)
 │       ├── auth.ts              ← sessions, getCurrentUser, isAdmin
 │       ├── password.ts          ← scrypt hash/verify (shared with seeds)
-│       ├── cart.ts · wishlist.ts← guest/user resolution + merges (ADR-003)
-│       ├── money.ts             ← cents formatting, discount math, shipping rules
+│       ├── cart.ts · wishlist.ts← guest/user resolution + merges (ADR-003; mutations read the cookie token)
+│       ├── money.ts             ← cents formatting, discount math, $9.99 shipping rule (ADR-011)
+│       ├── cart-quantity.ts     ← pure delta math for steppers (ADR-011)
+│       ├── format.ts            ← humanizeSlug (PDP titles) + code generation (ADR-011)
+│       ├── verification.ts      ← email-verification domain: budget, TTL, gating (ADR-011)
 │       ├── validation.ts        ← every Zod schema
 │       ├── rate-limit.ts        ← in-memory fixed windows
 │       └── *.test.ts            ← co-located unit layer
 ├── tests/
 │   ├── db-path.test.ts
-│   └── e2e/                     ← 10 specs + auth.setup + global-setup
+│   └── e2e/                     ← 12 specs + auth.setup + global-setup
 ├── docs/                        ← trap log, deployment, ssh push runbook
 └── AGENTS.md · CLAUDE.md · README.md · Project_Architecture_Document.md
 ```
@@ -388,26 +399,32 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | Unit — validation | 1 | 20 | `src/lib/validation.test.ts` | Vitest |
 | Unit — rate limit | 1 | 3 | `src/lib/rate-limit.test.ts` | Vitest |
 | Unit — db-path contract | 1 | 15 | `tests/db-path.test.ts` | Vitest |
-| E2E — smoke | 1 | 9 | `tests/e2e/smoke.spec.ts` | Playwright |
-| E2E — computed-style parity | 1 | 11 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
+| Unit — cart delta-quantity | 1 | 5 | `src/lib/cart-quantity.test.ts` | Vitest |
+| Unit — slug/code format | 1 | 5 | `src/lib/format.test.ts` | Vitest |
+| Unit — verification codes | 1 | 4 | `src/lib/verification.test.ts` | Vitest |
+| E2E — smoke | 1 | 11 | `tests/e2e/smoke.spec.ts` | Playwright |
+| E2E — computed-style parity | 1 | 14 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
 | E2E — catalog-order parity | 1 | 10 | `tests/e2e/catalog-parity.spec.ts` | Playwright |
-| E2E — cart | 1 | 7 | `tests/e2e/cart.spec.ts` | Playwright |
+| E2E — cart | 1 | 10 | `tests/e2e/cart.spec.ts` | Playwright |
 | E2E — checkout | 1 | 5 | `tests/e2e/checkout.spec.ts` | Playwright |
 | E2E — account | 1 | 11 | `tests/e2e/account.spec.ts` | Playwright |
-| E2E — auth | 1 | 13 | `tests/e2e/auth.spec.ts` | Playwright |
-| E2E — wishlist | 1 | 4 | `tests/e2e/wishlist.spec.ts` | Playwright |
+| E2E — auth | 1 | 15 | `tests/e2e/auth.spec.ts` | Playwright |
+| E2E — wishlist | 1 | 5 | `tests/e2e/wishlist.spec.ts` | Playwright |
 | E2E — search | 1 | 10 | `tests/e2e/search.spec.ts` | Playwright |
 | E2E — mobile navigation | 1 | 7 | `tests/e2e/mobile-navigation.spec.ts` | Playwright |
+| E2E — guest cart | 1 | 2 | `tests/e2e/guest-cart.spec.ts` | Playwright |
+| E2E — verify email | 1 | 3 | `tests/e2e/verify-email.spec.ts` | Playwright |
 | E2E — authenticated setup | 1 | 1 | `tests/e2e/auth.setup.ts` | Playwright |
-| **Total** | **16** | **140** | | |
+| **Total** | **21** | **170** | | |
 
 ### 8.2 Test Patterns
 
-- **Parity gate:** `storefront-parity.spec.ts` asserts computed styles against values measured live on the reference (colors, radii, the shadow pin, font, hero-dot geometry). This is the objective "looks identical" gate — screenshots are not.
+- **Parity gate:** `storefront-parity.spec.ts` asserts computed styles against values measured live on the reference (colors, radii, the shadow pin, font, hero-dot geometry, feature-bar card anatomy, footer Join button + separator rhythm). This is the objective "looks identical" gate — screenshots are not.
 - **Catalog-order gate:** `catalog-parity.spec.ts` pins the reference's product array order (Featured), the home On Sale membership, the Newest (reverse array) and Top Rated (stable rating-desc) sort semantics, the sort-dropdown option order, the reference-exact ratings/descriptions, and the related-products membership rule (all same-category, excluding self).
-- **Auth-contract gate:** `auth.spec.ts` pins the login/register form contract (3 fields, placeholders, enabled forgot-link), the nameless-registration flow, and the forgot-password anti-enumeration behavior (neutral confirmation for any email, field errors for invalid input, back-navigation).
-- **Isolation:** E2E global setup pushes/seeds/resets `db/e2e.db` (never the dev DB); `auth.setup.ts` logs in once (rate limiter) and shares storageState; `auth.spec.ts` opts out with an empty state; cart specs start from a cleared cart (`clearCartViaDrawer`).
-- **Radix-aware selectors:** close dialogs before asserting on page chrome (aria-hidden); scope text/label lookups to `main` (footer collisions).
+- **Auth-contract gate:** `auth.spec.ts` pins the login/register form contract (3 fields, placeholders, enabled forgot-link, header-tile anatomy, error BOX + pinned copy, native email validation), the nameless-registration flow, and the forgot-password anti-enumeration behavior (neutral confirmation for any email, field errors for invalid input, back-navigation).
+- **Money/interaction gate:** `money.test.ts` pins the $9.99 flat rate; `cart.spec.ts` pins drawer shipping at a below-threshold subtotal, the toast copy/anatomy/lifetime on cart + wishlist adds (and silence on wishlist remove), and the rapid-stepper race (intermediate assertion between clicks); `guest-cart.spec.ts` pins the cookie-token mutation path (opts out of storageState).
+- **Isolation:** E2E global setup pushes/seeds/resets `db/e2e.db` (never the dev DB) and restores the unverified `unverified@example.com` fixture every run; `auth.setup.ts` logs in once (rate limiter) and shares storageState; `auth.spec.ts`/`guest-cart.spec.ts`/`verify-email.spec.ts` opt out with an empty state; cart specs start from a cleared cart (`clearCartViaDrawer`).
+- **Radix-aware selectors:** close dialogs before asserting on page chrome (aria-hidden); scope text/label lookups to `main` (footer collisions); the drawer hides the header badge while open — assert the drawer's own totals; toast assertions wait out the enter spring (~450 ms, ±2 px).
 - **TDD:** bugs get a failing regression test at the same seam before the fix; the suite asserts behavior through the UI/API only.
 
 ### 8.3 Coverage Philosophy
@@ -418,9 +435,9 @@ Numeric coverage gates are not configured; instead, every domain seam (money, va
 
 1. `bun run lint` — 0 errors, 0 warnings
 2. `bun run typecheck` — 0 errors
-3. `bun run test` — 52/52
+3. `bun run test` — 66/66
 4. `bun run build` — compiles (validates RSC boundaries + redirects)
-5. `bun run test:e2e` — 88/88 (after a fresh build; 87 spec tests + the setup login)
+5. `bun run test:e2e` — 104/104 (after a fresh build; 103 spec tests + the setup login)
 6. No secrets/DB files/artifacts in `git status`
 
 ---
@@ -443,6 +460,7 @@ The build produces a self-contained server (`output: "standalone"`, tracing root
 | `DATABASE_URL` | Yes | SQLite location; schema-relative `file:` URL resolves against `prisma/schema.prisma` (use an ABSOLUTE path in production) | `file:../db/custom.db` |
 | `NEXT_PUBLIC_SITE_URL` | Prod | Canonical origin for metadata/sitemap/robots | `http://localhost:3000` |
 | `AUTH_SECRET` | Prod | HMAC secret for session cookies (`openssl rand -hex 32`) | insecure dev constant |
+| `AUTH_REQUIRE_EMAIL_VERIFICATION` | No | "true" = require the 6-digit "Verify your email" code after signup and block unverified logins (ADR-011; needs an email provider at the `console.info` seams) | off |
 
 ### 9.3 Docker
 
@@ -490,6 +508,7 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 | Medium | In-memory rate limiter is per-instance | Multi-instance deploys would not share limits | Accepted at current scale; migrate to shared store before scaling out (ADR-002/§6) |
 | Medium | Product imagery served from the reference's public CDN | Availability dependency; not rebrandable | By design for parity; swap via `prisma/seed.ts` |
 | Low | Password-reset emails not sent (request is logged at a `console.info` seam; no token table) | Reset flow is anti-enumeration-correct but delivers nothing | Future: plug a transactional provider at the seam (ADR-010) |
+| Low | Verification codes not emailed — logged at the `console.info` seam; the gate env-defaults OFF | The verification machinery is complete and E2E-tested but inert until a provider lands | Flip `AUTH_REQUIRE_EMAIL_VERIFICATION=true` when a provider is wired (ADR-011) |
 | Low | Order email notifications not sent | Confirmation is the success page + order history | Future outbox/worker (§7) |
 | Low | Reviews tab renders "coming soon" (reference parity) | No UGC surface | Deliberate parity decision |
 | Low | `typescript.ignoreBuildErrors: true` in next.config | Build does not type-check | `bun run typecheck` is the enforced gate; flip when the scaffold is retired |
@@ -501,10 +520,11 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 |---|---|---|
 | `src/app/globals.css` | ~110 | Tailwind v4 `@theme` + every v3-parity pin (ADR-005) — load-bearing |
 | `src/lib/db-path.ts` | ~107 | Schema-relative SQLite URL contract (test-pinned) |
-| `src/lib/cart.ts` | ~200 | Cart resolution, guest/user merge, DTO + totals |
+| `src/lib/cart.ts` | ~230 | Cart resolution, guest/user merge, cookie-token mutations, DTO + totals |
 | `src/lib/actions/checkout.ts` | ~140 | Transactional order placement (ADR-007) |
 | `src/lib/auth.ts` | ~100 | Sessions, HMAC cookie, role checks (ADR-006) |
-| `src/components/store/store-provider.tsx` | ~160 | The single client commerce-state seam |
+| `src/components/store/store-provider.tsx` | ~200 | The single client commerce-state seam (cart/wishlist/user + toast notifications) |
+| `src/components/store/toast-viewport.tsx` | ~50 | The reference-exact dark bottom-right toast region (ADR-011) |
 | `src/components/store/hero-carousel.tsx` | ~150 | Hero slides + the pinned sRGB overlay |
 | `src/components/checkout/checkout-flow.tsx` | ~370 | 3-step wizard with per-step validation gates |
 | `src/components/account/account-tabs.tsx` | ~430 | Account dashboard (4 tabs) |
@@ -518,6 +538,8 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 - **Parity surface** — a UI element whose computed styles are pinned to reference-measured values and guarded by `storefront-parity.spec.ts`.
 - **Trap log** — the accumulated, measured list of Tailwind v3→v4 engine differences (§5.4) and their token-level fixes.
 - **Guest identity** — the cookie-token cart/wishlist rows that merge into a user at login (ADR-003).
+- **Delta stepper** — a quantity control that posts `±1` increments to a transactional server mutation instead of an absolute target (ADR-011; immune to stale-render races).
+- **Env-gated parity feature** — reference behavior shipped in full but defaulted OFF because a production dependency (email provider) is absent (ADR-011 verification gate).
 - **ActionResult** — the `{ ok, data | error }` envelope every server action returns.
 - **Seam** — a public boundary tests target (server action, route handler, or rendered UI) — never module internals.
 - **Superset** — clone scope rule: match the reference's resting visuals exactly, add functionality only where it does not change parity surfaces.

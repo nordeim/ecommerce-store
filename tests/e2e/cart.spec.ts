@@ -24,6 +24,60 @@ test.describe("cart", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
   });
 
+  test("below-threshold carts pay the reference's flat $9.99 shipping (session-4)", async ({ page }) => {
+    // Measured live on the reference 2026-10-07: $34.99 cart -> Shipping
+    // $9.99, Total $44.98 (and $79.99 -> $9.99; $299.99 -> Free).
+    await page.goto("/product/vitamin-c-serum");
+    await page.getByRole("button", { name: "Add to Cart" }).first().click();
+    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await openCartDrawer(page);
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("Subtotal").locator("..")).toContainText("$34.99");
+    await expect(dialog.getByText("Shipping").locator("..")).toContainText("$9.99");
+    await expect(dialog.getByText("Total").locator("..").last()).toContainText("$44.98");
+  });
+
+  test("adding to cart shows the reference's dark toast (session-4)", async ({ page }) => {
+    // The reference toasts "«name» added to cart!" bottom-right: a dark
+    // rounded-xl box with the orange CircleCheckBig icon, 3000ms lifetime.
+    await page.goto("/product/ceramic-planter");
+    await page.getByRole("button", { name: "Add to Cart" }).first().click();
+    // getByText resolves to the toast ITEM (the text is its direct child).
+    const box = page.getByText("Ceramic Planter Set added to cart!");
+    await expect(box).toBeVisible();
+    await expect(box).toHaveCSS("background-color", "rgb(23, 23, 28)"); // bg-foreground
+    await expect(box).toHaveCSS("color", "rgb(251, 250, 249)"); // text-background
+    await expect(box).toHaveCSS("border-radius", "12px"); // rounded-xl
+    await expect(box.locator("svg")).toHaveCSS("color", "rgb(230, 107, 26)"); // text-primary
+    // Fixed to the bottom-right corner (bottom-6 right-6). A short settle
+    // lets the enter spring finish; ±2px tolerance mirrors the reference's
+    // own mid-spring sampling drift (its live values oscillate ~2px too).
+    await page.waitForTimeout(450);
+    const pos = await box.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { bottom: window.innerHeight - r.bottom, right: window.innerWidth - r.right };
+    });
+    expect(Math.round(pos.bottom)).toBeGreaterThanOrEqual(22);
+    expect(Math.round(pos.bottom)).toBeLessThanOrEqual(26);
+    expect(Math.round(pos.right)).toBeGreaterThanOrEqual(22);
+    expect(Math.round(pos.right)).toBeLessThanOrEqual(26);
+    // Auto-dismisses (~3s).
+    await expect(box).toBeHidden({ timeout: 6000 });
+  });
+
+  test("rapid adds stack toasts without dedupe (reference parity)", async ({ page }) => {
+    await page.goto("/product/yoga-mat");
+    const add = page.getByRole("button", { name: "Add to Cart" }).first();
+    await add.click();
+    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await add.click();
+    await expect(page.getByRole("button", { name: "Cart, 2 items" })).toBeVisible();
+    // Two toasts stack in the region (gap-2), each its own element.
+    const region = page.locator("div.fixed.bottom-6.right-6");
+    await expect(region).toBeVisible();
+    await expect(region.locator("> div")).toHaveCount(2);
+  });
+
   test("adding from a card bumps the badge; the drawer (via header) shows correct totals", async ({ page }) => {
     await page.goto("/shop");
     await page.locator(".bg-card.group").first().hover();
@@ -99,7 +153,13 @@ test.describe("cart", () => {
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     // Increase twice: 3 × $34.99 = $104.97 (crosses the free-shipping line).
+    // The intermediate assertion between clicks serializes the two server
+    // mutations — the reference parity AND the regression pin for the
+    // session-4 lost-update race (stale-state absolute quantities used to
+    // collapse double-clicks into a single +1). Assert the DRAWER's own
+    // totals (the header badge is aria-hidden behind the open Radix dialog).
     await dialog.getByLabel(/Increase quantity/).click();
+    await expect(dialog.getByText("$69.98").first()).toBeVisible();
     await dialog.getByLabel(/Increase quantity/).click();
     await expect(dialog.getByText("$104.97").first()).toBeVisible();
     await expect(dialog.getByText("Shipping").locator("..")).toContainText("Free");

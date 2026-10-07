@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.3.0
+version: 1.4.0
 last_updated: "2026-10-07"
 tags:
   - e-commerce
@@ -28,7 +28,7 @@ tags:
 > Companion docs: `AGENTS.md` (agent cheat-sheet), `CLAUDE.md` (workflow),
 > `Project_Architecture_Document.md` (PAD — ADRs and rationale),
 > `docs/Tailwind-V4-Validation-Report.md` (trap log detail),
-> `docs/remediation-plan-session1.md` … `session3.md` (post-push audits).
+> `docs/remediation-plan-session1.md` … `session4.md` (post-push audits).
 
 ---
 
@@ -245,8 +245,8 @@ app (routes) → components (ui/store/account/checkout) → lib (domains+actions
 | Group | Layout | Contains |
 |---|---|---|
 | — (root) | `src/app/layout.tsx` — html/body/font/metadata ONLY | `not-found.tsx` (chrome-less platform 404), `api/*`, `sitemap.ts`, `robots.ts` |
-| `(storefront)` | chrome + StoreProvider hydration | home, `shop/`, `product/[slug]/`, `cart/`, `checkout/` (+success), `wishlist/`, `account/`, `admin/` |
-| `(auth)` | `min-h-screen flex items-center justify-center bg-background px-4` | `login/`, `register/`, `forgot-password/` — standalone cards, no chrome. Each route = server `page.tsx` (owns `Metadata`: "Login"/"Register"/"Forgot Password"; root template appends "\| Lumina") + a `*-form.tsx` client island |
+| `(storefront)` | chrome + StoreProvider hydration | home, `shop/`, `product/[slug]/`, `cart/` (server page owning "Cart | Lumina" + `cart-client.tsx` island), `checkout/` (+success), `wishlist/`, `account/`, `admin/` |
+| `(auth)` | `min-h-screen flex items-center justify-center bg-background px-4` | `login/`, `register/`, `forgot-password/`, `verify-email/` — standalone cards, no chrome. Each route = server `page.tsx` (owns `Metadata`; root template appends "\| Lumina") + a `*-form.tsx` client island; the tinted error BOX (`auth-error.tsx`) is shared by all four screens |
 
 Consequences: the auth routes are statically prerendered; unknown PRODUCT
 slugs render an in-chrome "Product not found" block (`product/[slug]/page.tsx`)
@@ -254,12 +254,12 @@ while unknown ROUTES hit the chrome-less 404; the StoreProvider instance
 survives client navigation inside `(storefront)` — logout MUST call
 `setUser(null)` (§6).
 
-### 5.3 Component inventory (50 tsx in src; 24 `"use client"`)
+### 5.3 Component inventory (55 tsx in src; 26 `"use client"`)
 
 | Directory | Contents |
 |---|---|
 | `src/components/ui/` | shadcn-style primitives with the reference's exact class strings: button, badge, input, label, separator, select, sheet, tabs, radio-group, toast |
-| `src/components/store/` | announcement-bar, header (nav + cart badge + account icon), search-bar (typeahead combobox), mobile-nav (left Sheet w-72), cart-drawer (right Sheet), product-card, hero-carousel, category-showcase, footer, star-rating, store-provider |
+| `src/components/store/` | announcement-bar, header (nav + cart badge + account icon), search-bar (typeahead combobox), mobile-nav (left Sheet w-72), cart-drawer (right Sheet, delta steppers), product-card (toast on add), buy-panel (toast on add), hero-carousel, category-showcase (feature bar as bordered cards), footer, star-rating, store-provider (cart/wishlist/user + toast queue), toast-viewport |
 | `src/components/account/` | account-tabs (4 tabs, useActionState forms; reference anatomy: User-icon avatar, highlighted default address card, Change Password/Notifications sections + Session superset), admin rows |
 | `src/components/checkout/` | checkout-flow (3-step wizard client island) |
 
@@ -313,16 +313,38 @@ There are no custom hooks; one context covers all state:
   order; "Top Rated" = `[{rating: desc}, {sortOrder: asc}]` (Prisma ties
   are otherwise undefined). Home's On Sale = first 4 `isOnSale` products in
   array order. E2E-pinned by `tests/e2e/catalog-parity.spec.ts`.
-- **Auth forms are a parity contract (ADR-010):** register collects exactly
+- **Auth forms are a parity contract (ADR-010/011):** register collects exactly
   [Email, Password, Confirm Password] — the reference has NO Name field;
   `registerSchema.name` is optional and `registerAction` derives the display
   name from the email local part (`deriveDisplayName`, `src/lib/validation.ts`:
   `john.doe@x` → "John Doe"; `User.name` stays required in Prisma). Password
-  inputs carry the `••••••••` placeholder. `/forgot-password` runs
-  `requestPasswordResetAction`: Zod email, rate-limited 5/15min/IP+email,
-  anti-enumeration (the user lookup feeds only a `console.info` seam — never
-  the response; every submit shows the same neutral confirmation). E2E-pinned
-  by `tests/e2e/auth.spec.ts`.
+  inputs carry the `••••••••` placeholder (8-char minimum, no complexity
+  rule — measured). All auth screens share the reference anatomy: header
+  tile OUTSIDE the card, `h-12` icon-led inputs, "or" line-and-label divider,
+  and the tinted error BOX (`src/app/(auth)/auth-error.tsx`:
+  `div.mb-4.p-3.rounded-lg.bg-destructive/10.text-destructive.text-sm`, first
+  child of the card) — NO `noValidate` (native `type=email` validation is
+  the reference's contract). Error copy pinned: "Invalid email or password",
+  "A user with this email already exists", "Passwords do not match".
+  `/forgot-password` runs `requestPasswordResetAction`: Zod email,
+  rate-limited 5/15min/IP+email, anti-enumeration (the user lookup feeds
+  only a `console.info` seam — never the response; every submit shows the
+  same neutral confirmation). E2E-pinned by `tests/e2e/auth.spec.ts`.
+- **Email verification (ADR-011, env-gated):** the reference gates
+  registration behind a 6-digit "Verify your email" screen and blocks
+  unverified logins ("Please verify your email before logging in. Check your
+  email for the verification code."). The clone ships the full machinery —
+  `User.emailVerified` + `verificationHash`/`verificationExpiresAt`/
+  `verificationAttempts`, `/verify-email` route,
+  `verifyEmailAction`/`resendVerificationAction`, 5-attempt budget, 15-min
+  TTL, scrypt-hashed codes — gated behind `AUTH_REQUIRE_EMAIL_VERIFICATION`
+  (default OFF: no email provider is wired; codes log at the seam; an
+  always-on gate would lock out every new user). E2E drives the flow via the
+  seeded `unverified@example.com` fixture (code `123456`, restored by
+  `prisma/e2e-reset.ts` every run).
+- **Money is a parity contract (ADR-011):** flat shipping below $100 is
+  **$9.99** (`FLAT_SHIPPING_CENTS = 999` in `src/lib/money.ts`, unit-pinned);
+  Free at/above. Seeded demo orders store their own totals — unaffected.
 - **PDP related products = ALL same-category products excluding self**, in
   array (sortOrder) order — no cap, no cross-category fill (measured live:
   headphones → speaker + pad; planter → blanket; sunglasses → watch). Shop
@@ -338,6 +360,23 @@ There are no custom hooks; one context covers all state:
 - **Guest identity:** carts/wishlists key on signed 192-bit cookie tokens
   (`luxe_cart`, `luxe_wishlist`); login MERGES the guest row into the user
   row (quantity-max union) inside the login action; reads never mint rows.
+  Cart MUTATIONS resolve the guest token from the cookie inside the action
+  (`src/lib/cart.ts`) — passing `undefined` silently minted a NEW cart per
+  guest add and made guest steppers read as empty (the session-4 latent
+  bug; pinned by `tests/e2e/guest-cart.spec.ts`, which opts out of
+  storageState).
+- **Steppers post DELTAS (ADR-011):** `adjustQuantity(itemId, ±1)` →
+  `adjustCartItemAction` → transactional `changeQuantityBy` — rapid clicks
+  each land exactly once; the old absolute API computed `item.quantity + 1`
+  from stale render state and lost updates when two clicks raced one
+  re-render. Remove is its own action (`removeCartItemAction`).
+- **Toast subsystem (ADR-011):** cart adds + wishlist ADDS toast
+  "«name» added to cart!" / "… added to wishlist!" via `notify` in
+  StoreProvider → `ToastViewport` (`fixed bottom-6 right-6 z-[100]`, dark
+  box, CircleCheckBig accent, 3000 ms, stacks without dedupe); wishlist
+  REMOVE is silent. Region is `pointer-events-none` + `aria-live=polite`
+  (registered divergences: reference toasts are inert on click; the spring
+  is a CSS `@starting-style` approximation).
 
 ## 8. Accessibility Implementation
 
@@ -369,7 +408,7 @@ There are no custom hooks; one context covers all state:
 | 3 | Drawer opens on every add (reference doesn't) | `setCartOpen(true)` left in an add handler | Add → badge only; drawer opens via header button (E2E-pinned) |
 | 4 | Header keeps "My account" after logout | StoreProvider state survives client nav inside the route group | Call `setUser(null)` in the logout handler |
 | 5 | E2E can't find "Email" label / "New York" text | Footer carries colliding inputs/text | Scope selectors to `getByRole("main")` on chrome pages |
-| 6 | `getByRole("alert")` resolves to 2 elements | Next route announcer also has role=alert | Target `p[role=alert]` |
+| 6 | `getByRole("alert")` resolves to 2 elements | Next route announcer also has role=alert | Auth errors target the BOX locator `div.mb-4.p-3.rounded-lg` (session-4; the `p[role=alert]` form is gone) |
 | 7 | Header assertions fail while a dialog is open | Radix `aria-hidden`s the page chrome | Close the dialog before asserting on the header |
 | 8 | E2E login fails mid-suite with 429 | Login action rate-limited (10/15min/IP+email) | ONE login in `auth.setup.ts` → storageState; never per-test logins |
 | 9 | Cart counts drift between specs | Shared e2e SQLite file | `clearCartViaDrawer` in beforeEach; global reset in `global-setup.ts` |
@@ -379,6 +418,9 @@ There are no custom hooks; one context covers all state:
 | 13 | Login page flashes logged-out header before redirect | — | Auth pages render chrome-less (ADR-008); nothing to flash |
 | 14 | Register E2E fails on `getByLabel("Name")` | The reference register form has NO Name field (ADR-010) | Don't fill one — the action derives the name; use a fresh `e2e-<ts>@example.com` email (the reset only clears `e2e-*`/`logout-*`/`mismatch-*` users) |
 | 15 | Live audit reads the wrong hero slide / hidden tab panel | Inactive slides stay in the DOM (`opacity-0`); Radix keeps all tab panels mounted | Filter by `checkVisibility()` / query the VISIBLE panel (`[data-state=active]`) |
+| 16 | Guest cart empties / each add starts fresh | Cart mutation passed `undefined` as the guest token — every add minted a new cart | Mutations read `cookies().get(CART_COOKIE)` (ADR-011); `guest-cart.spec.ts` pins it |
+| 17 | Rapid stepper clicks land as +1 instead of +2 | Stepper posted ABSOLUTE qty computed from stale render state (lost-update race) | Post deltas: `adjustQuantity(itemId, ±1)` → transactional `changeQuantityBy` |
+| 18 | Toast assertions flake (position off by 1–2 px; toast gone at 3.1 s) | Enter spring still in flight; the poll ate the 3 s window | Wait ~450 ms for the spring, ±2 px tolerance; settle-then-measure for lifetime |
 
 ## 10. Debugging Guide
 
@@ -398,9 +440,9 @@ There are no custom hooks; one context covers all state:
 ```bash
 bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
-bun run test          # 52 unit tests pass
-bun run build         # compiles; 20 routes
-bun run test:e2e      # 88 tests pass (87 spec + the setup login; requires the build)
+bun run test          # 66 unit tests pass
+bun run build         # compiles; 21 routes
+bun run test:e2e      # 104 tests pass (103 spec + the setup login; requires the build)
 ```
 
 Then:
@@ -447,6 +489,17 @@ Then:
    without the anti-enumeration/rate-limit behavior would be a visual clone
    with a security hole. When a reference surface encodes a security
    posture, port the posture, not just the pixels (ADR-010).
+10. **Post deltas, not absolutes (L10).** A stepper that sends
+    `currentQuantity + 1` from render state loses updates the moment two
+    clicks land inside one re-render frame — the E2E suite passed for
+    months because single-click flows never race. Server-authoritative
+    increments (`±1` applied inside a transaction) are immune AND simpler
+    than optimistic locking (ADR-011).
+11. **Test the paths your tests don't run (L11).** Every cart/wishlist E2E
+    ran authenticated, so the guest-token mutation path shipped broken
+    (each guest add minted a new cart) across three remediation rounds.
+    Coverage follows the flows you actually exercise — guest-cart.spec.ts
+    (storageState opt-out) now pins the cookie path forever.
 
 ## 13. Pitfalls to Avoid
 
@@ -553,7 +606,7 @@ router.refresh();
 router.push("/");
 ```
 
-### 15.7 Auth forms (reference contract, ADR-010)
+### 15.7 Auth forms (reference contract, ADR-010/011)
 
 ```ts
 // Register: 3 fields only — no Name (the reference collects none)
@@ -574,6 +627,25 @@ console.info(`[password-reset] requested for ${user ? "known" : "unknown"} accou
 return { ok: true, data: null };   // same neutral copy for every email
 ```
 
+Error presentation: the shared BOX (`src/app/(auth)/auth-error.tsx`) renders
+`div.mb-4.p-3.rounded-lg.bg-destructive/10.text-destructive.text-sm` as the
+card's first child — plain red text is a parity break. Forms carry NO
+`noValidate`; native `type=email` validation is the reference contract.
+
+### 15.8 Toasts + delta steppers (ADR-011)
+
+```ts
+// Toast: fire from the mutation call site, not the server
+await addToCart(product.id);
+notify(`${product.name} added to cart!`);   // StoreProvider queues it
+// ToastViewport renders the stack: dark box, CircleCheckBig accent,
+// 3000 ms lifetime, pointer-events-none + aria-live region.
+
+// Stepper: post the DELTA, let the server apply it transactionally
+// ❌ updateQuantity(item.id, item.quantity + 1)   // stale-render race
+await adjustQuantity(item.id, +1);               // → changeQuantityBy
+```
+
 ## 16. Coding Anti-Patterns
 
 ```tsx
@@ -588,8 +660,11 @@ throw new Error("oops")           return { ok: false, error: { message } }
 
 // ❌ space-y + mt in mobile nav  ✅ flex gap-4 stack
 
-// ❌ bare role=alert query        ✅ p[role=alert]
-getByRole("alert")                page.locator("p[role=alert]")
+// ❌ bare role=alert query        ✅ the auth error BOX
+getByRole("alert")                page.locator("div.mb-4.p-3.rounded-lg")
+
+// ❌ absolute stepper qty          ✅ post the delta
+updateQuantity(id, qty + 1)       adjustQuantity(id, +1) // transactional
 
 // ❌ per-test logins              ✅ one setup login + storageState
 ```
@@ -688,6 +763,7 @@ Full records with context/rationale/consequences in
 | 008 | Route-group chrome split (minimal root layout, standalone auth/404) |
 | 009 | Catalog order as a parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break) |
 | 010 | Auth parity contract (nameless registration + derived display name, anti-enumeration password reset) |
+| 011 | Money & interaction parity round ($9.99 flat shipping, toast subsystem, transactional delta steppers, cookie-token cart mutations, env-gated email verification) |
 
 ## Appendix B: The Meticulous Workflow
 
@@ -724,4 +800,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session3.md` | the post-push audits this skill distills (latest: session-3) |
+| `docs/remediation-plan-session1.md` … `session4.md` | the post-push audits this skill distills (latest: session-4) |

@@ -110,3 +110,29 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Toast animation (session-4, TOAST-1) — enter from opacity-0 /
+   translateY(16px) scale(0.96) with a bouncy bezier (approximates the
+   reference's framer-motion spring, which overshoots ~2px); exit rises to
+   translateY(-10px) scale(0.95) before unmount. @starting-style makes the
+   transition run on element insertion without JS state. */
+.toast-item {
+  transition:
+    opacity 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.toast-item:not(.toast-exiting) {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.toast-item.toast-exiting {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+@starting-style {
+  .toast-item:not(.toast-exiting) {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}

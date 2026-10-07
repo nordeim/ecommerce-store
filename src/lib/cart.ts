@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "./db";
+import { nextQuantity } from "./cart-quantity";
 import { shippingForSubtotal } from "./money";
 
 export const CART_COOKIE = "luxe_cart";
@@ -156,7 +157,14 @@ export async function mergeGuestCartIntoUserCart(token: string | undefined, user
 export async function addItem(userId: string | null, productId: string, quantity: number): Promise<CartDto> {
   const product = await db.product.findUnique({ where: { id: productId } });
   if (!product || !product.isActive) throw new Error("Product not found");
-  const cart = await resolveCartRow(undefined, userId, true);
+  // Session-4 bug fix (found live): mutations MUST resolve the guest token
+  // from the cookie like getCart does — passing undefined minted a NEW cart
+  // on every guest add (orphaning previous items) and made guest steppers
+  // read as empty. All E2E cart specs run authenticated, so the guest path
+  // had never been exercised.
+  const store = await cookies();
+  const token = store.get(CART_COOKIE)?.value;
+  const cart = await resolveCartRow(token, userId, true);
   if (!cart) throw new Error("Cart unavailable");
   const existing = cart.items.find((i) => i.productId === productId);
   if (existing) {
@@ -176,15 +184,52 @@ export async function addItem(userId: string | null, productId: string, quantity
   );
 }
 
-export async function updateItem(userId: string | null, itemId: string, quantity: number): Promise<CartDto> {
-  const cart = await resolveCartRow(undefined, userId, false);
+/**
+ * Delta-based stepper mutation (session-4, CART-RACE-1).
+ *
+ * The old absolute-quantity API let two rapid stepper clicks race a single
+ * re-render — both computed the same `current + 1` and the second response
+ * overwrote the first (lost update). Deltas are applied inside a
+ * transaction against the row's CURRENT quantity, so SQLite's single-writer
+ * serialization makes every +1 land exactly once.
+ */
+export async function changeQuantityBy(userId: string | null, itemId: string, delta: number): Promise<CartDto> {
+  const store = await cookies();
+  const token = store.get(CART_COOKIE)?.value;
+  const cart = await resolveCartRow(token, userId, false);
   if (!cart) return EMPTY_CART;
   const item = cart.items.find((i) => i.id === itemId);
   if (!item) return toDto(cart.items);
-  if (quantity <= 0) {
+
+  await db.$transaction(async (tx) => {
+    const row = await tx.cartItem.findUnique({ where: { id: itemId }, select: { quantity: true } });
+    if (!row) return; // removed concurrently — nothing to adjust
+    const next = nextQuantity(row.quantity, delta);
+    if (next <= 0) {
+      await tx.cartItem.delete({ where: { id: itemId } });
+    } else if (next !== row.quantity) {
+      await tx.cartItem.update({ where: { id: itemId }, data: { quantity: next } });
+    }
+  });
+
+  return toDto(
+    await db.cartItem.findMany({
+      where: { cartId: cart.id },
+      include: { product: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  );
+}
+
+/** Remove a line outright (the trash button). */
+export async function removeItem(userId: string | null, itemId: string): Promise<CartDto> {
+  const store = await cookies();
+  const token = store.get(CART_COOKIE)?.value;
+  const cart = await resolveCartRow(token, userId, false);
+  if (!cart) return EMPTY_CART;
+  const item = cart.items.find((i) => i.id === itemId);
+  if (item) {
     await db.cartItem.delete({ where: { id: itemId } });
-  } else {
-    await db.cartItem.update({ where: { id: itemId }, data: { quantity } });
   }
   return toDto(
     await db.cartItem.findMany({
@@ -200,6 +245,8 @@ export async function clearCart(cartId: string): Promise<void> {
 }
 
 export async function getCartId(userId: string | null): Promise<string | null> {
-  const row = await resolveCartRow(undefined, userId, false);
+  const store = await cookies();
+  const token = store.get(CART_COOKIE)?.value;
+  const row = await resolveCartRow(token, userId, false);
   return row?.id ?? null;
 }

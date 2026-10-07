@@ -26,6 +26,25 @@ test.describe("wishlist", () => {
     await expect(heart).toHaveAttribute("aria-pressed", "false");
   });
 
+  test("wishlist ADD toasts; REMOVE does not (reference parity, session-4)", async ({ page }) => {
+    // Measured live: adding to wishlist toasts "«name» added to wishlist!"
+    // in the same dark box as the cart toast; un-toggling (removing) shows
+    // NO toast at all. Uses a product no earlier spec in this file touches
+    // (leather-watch/silk-pajama are added by the tests above and persist in
+    // the demo user's DB wishlist for the rest of the run).
+    await page.goto("/product/titanium-sunglasses");
+    await page.getByRole("button", { name: /Add Titanium Sunglasses to wishlist/ }).click();
+    const toast = page.getByText("Titanium Sunglasses added to wishlist!");
+    await expect(toast).toBeVisible();
+    // Wait out the toast's full lifecycle (auto-dismiss + exit) so the
+    // remove-phase count below can't see it.
+    await expect(toast).toBeHidden({ timeout: 8000 });
+    await page.getByRole("button", { name: /Remove Titanium Sunglasses from wishlist/ }).click();
+    await page.getByRole("button", { name: /Add Titanium Sunglasses to wishlist/ }).waitFor();
+    await page.waitForTimeout(800);
+    await expect(page.getByText(/added to wishlist/)).toHaveCount(0);
+  });
+
   test("wishlist persists across reloads (DB-backed)", async ({ page }) => {
     await page.goto("/product/silk-pajama");
     await page.getByRole("button", { name: /Add Silk Pajama Set to wishlist/ }).click();

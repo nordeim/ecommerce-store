@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { scryptHash } from "../src/lib/password";
 
 /**
  * Resets transient commerce state so every E2E run starts identical:
@@ -26,6 +27,19 @@ async function main() {
   await db.user.update({
     where: { email: "john@example.com" },
     data: { phone: "+1 (555) 123-4567", firstName: "John", lastName: "Doe", name: "John Doe" },
+  });
+
+  // Session-4 (AUTH-VERIFY-1): the verify-email spec CONSUMES the fixture's
+  // code (flips emailVerified) — restore its unverified state + the
+  // deterministic code so every run can drive the happy path.
+  await db.user.update({
+    where: { email: "unverified@example.com" },
+    data: {
+      emailVerified: false,
+      verificationHash: scryptHash("123456"),
+      verificationExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      verificationAttempts: 0,
+    },
   });
 
   console.log("[e2e-reset] transient state cleared");

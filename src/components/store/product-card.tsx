@@ -27,7 +27,7 @@ export type ProductCardData = {
 };
 
 export function ProductCard({ product, animate = true }: { product: ProductCardData; animate?: boolean }) {
-  const { addToCart, toggleWishlist, wishlist } = useStore();
+  const { addToCart, toggleWishlist, wishlist, notify } = useStore();
   const discount = discountPercent(product.price, product.compareAtPrice);
   const inWishlist = wishlist.has(product.id);
 
@@ -64,7 +64,11 @@ export function ProductCard({ product, animate = true }: { product: ProductCardD
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void toggleWishlist(product.id);
+              // Toast on ADD only — the reference shows no toast when a
+              // product is removed from the wishlist (verified live).
+              void toggleWishlist(product.id).then((added) => {
+                if (added) notify(`${product.name} added to wishlist!`);
+              });
             }}
           >
             <Heart className={cn("h-4 w-4", inWishlist && "fill-primary")} />
@@ -77,9 +81,12 @@ export function ProductCard({ product, animate = true }: { product: ProductCardD
                 e.preventDefault();
                 e.stopPropagation();
                 // Reference parity: a successful add only bumps the header
-                // badge — the drawer opens via the header cart button only
-                // (verified live on the reference, 2026-10-07).
-                void addToCart(product.id, 1);
+                // badge — the drawer opens via the header cart button only,
+                // and the dark bottom-right toast confirms the add (both
+                // verified live on the reference, 2026-10-07).
+                void addToCart(product.id, 1).then((ok) => {
+                  if (ok) notify(`${product.name} added to cart!`);
+                });
               }}
             >
               <ShoppingBag className="h-3.5 w-3.5" />

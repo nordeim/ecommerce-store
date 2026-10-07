@@ -18,7 +18,7 @@ import { useStore } from "./store-provider";
 import { formatCents } from "@/lib/money";
 
 export function CartDrawer() {
-  const { cart, cartOpen, setCartOpen, updateQuantity } = useStore();
+  const { cart, cartOpen, setCartOpen, adjustQuantity, removeItem } = useStore();
 
   return (
     <Sheet open={cartOpen} onOpenChange={setCartOpen}>
@@ -59,7 +59,7 @@ export function CartDrawer() {
                           className="p-1.5 hover:bg-secondary transition-colors rounded-l-lg disabled:opacity-40"
                           aria-label={`Decrease quantity of ${item.name}`}
                           disabled={item.quantity <= 1}
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          onClick={() => adjustQuantity(item.id, -1)}
                         >
                           <Minus className="h-3.5 w-3.5" />
                         </button>
@@ -67,7 +67,7 @@ export function CartDrawer() {
                         <button
                           className="p-1.5 hover:bg-secondary transition-colors rounded-r-lg"
                           aria-label={`Increase quantity of ${item.name}`}
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          onClick={() => adjustQuantity(item.id, 1)}
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
@@ -75,7 +75,7 @@ export function CartDrawer() {
                       <button
                         className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
                         aria-label={`Remove ${item.name} from cart`}
-                        onClick={() => updateQuantity(item.id, 0)}
+                        onClick={() => removeItem(item.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
