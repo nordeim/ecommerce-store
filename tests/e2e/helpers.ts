@@ -1,9 +1,30 @@
+import type { Browser, Page } from "@playwright/test";
+import { expect } from "@playwright/test";
+
 export const DEMO_EMAIL = "john@example.com";
 export const DEMO_PASSWORD = "Demo1234!";
 export const ADMIN_EMAIL = "admin@luxestore.com";
 export const ADMIN_PASSWORD = "Admin1234!";
 
-import type { Page } from "@playwright/test";
+/**
+ * Logs in as the seeded ADMIN through a second browser context and opens
+ * the console. The admin email draws from its own rate-limit bucket
+ * (login limit is per IP+email), so it coexists with the demo-user setup
+ * login. The login form lands everyone on /account — the admin then opens
+ * the role-gated console explicitly.
+ */
+export async function adminLogin(browser: Browser): Promise<Page> {
+  const ctx = await browser.newContext();
+  const admin = await ctx.newPage();
+  await admin.goto("/login");
+  await admin.getByLabel("Email").fill(ADMIN_EMAIL);
+  await admin.getByLabel("Password").fill(ADMIN_PASSWORD);
+  await admin.getByRole("button", { name: "Log in", exact: true }).click();
+  await admin.waitForURL("**/account");
+  await admin.goto("/admin");
+  await expect(admin.getByRole("heading", { name: "Admin Dashboard" })).toBeVisible();
+  return admin;
+}
 
 /**
  * Opens the cart drawer through the header cart button — the ONLY way the

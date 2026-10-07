@@ -1,9 +1,9 @@
-# LUXE Store — Master Project Architecture Document (PAD) v1.4
+# LUXE Store — Master Project Architecture Document (PAD) v1.7
 
 **Classification:** Internal Engineering Reference
 **Status:** DEFINITIVE, PRODUCTION-LOCKED BLUEPRINT
 **Companion Document:** [README.md](README.md) · [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) · [docs/Tailwind-V4-Validation-Report.md](docs/Tailwind-V4-Validation-Report.md)
-**Last Updated:** 2026-10-07
+**Last Updated:** 2026-10-08
 **Audience:** Senior Engineers, Tech Leads, DevOps, and Onboarding Engineers
 **Rule:** Every architectural decision in this document traces to a specific rationale. Nothing is here "because it's popular."
 
@@ -18,6 +18,7 @@
 | 1.4 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-4 remediation: money/interaction parity round (ADR-011 — $9.99 flat shipping, reference-exact toast subsystem, transactional delta steppers fixing a lost-update race, cart-mutation guest-token fix, auth-screen anatomy rebuild incl. tinted error boxes + native validation + pinned copy, env-gated email-verification machinery, humanized-slug PDP titles, Reviews/Shipping tab panels, feature-bar cards, footer Join/separator), 170-test gate — see docs/remediation-plan-session4.md |
 | 1.5 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-5 remediation: buy-panel/home parity round (ADR-012 — StoreProvider server-truth re-sync fixing the stale post-order cart badge; wishlist heart color contract: red `fill-destructive` active + muted card hearts + the 82px px-8 PDP heart incl. the reference's mobile clipped-heart geometry; home section hairline dividers), reference quirk register (cosmetic wishlist, base44 Google OAuth), 173-test gate — see docs/remediation-plan-session5.md |
 | 1.6 | 2026-10-07 | Review agent (Super Z) | [REM] | Session-6 remediation: superset correctness round (ADR-013 — server-side stock enforcement: clamped cart mutations + in-transaction overselling rejection + atomic placement decrement; ADR-014 — redirect-after-login with `validateRedirectPath` open-redirect hardening; `/login` becomes dynamic), first admin-console E2E coverage + guest-checkout E2E, dead-code removal, 188-test gate — see docs/remediation-plan-session6.md |
+| 1.7 | 2026-10-08 | Review agent (Super Z) | [REM] | Session-7 remediation: operational-completeness round (ADR-015 — admin order-detail view rendering the OrderEvent timeline + dedicated admin E2E; fresh-clone build reproducibility — `public/` committed + hardened build script; per-page admin redirect targets fixing REDIRECT-2; unknown-slug PDP titles + CDN favicon parity; nested-`<main>` landmark fix; six unused dependencies pruned; e2e-reset run-to-run order isolation), 194-test gate — see docs/remediation-plan-session7.md |
 
 ## Table of Contents
 
@@ -170,6 +171,15 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 
 ---
 
+**ADR-015: The admin order-detail view — surfacing the OrderEvent audit trail (and the round-7 operational set)**
+- **Context:** The round-7 audit (fresh-clone start) found the repo's own verification gate unrunnable from a bare clone (`public/` was never committed — `bun run build` exits 1 at the standalone copy step), the session-6 redirect wiring hardcoding `/login?redirect=/admin` on the admin SUB-pages (guests on `/admin/orders` lost their exact destination — the ADR-014 spec said "every `/admin*` page gates with its own path"), the `OrderEvent` rows written by `placeOrderAction`/`updateOrderStatusAction` rendered on no surface (PAD §11 round-7 candidate), admin E2E coverage limited to the stock-form seam, and two small parity gaps measured live (unknown-slug PDP `document.title` — the reference humanizes whatever slug is in the URL; no favicon — the reference injects a CDN-logo `<link rel=icon>` while the clone 404s `/favicon.ico`).
+- **Decision:** (1) New read-only server page `/admin/orders/[id]` (admin-gated; anonymous → `/login?redirect=` with the FULL dynamic path) rendering the customer block (email, placed date, payment method + card last4), the parsed JSON shipping-address snapshot, the OrderItem snapshots, and the chronological OrderEvent timeline; order numbers deep-link to it from the admin orders list and the dashboard's Recent Orders; unknown ids render an in-admin not-found block. Status mutations stay on the list row's Select — one mutation seam, no duplication. (2) `adminLogin` promoted to `helpers.ts`; new `tests/e2e/admin.spec.ts` (one shared admin login; guest gating, dashboard stats, order-detail content, combobox status transitions landing in the timeline with restore, visibility toggle enforced on /shop). (3) `prisma/e2e-reset.ts` now deletes non-canonical orders and demo-order `status_changed` events every run — spec-placed orders otherwise accumulate across runs (the e2e DB file persists), pushing demo fixtures out of the dashboard's take:5 list and piling duplicate timeline events; `prisma/dev-cleanup.ts` mirrors this for the dev DB. (4) Build reproducibility: `public/.gitkeep` committed + `mkdir -p public` in the build script (verified: `rm -rf public && bun run build` exits 0). (5) Parity closes: PDP `generateMetadata` humanizes EVERY slug (the in-chrome not-found block is unchanged); `metadata.icons` in the root layout points at the reference's CDN logo (the established remote-CDN pixel-parity pattern — no binary shipped). (6) Hygiene: admin pages wrap in `<div className="flex-1">` (the storefront layout already owns the single `<main>` — a nested pair is invalid HTML and broke strict-mode locators); six zero-import dependencies removed (`z-ai-web-dev-sdk`, `zustand`, `@radix-ui/react-toast`, `@radix-ui/react-alert-dialog`, `@radix-ui/react-popover`, `tailwindcss-animate`).
+- **Rationale:** An audit trail that exists only in the DB is operational theater — the admin who changes a status needs to see the history on a surface, and the round-6 stock work made the console's numbers meaningful, so the console's coverage had to catch up. A gate that fails on a fresh clone defeats the repo's own documented workflow (clone → install → `db:setup` → build → test). The redirect and title fixes follow the standing rule: parity surfaces are measured, not guessed — and both were measured live this round.
+- **Consequences:** (+) The admin console is now a complete operational surface (stats → list → detail → timeline) with E2E at every seam; fresh clones build green; E2E runs are deterministic run-over-run (proven: 118/118 twice consecutively); the browser tab carries the Lumina icon. (−) One more dynamic admin route (22 total); the e2e-reset's canonical-order list must be maintained if the seed's demo-order set ever changes (same contract as dev-cleanup's `CANONICAL_ORDERS`); `/favicon.ico` deliberately stays 404 (the reference's is a platform 302 — the `<link rel=icon>` is what browsers honor).
+- **Alternatives Rejected:** a timeline section on the orders LIST page (crowds the row card; the detail page has room for items + address too); a separate mutation seam on the detail page (duplicates the list row's Select for zero user value); shipping a favicon binary (breaks the remote-CDN parity pattern; the repo owns no icon asset); guarding the build's `cp` with `|| true` (masks real copy failures — `mkdir -p` is deterministic).
+
+---
+
 ## 2. High-Level System Topology
 
 ```
@@ -235,7 +245,7 @@ ecommerce-store/
 │   │   │   ├── checkout/        ← wizard page + success confirmation
 │   │   │   ├── account/         ← dashboard (auth-gated, tabs)
 │   │   │   ├── wishlist/        ← hearts page
-│   │   │   └── admin/           ← role-gated console (superset)
+│   │   │   └── admin/           ← role-gated console: dashboard + orders + orders/[id] detail + products (superset)
 │   │   ├── (auth)/              ← STANDALONE login/register/forgot-password/verify-email (ADR-008/010/011)
 │   │   ├── api/{health,search,newsletter}/route.ts   ← the 3-endpoint whitelist
 │   │   └── sitemap.ts · robots.ts
@@ -429,7 +439,7 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | Unit — cart delta-quantity + stock clamp | 1 | 10 | `src/lib/cart-quantity.test.ts` | Vitest |
 | Unit — slug/code format | 1 | 5 | `src/lib/format.test.ts` | Vitest |
 | Unit — verification codes | 1 | 4 | `src/lib/verification.test.ts` | Vitest |
-| E2E — smoke | 1 | 11 | `tests/e2e/smoke.spec.ts` | Playwright |
+| E2E — smoke | 1 | 12 | `tests/e2e/smoke.spec.ts` | Playwright |
 | E2E — computed-style parity | 1 | 16 | `tests/e2e/storefront-parity.spec.ts` | Playwright |
 | E2E — catalog-order parity | 1 | 10 | `tests/e2e/catalog-parity.spec.ts` | Playwright |
 | E2E — cart | 1 | 10 | `tests/e2e/cart.spec.ts` | Playwright |
@@ -442,9 +452,10 @@ Email+password (scrypt) → `Session` row → cookie `luxe_session=token.hmac` (
 | E2E — guest cart | 1 | 2 | `tests/e2e/guest-cart.spec.ts` | Playwright |
 | E2E — guest checkout | 1 | 1 | `tests/e2e/guest-checkout.spec.ts` | Playwright |
 | E2E — stock enforcement (incl. admin seam) | 1 | 2 | `tests/e2e/stock.spec.ts` | Playwright |
+| E2E — admin console | 1 | 5 | `tests/e2e/admin.spec.ts` | Playwright |
 | E2E — verify email | 1 | 3 | `tests/e2e/verify-email.spec.ts` | Playwright |
 | E2E — authenticated setup | 1 | 1 | `tests/e2e/auth.setup.ts` | Playwright |
-| **Total** | **23** | **188** | | |
+| **Total** | **24** | **194** | | |
 
 ### 8.2 Test Patterns
 
@@ -464,9 +475,9 @@ Numeric coverage gates are not configured; instead, every domain seam (money, va
 
 1. `bun run lint` — 0 errors, 0 warnings
 2. `bun run typecheck` — 0 errors
-3. `bun run test` — 66/66
+3. `bun run test` — 76/76
 4. `bun run build` — compiles (validates RSC boundaries + redirects)
-5. `bun run test:e2e` — 107/107 (after a fresh build; 106 spec tests + the setup login)
+5. `bun run test:e2e` — 118/118 (after a fresh build; 117 spec tests + the setup login)
 6. No secrets/DB files/artifacts in `git status`
 
 ---
@@ -540,9 +551,10 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 | Low | Verification codes not emailed — logged at the `console.info` seam; the gate env-defaults OFF | The verification machinery is complete and E2E-tested but inert until a provider lands | Flip `AUTH_REQUIRE_EMAIL_VERIFICATION=true` when a provider is wired (ADR-011) |
 | Low | Order email notifications not sent | Confirmation is the success page + order history | Future outbox/worker (§7) |
 | Low | Reviews tab renders "coming soon" (reference parity) | No UGC surface | Deliberate parity decision |
-| Low | `OrderEvent` rows are written (placed/status_changed) but displayed nowhere — no admin order-detail view | Operational audit trail exists only in the DB | Round-7 candidate: admin order-detail page rendering the event timeline |
-| Low | Admin console E2E coverage is stock-form-only (`stock.spec.ts`'s admin seam) — status transitions and stats are live-verified only | Regressions in admin mutations beyond stock would not fail CI | Round-7 candidate: dedicated `admin.spec.ts` (dashboard stats, order-status combobox, visibility toggle) |
 | Low | `typescript.ignoreBuildErrors: true` in next.config | Build does not type-check | `bun run typecheck` is the enforced gate; flip when the scaffold is retired |
+| Resolved | `OrderEvent` rows were written (placed/status_changed) but displayed nowhere | Operational audit trail existed only in the DB | Session-7 (ADR-015): `/admin/orders/[id]` renders the full timeline |
+| Resolved | Admin console E2E coverage was stock-form-only | Regressions in admin mutations beyond stock would not fail CI | Session-7 (ADR-015): dedicated `admin.spec.ts` (gating, stats, order-detail, status combobox, visibility toggle) |
+| Resolved | Fresh-clone `bun run build` exited 1 (`public/` never committed) | The repo's own gate was unrunnable from a bare clone | Session-7 (BUILD-1): `public/.gitkeep` committed + `mkdir -p public` in the build script |
 | Resolved | Sandbox env shadowing (parent `.env`/shell inject overriding `DATABASE_URL`) diverted the dev DB outside the repo | Stale rows survived reseeds; repo-root `db/` stayed empty | Documented in AGENTS.md; sandbox paths hard-linked onto the repo DB; repo contract test-pinned |
 
 ## 12. Key Files Reference

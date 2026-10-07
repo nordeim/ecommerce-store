@@ -91,7 +91,9 @@ from the injected location) — the repo contract itself is test-pinned in
   category (plain name) and search (quoted term) ONLY — price/sort never
   chip; clicking a chip deep-links to the URL minus that param. The PDP
   document.title is the **humanized slug** ("Wireless Headphones | Lumina"),
-  NOT the product name (measured live across all 11 slugs); the h1 keeps
+  NOT the product name — for EVERY slug, including unknown ones (session-7,
+  TITLE-NF-1: the reference's SPA titles `/product/anything` as the
+  humanized path; the in-chrome not-found BLOCK is unchanged). The h1 keeps
   the full name. The Reviews tab's empty panel is `div.text-center.py-10`;
   the Shipping tab is plain `p` elements with a literal `✓` prefix (NO
   icons — only the Description tab's Key Features uses lucide checks).
@@ -114,12 +116,30 @@ from the injected location) — the repo contract itself is test-pinned in
   every `db:setup`/global-setup run; `prisma/dev-cleanup.ts` restores 25 on
   the dev DB. Pinned by `tests/e2e/stock.spec.ts` (which also drives the
   admin stock form — the admin console's first E2E coverage).
-- **Redirect-after-login (ADR-014, session-6):** `/account` and `/admin*`
-  gate anonymous visitors to `/login?redirect=<their path>`; the login
-  server page passes the param into the form island, which only honors a
-  `validateRedirectPath`-validated same-origin relative path (open-redirect
-  payloads fall through to `/account`). `/login` is therefore a DYNAMIC
-  route (was static). Pinned by `tests/e2e/auth.spec.ts`.
+- **Redirect-after-login (ADR-014, session-6 + session-7 REDIRECT-2):**
+  `/account` and `/admin*` gate anonymous visitors to
+  `/login?redirect=<their OWN path>` — the admin SUB-pages carry their full
+  path (`/admin/orders`, `/admin/products`, `/admin/orders/<id>`), not the
+  dashboard shortcut; the login server page passes the param into the form
+  island, which only honors a `validateRedirectPath`-validated same-origin
+  relative path (open-redirect payloads fall through to `/account`).
+  `/login` is therefore a DYNAMIC route (was static). Pinned by
+  `tests/e2e/auth.spec.ts` + `admin.spec.ts`.
+- **The admin order-detail view (ADR-015, session-7)** renders what the
+  mutations write but no prior surface showed: `/admin/orders/[id]`
+  (admin-gated like every `/admin*` route) shows the customer block
+  (email, placed date, payment method + card last4), the parsed JSON
+  shipping-address snapshot, the OrderItem snapshots (image/name/unit
+  price/quantity/line total), and the **OrderEvent timeline** (chronological;
+  `placed` → "Order placed", `status_changed` → "Status changed" with the
+  `old → new by actor` note). Order numbers link to it from the admin
+  orders list AND the dashboard's Recent Orders. Unknown ids render an
+  in-admin "Order not found" block. Read-only — status changes stay on the
+  list row's Select (one mutation seam). Pinned by `tests/e2e/admin.spec.ts`.
+- **One `<main>` landmark per page (session-7, MAIN-NEST-1):** the admin
+  pages wrap their content in `<div className="flex-1">` — NOT `<main>` —
+  because the `(storefront)` layout already renders the `<main>`; a nested
+  pair is invalid HTML and breaks strict-mode `locator("main")` in specs.
 - **Steppers post DELTAS, not absolutes** (ADR-011): the drawer and /cart
   steppers call `adjustQuantity(itemId, ±1)`; the server applies them inside
   `db.$transaction` (`changeQuantityBy`) so rapid clicks each land exactly
@@ -139,11 +159,27 @@ from the injected location) — the repo contract itself is test-pinned in
 - The login action is rate-limited (10/15min/IP+email) and the password-reset action 5/15min — that's why `auth.setup.ts` logs in ONCE and saves `tests/e2e/.auth/user.json` as storageState. Don't add per-test logins.
 - Register specs do NOT fill a Name field (the reference form has none — the action derives it); register specs must use a fresh random email per run (`e2e-<ts>@example.com`) because the e2e-reset clears only `e2e-*` spec users.
 - The stock spec logs in as the seeded ADMIN through a second browser
-  context (`adminLogin(browser)`) — the admin email draws from its own
-  rate-limit bucket, so it coexists with the demo-user setup login. Its
-  `setStock` helper clicks the admin form's Save then WAITS (~800ms + reload)
-  before asserting — the server action + `router.refresh()` land
-  asynchronously and a reload that races the write reads stale truth.
+  context (`adminLogin(browser)` — now shared from `helpers.ts`) — the admin
+  email draws from its own rate-limit bucket, so it coexists with the
+  demo-user setup login. Its `setStock` helper clicks the admin form's Save
+  then WAITS (~800ms + reload) before asserting — the server action +
+  `router.refresh()` land asynchronously and a reload that races the write
+  reads stale truth.
+- **admin.spec.ts (session-7)** shares ONE admin login across the file
+  (`beforeAll`) to stay inside the login rate-limit bucket (the stock
+  spec's two logins share it). Selector contracts: scope stat-label
+  assertions to `div.grid.grid-cols-2` (the header also carries an
+  "Orders" link — strict-mode trap); scope order rows via the combobox's
+  stable aria-label (`Change status for ORD-2026-001`) +
+  `div.rounded-xl` filter, and assert the badge via the row's
+  `div.rounded-full` (the Select trigger also displays the status text);
+  the status test RESTORES the canonical status afterward. **Run-to-run
+  isolation:** `prisma/e2e-reset.ts` now deletes non-canonical orders and
+  demo-order `status_changed` events every run — spec-placed orders
+  otherwise accumulate across runs (the e2e DB file persists) and push the
+  demo fixtures out of the dashboard's take:5 Recent Orders list while
+  piling duplicate timeline events (both broke the first accumulation-run
+  of this very spec).
 - **Client-island hydration races (session-6 lesson, hit twice):** after a
   FULL page load (`page.goto`) of a client-island page (checkout wizard,
   login form), values typed before React hydrates get WIPED by React's
@@ -159,7 +195,7 @@ from the injected location) — the repo contract itself is test-pinned in
 - Address-tab specs target the card via the `p` chain (`card >> p`), not `getByText("Home")` — the label span was removed for parity.
 - Login credentials for dev/E2E: `john@example.com` / `Demo1234!` (demo user, seeded order history) and `admin@luxestore.com` / `Admin1234!` (admin role).
 - Selector gotchas baked into the specs: the footer carries an "Email address" input and a "New York, NY 10001" text that collide with naive `getByLabel`/`getByText` — scope to `getByRole("main")`. The auth screens have NO `main` landmark and NO footer (reference parity) — use page-level selectors there, and target the card's error via the box locator `div.mb-4.p-3.rounded-lg` (session-4; the old `p[role=alert]` form is gone). Radix `aria-hidden`s the page chrome while a dialog is open — close drawers before asserting on the header. Specs that inspect drawer contents open it via `openCartDrawer` (helpers.ts). Wishlist-heart specs use STATE-STABLE locators — the aria-label flips "Add … to wishlist" ↔ "Remove … from wishlist" on toggle, so a name anchored to "Add …" stops matching the moment the toggle lands ("element not found" IS the success signal); match `/«Product» (from|to) wishlist/` instead (session-5). PDP action-row assertions scope to `main .flex.items-center.gap-4.mb-4` — the related-products cards below carry their own wishlist/ATC buttons. The post-order header badge asserts `getByRole("button", { name: "Cart", exact: true })` — exact, because "Cart, N items" contains "Cart" (session-5, CHECKOUT-BADGE-1).
-- Dev-DB hygiene after live-audit/manual testing: `bun prisma/dev-cleanup.ts` removes stray orders (anything not in the seed's canonical set), test subscribers, and wishlist/cart residue — targeted deletes, NOT `migrate reset` (which would break the sandbox hard-link contract). The seed is upsert-only and never deletes.
+- Dev-DB hygiene after live-audit/manual testing: `bun prisma/dev-cleanup.ts` removes stray orders (anything not in the seed's canonical set), test subscribers, wishlist/cart residue, and (session-7) demo-order `status_changed` events + canonical statuses left by live status-transition testing — targeted deletes, NOT `migrate reset` (which would break the sandbox hard-link contract). The seed is upsert-only and never deletes.
 
 ## Tailwind v4 trap log (violations here silently break visual parity)
 
@@ -178,7 +214,18 @@ Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — v
 ## Conventions
 
 - Import alias `@/*` → `src/*`. Components PascalCase; routes kebab-case.
-- `next/font/google` (Plus Jakarta Sans via `--font-jakarta`); product art is remote (`media.base44.com`, `images.unoptimized`) — plain `<img>` tags are used for reference parity; ESLint does not flag them in this repo.
+- `next/font/google` (Plus Jakarta Sans via `--font-jakarta`); product art is remote (`media.base44.com`, `images.unoptimized`) — plain `<img>` tags are used for reference parity; ESLint does not flag them in this repo. The **favicon follows the same remote-CDN parity pattern** (session-7, FAVICON-1): `metadata.icons` in the root layout points at the reference's CDN logo — measured live; `/favicon.ico` itself stays 404 (the reference's is a platform 302). Pinned by the smoke spec.
 - Product images live on the reference app's public media CDN by design (pixel parity); swap to owned assets via `prisma/seed.ts` before rebranding.
 - `next.config.ts` sets `allowedDevOrigins: ["127.0.0.1", "localhost"]` — Next 16's dev-origin protection otherwise blocks chunk loads on `127.0.0.1` (unhydrated page). `devIndicators: false` keeps the dev "N" badge out of UI screenshots.
 - Conventional Commits; never commit `.env`, `db/*.db`, `dev.log`, `tests/e2e/.auth/`.
+- **The build script is fresh-clone-safe (session-7, BUILD-1):** `mkdir -p public`
+  precedes the standalone copies, and `public/.gitkeep` is committed — a
+  bare `git clone` + `bun install` + `bun run build` exits 0 (the directory
+  was previously an untracked local artifact; every fresh clone failed at
+  `cp -r public`).
+- **Dependencies are pruned to what `src/` imports (session-7, DEPS-1):**
+  `z-ai-web-dev-sdk`, `zustand`, `@radix-ui/react-toast`,
+  `@radix-ui/react-alert-dialog`, `@radix-ui/react-popover`, and
+  `tailwindcss-animate` were removed (zero imports; the toast viewport is
+  custom per ADR-011 and `tw-animate-css` is the v4 animation import).
+  Re-verify with a grep before re-adding any of them.

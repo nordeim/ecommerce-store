@@ -6,8 +6,8 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.6.0
-last_updated: "2026-10-07"
+version: 1.7.0
+last_updated: "2026-10-08"
 tags:
   - e-commerce
   - nextjs
@@ -455,6 +455,10 @@ There are no custom hooks; one context covers all state:
 | 23 | Checkout spec re-enters the wizard and clicks Continue immediately | The wizard REMOUNTS fresh on every navigation into `/checkout` — step 1, empty fields | Refill the shipping/payment form after re-entering checkout |
 | 24 | Admin stock form Save appears to lose the write | The server action + `router.refresh()` land asynchronously; a racing reload reads stale truth | Wait ~800ms after Save, then reload + assert the input value |
 | 25 | Orders keep succeeding against products the admin just zeroed | Nothing server-side validated stock (UI-only enforcement) | ADR-013: `clampToStock` on cart mutations + in-transaction rejection + atomic decrement at placement (`stock.spec.ts`) |
+| 26 | Fresh `git clone` + `bun run build` exits 1 (`cp: cannot stat 'public'`) | `public/` existed only as an untracked local artifact — never committed | `mkdir -p public` in the build script + committed `public/.gitkeep` (session-7 BUILD-1) |
+| 27 | Admin spec passes on run 1, fails on run 2 ("ORD-2026-001" missing from Recent Orders; duplicate timeline notes trip strict mode) | Spec-placed orders ACCUMULATE in the persisted `db/e2e.db`; new orders (placedAt=now) push demo fixtures (placedAt=Mar 2026) out of take:5 lists while status_changed events pile onto demo timelines | `e2e-reset.ts` deletes non-canonical orders + demo-order `status_changed` events every run (session-7); assert canonical fixtures only after a reset |
+| 28 | `locator("main")` strict-mode violation on admin pages | Every admin page nested its own `<main>` inside the storefront layout's `<main>` (two landmarks — invalid HTML) | Admin pages wrap in `<div className="flex-1">`; ONE `<main>` per page, owned by the layout (session-7 MAIN-NEST-1) |
+| 29 | Dev-mode live-verification login never navigates (no POST in dev.log) | Writing/editing scripts INSIDE the repo while `next dev` runs triggers Fast Refresh full reloads mid-fill — React's DOM adoption wipes the form values (and `networkidle` never fires under the HMR websocket) | Settle the server after repo-file edits; wait for the input + a beat, retry the submit once; drive Server-Action flows with Playwright (direct), not through the sandbox proxy |
 
 ## 10. Debugging Guide
 
@@ -827,6 +831,10 @@ Full records with context/rationale/consequences in
 | 009 | Catalog order as a parity contract (sortOrder = reference array position, staggered createdAt, rating tie-break) |
 | 010 | Auth parity contract (nameless registration + derived display name, anti-enumeration password reset) |
 | 011 | Money & interaction parity round ($9.99 flat shipping, toast subsystem, transactional delta steppers, cookie-token cart mutations, env-gated email verification) |
+| 012 | Client store re-syncs from server truth on refresh (adjust-state-during-render) |
+| 013 | Server-side stock enforcement (clamp in cart, reject + decrement at placement) |
+| 014 | Redirect-after-login with validated same-origin targets (per-page paths on admin sub-pages) |
+| 015 | Admin order-detail view rendering the OrderEvent timeline + fresh-clone build reproducibility + admin E2E expansion (session-7 operational set) |
 
 ## Appendix B: The Meticulous Workflow
 

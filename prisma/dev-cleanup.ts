@@ -38,6 +38,17 @@ async function main() {
   // canonical 25 so post-audit dev state matches the seed.
   const stockReset = await db.product.updateMany({ where: { stock: { not: 25 } }, data: { stock: 25 } });
 
+  // Session-7 (ADMIN-COV-2/ADMIN-DETAIL-1): live-verification status
+  // transitions leave status_changed events on the demo orders (the admin
+  // order-detail timeline renders every event). Restore the canonical
+  // statuses + timelines so post-audit dev state matches the seed.
+  const demoEvents = await db.orderEvent.deleteMany({
+    where: { type: "status_changed", order: { number: { in: [...CANONICAL_ORDERS] } } },
+  });
+  await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
+  await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });
+  await db.order.update({ where: { number: "ORD-2026-003" }, data: { status: "delivered" } });
+
   await db.newsletterSubscriber.deleteMany({ where: { email: { in: TEST_SUBSCRIBERS } } });
 
   // Wishlist + cart residue on every user (the seed starts both empty; the
@@ -54,6 +65,7 @@ async function main() {
   ]);
   console.log(`[dev-cleanup] removed ${strayIds.length} stray order(s)`);
   console.log(`[dev-cleanup] reset ${stockReset.count} product stock value(s) to 25`);
+  console.log(`[dev-cleanup] removed ${demoEvents.count} demo-order status_changed event(s)`);
   console.log(`[dev-cleanup] orders: ${orders.map((o) => o.number).join(", ")}`);
   console.log(`[dev-cleanup] wishlist items: ${wish}, newsletter: ${subs}`);
 }

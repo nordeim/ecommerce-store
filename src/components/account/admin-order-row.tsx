@@ -2,9 +2,11 @@
 
 /**
  * AdminOrderRow — order row with an inline status Select that calls the
- * updateOrderStatusAction server action (admin-gated server-side).
+ * updateOrderStatusAction server action (admin-gated server-side). The
+ * order number links to the detail page (session-7, ADMIN-DETAIL-1).
  */
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -47,7 +49,11 @@ export function AdminOrderRow({
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-border/50">
       <div>
-        <p className="font-medium">{order.number}</p>
+        <p className="font-medium">
+          <Link href={`/admin/orders/${order.id}`} className="hover:text-primary transition-colors">
+            {order.number}
+          </Link>
+        </p>
         <p className="text-sm text-muted-foreground">
           {order.email} · {order.itemCount} items ·{" "}
           {new Date(order.placedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}

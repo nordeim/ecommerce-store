@@ -26,12 +26,14 @@ async function getProduct(slug: string) {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getProduct(slug);
-  if (!product) return { title: "Product Not Found" };
-  // Reference parity (session-4, TITLE-2): the reference's PDP title is the
-  // HUMANIZED SLUG ("wireless-headphones" -> "Wireless Headphones | Lumina"),
-  // NOT the product name — measured live across all 11 catalog slugs. The
-  // h1 keeps the full product name; og:title follows the product name for
-  // richer social cards (superset).
+  // Reference parity (session-4 TITLE-2 + session-7 TITLE-NF-1): the
+  // reference's SPA derives the tab title from the URL slug regardless of
+  // whether the product resolves — an unknown slug still titles as the
+  // HUMANIZED SLUG ("wireless-noise-cancelling-headphones" → "Wireless Noise
+  // Cancelling Headphones | Lumina", measured live). The h1/page body keeps
+  // the not-found branch; only the metadata mirrors the URL. og:title follows
+  // the product name for richer social cards (superset).
+  if (!product) return { title: humanizeSlug(slug) };
   return {
     title: humanizeSlug(slug),
     description: product.description,

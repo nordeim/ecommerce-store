@@ -38,7 +38,7 @@ export default async function AdminPage() {
   ];
 
   return (
-    <main className="flex-1">
+    <div className="flex-1">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -83,7 +83,13 @@ export default async function AdminPage() {
                     className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border/50"
                   >
                     <div>
-                      <p className="font-medium">{o.number}</p>
+                      {/* Session-7 (ADMIN-DETAIL-1): the number deep-links to the
+                          order-detail view (items + event timeline). */}
+                      <p className="font-medium">
+                        <Link href={`/admin/orders/${o.id}`} className="hover:text-primary transition-colors">
+                          {o.number}
+                        </Link>
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {o.email} · {o.items.reduce((s, i) => s + i.quantity, 0)} items
                       </p>
@@ -101,6 +107,6 @@ export default async function AdminPage() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

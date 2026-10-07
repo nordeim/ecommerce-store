@@ -29,6 +29,21 @@ async function main() {
     data: { phone: "+1 (555) 123-4567", firstName: "John", lastName: "Doe", name: "John Doe" },
   });
 
+  // Session-7 (ADMIN-COV-2): spec-placed orders accumulate across runs (the
+  // e2e DB file persists between runs) — they push the demo fixtures out of
+  // take-limited lists (the admin dashboard's take:5 Recent Orders) and pile
+  // status_changed events onto the demo timelines (the admin order-detail
+  // page renders every event). Delete anything outside the seed's canonical
+  // set and restore the demo statuses/timelines so each run starts identical.
+  const CANONICAL_ORDERS = ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003"];
+  await db.order.deleteMany({ where: { number: { notIn: CANONICAL_ORDERS } } });
+  await db.orderEvent.deleteMany({
+    where: { type: "status_changed", order: { number: { in: CANONICAL_ORDERS } } },
+  });
+  await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
+  await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });
+  await db.order.update({ where: { number: "ORD-2026-003" }, data: { status: "delivered" } });
+
   // Session-4 (AUTH-VERIFY-1): the verify-email spec CONSUMES the fixture's
   // code (flips emailVerified) — restore its unverified state + the
   // deterministic code so every run can drive the happy path.

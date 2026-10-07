@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default async function AdminOrdersPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login?redirect=/admin");
+  if (!user) redirect("/login?redirect=/admin/orders");
   if (!isAdmin(user)) redirect("/");
 
   const orders = await db.order.findMany({
@@ -26,7 +26,7 @@ export default async function AdminOrdersPage() {
   });
 
   return (
-    <main className="flex-1">
+    <div className="flex-1">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center gap-3 mb-8">
           <Button asChild variant="ghost" size="sm" className="rounded-xl">
@@ -60,6 +60,6 @@ export default async function AdminOrdersPage() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -100,6 +100,12 @@ test.describe("smoke", () => {
     await expect(page.getByRole("link", { name: "Back to Shop" })).toBeVisible();
     // Unlike the route 404, this one keeps the storefront chrome.
     await expect(page.getByRole("banner")).toBeVisible();
+    // Reference parity (session-7, TITLE-NF-1): the reference's SPA derives
+    // the tab title from the URL slug regardless of whether the product
+    // resolves — measured live: /product/wireless-noise-cancelling-headphones
+    // (unknown there too) titles "Wireless Noise Cancelling Headphones |
+    // Lumina". The clone previously said "Product Not Found | Lumina".
+    await expect(page).toHaveTitle("Not A Real Slug | Lumina");
   });
 
   test("auth screens render standalone (no storefront chrome)", async ({ page }) => {
@@ -117,5 +123,19 @@ test.describe("smoke", () => {
     await expect(footer.getByText("hello@luxestore.com")).toBeVisible();
     await expect(footer.getByText("+1 (555) 123-4567")).toBeVisible();
     await expect(footer.getByText("© 2026 LUXE Store. All rights reserved.")).toBeVisible();
+  });
+
+  test("every page carries the reference's favicon link (session-7)", async ({ page }) => {
+    // Measured live on the reference: it injects <link rel="icon"> pointing
+    // at its media CDN logo (and /favicon.ico 302s to the same asset). The
+    // clone follows the repo's remote-CDN pixel-parity pattern (product art
+    // already lives on media.base44.com) instead of shipping a binary.
+    await page.goto("/");
+    const icon = page.locator('link[rel="icon"]');
+    await expect(icon).toHaveCount(1);
+    await expect(icon).toHaveAttribute(
+      "href",
+      "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/76cff797e_logo.png",
+    );
   });
 });

@@ -1,5 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
-import { ADMIN_EMAIL, ADMIN_PASSWORD, clearCartViaDrawer, openCartDrawer } from "./helpers";
+import { expect, test, type Page } from "@playwright/test";
+import { adminLogin, clearCartViaDrawer, openCartDrawer } from "./helpers";
 
 // Stock enforcement (session-6, STOCK-1): the reference has no inventory
 // concept, so the clone's stock handling is pure superset — but it must be
@@ -12,25 +12,10 @@ import { ADMIN_EMAIL, ADMIN_PASSWORD, clearCartViaDrawer, openCartDrawer } from 
 //   3. A successful order DECREMENTS stock (atomic with placement).
 //
 // Stock is controlled through the REAL admin seam (login as the seeded
-// admin, edit the products-page stock form) — also the admin console's
-// first E2E coverage. The login rate limiter is per IP+email, so the admin
-// logins draw from their own bucket (the setup's demo-user login is a
-// different email).
-
-async function adminLogin(browser: Browser): Promise<Page> {
-  const ctx = await browser.newContext();
-  const admin = await ctx.newPage();
-  await admin.goto("/login");
-  await admin.getByLabel("Email").fill(ADMIN_EMAIL);
-  await admin.getByLabel("Password").fill(ADMIN_PASSWORD);
-  await admin.getByRole("button", { name: "Log in", exact: true }).click();
-  // The login form lands everyone on /account — the admin then opens the
-  // role-gated console explicitly.
-  await admin.waitForURL("**/account");
-  await admin.goto("/admin");
-  await expect(admin.getByRole("heading", { name: "Admin Dashboard" })).toBeVisible();
-  return admin;
-}
+// admin, edit the products-page stock form). The shared adminLogin helper
+// lives in helpers.ts (session-7: also used by admin.spec.ts); the login
+// rate limiter is per IP+email, so the admin logins draw from their own
+// bucket (the setup's demo-user login is a different email).
 
 /** Set a product's stock through the admin products form (the real seam). */
 async function setStock(admin: Page, productName: string, value: number): Promise<void> {

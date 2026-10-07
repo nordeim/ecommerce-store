@@ -23,6 +23,14 @@ export const metadata: Metadata = {
   description:
     "LUXE Store — curated collection of premium products for modern living. Quality meets style in every piece.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
+  // Reference parity (session-7, FAVICON-1): the reference injects
+  // <link rel="icon"> pointing at its media-CDN logo (its /favicon.ico 302s
+  // to the same asset). We follow the repo's remote-CDN pixel-parity pattern
+  // (product art already lives on media.base44.com by design) instead of
+  // shipping a binary — measured live 2026-10-07.
+  icons: {
+    icon: "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/76cff797e_logo.png",
+  },
 };
 
 export default function RootLayout({
