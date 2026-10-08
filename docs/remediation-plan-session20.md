@@ -369,4 +369,4 @@ by failure REASON, reverted, GREEN re-run.
 - [x] Screenshots captured under `docs/screenshots/` (111–115) + VLM-verified
 - [x] Docs updated: AGENTS.md, CLAUDE.md, README.md, PAD v1.20 (ADR-028 + revision row + Known-Issues Resolved rows), SKILL v1.20.0, session log (session_38), worklog
 - [x] `.env.example` verified current (no new env plumbing — the token seam reuses the existing console.info contract)
-- [ ] Committed on `main` and pushed via the SSH wrapper (final step — checked off in the session log after the push lands)
+- [x] Committed on `main` and pushed via the SSH wrapper (final step — checked off in the session log after the push lands)
