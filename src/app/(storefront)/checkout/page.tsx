@@ -2,14 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getCart } from "@/lib/cart";
+import { pageMetadata } from "@/lib/metadata";
 import { CheckoutFlow } from "@/components/checkout/checkout-flow";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Checkout",
-};
+export const metadata: Metadata = pageMetadata({ title: "Checkout", path: "/checkout" });
 
 export default async function CheckoutPage() {
   const user = await getCurrentUser();

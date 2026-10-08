@@ -283,4 +283,14 @@ test.describe("storefront computed-style parity", () => {
     await expect(iconRow.locator("svg.lucide-rotate-ccw")).toHaveCount(1);
     await expect(iconRow.locator("svg.lucide-refresh-cw")).toHaveCount(0);
   });
+
+  test("shop sort trigger is the reference 150px wide (session-9, SORT-W-1)", async ({ page }) => {
+    // Measured live 2026-10-08 on both sites: the sort combobox class ends
+    // w-[150px] (computed 150px); the clone shipped w-[170px]. Category
+    // (w-[160px]) and price (w-[150px]) already match.
+    await page.goto("/shop");
+    const sort = page.locator('button[aria-label="Sort products"]');
+    await expect(sort).toBeVisible();
+    await expect(sort).toHaveCSS("width", "150px");
+  });
 });

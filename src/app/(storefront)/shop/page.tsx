@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
 import { Search, X } from "lucide-react";
 import { db } from "@/lib/db";
+import { pageMetadata } from "@/lib/metadata";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,9 +17,25 @@ import { ShopFilters } from "@/components/store/shop-filters";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Shop",
-};
+// Reference parity (session-9, METADATA-OG-1): static-page pattern
+// ("Shop on Lumina. " + site description), and the reference's og:url
+// PRESERVES the query string (/shop?category=electronics keeps the param —
+// measured live 2026-10-08).
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const qs = new URLSearchParams();
+  const { category, search, sort, price } = parseSearchParams(params);
+  if (category) qs.set("category", category);
+  if (search) qs.set("search", search);
+  if (sort && sort !== "featured") qs.set("sort", sort);
+  if (price && price !== "all") qs.set("price", price);
+  const query = qs.toString();
+  return pageMetadata({ title: "Shop", path: query ? `/shop?${query}` : "/shop" });
+}
 
 type SortKey = "featured" | "price_asc" | "price_desc" | "newest" | "rating";
 type PriceKey = "all" | "under-50" | "50-100" | "100-200" | "over-200";

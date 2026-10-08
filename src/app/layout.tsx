@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { SITE_DESCRIPTION } from "@/lib/metadata";
 import "./globals.css";
 
 /**
@@ -20,8 +21,10 @@ export const metadata: Metadata = {
     default: "Lumina",
     template: "%s | Lumina",
   },
-  description:
-    "LUXE Store — curated collection of premium products for modern living. Quality meets style in every piece.",
+  // Reference parity (session-9, METADATA-OG-1): the reference's site
+  // description — measured live 2026-10-08 on every route's head (the old
+  // "LUXE Store — curated collection…" text drifted).
+  description: SITE_DESCRIPTION,
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   // Reference parity (session-7, FAVICON-1): the reference injects
   // <link rel="icon"> pointing at its media-CDN logo (its /favicon.ico 302s
@@ -30,6 +33,16 @@ export const metadata: Metadata = {
   // shipping a binary — measured live 2026-10-07.
   icons: {
     icon: "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/76cff797e_logo.png",
+  },
+  // Reference parity (session-9, METADATA-OG-1): the PWA head set the
+  // reference renders site-wide — apple-mobile-web-app-capable/title/
+  // status-bar-style via Next's appleWebApp (which ALSO emits
+  // mobile-web-app-capable itself — adding it to `other` would duplicate
+  // the tag). Measured live 2026-10-08.
+  appleWebApp: {
+    capable: true,
+    title: "Lumina",
+    statusBarStyle: "black",
   },
 };
 

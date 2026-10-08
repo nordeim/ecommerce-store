@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Platform404 } from "@/components/store/platform-404";
 import { notFoundPageTitle } from "@/lib/format";
+import { pageMetadata } from "@/lib/metadata";
 
 /**
  * Unknown-route catch-all (session-8, TITLE-404-1).
@@ -15,6 +16,10 @@ import { notFoundPageTitle } from "@/lib/format";
  * component) with the path-aware title. Known routes are all more
  * specific than a catch-all, and nothing in the app calls notFound() —
  * `src/app/not-found.tsx` stays as the boundary insurance.
+ *
+ * og parity (session-9, METADATA-OG-1): unknown routes follow the PLAIN
+ * description but DO carry twitter:card + twitter:url (measured live —
+ * only the PDP omits them).
  */
 export async function generateMetadata({
   params,
@@ -23,12 +28,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { notFound: segments } = await params;
   const title = notFoundPageTitle(segments);
+  const path = segments.length > 0 ? `/${segments.join("/")}` : "/";
   if (title === null) {
     // No letter-bearing segment (e.g. /12345): the reference keeps the
     // plain default — bypass the "%s | Lumina" template.
-    return { title: { absolute: "Lumina" } };
+    return pageMetadata({ title: "Lumina", path, bare: true, plain: true });
   }
-  return { title };
+  return pageMetadata({ title, path, plain: true });
 }
 
 export default async function CatchAllNotFoundPage({

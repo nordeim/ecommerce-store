@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Heart } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
+import { pageMetadata } from "@/lib/metadata";
 import { getWishlistProducts } from "@/lib/wishlist";
 import { ProductCard } from "@/components/store/product-card";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Wishlist",
-};
+export const metadata: Metadata = pageMetadata({ title: "Wishlist", path: "/wishlist" });
 
 export default async function WishlistPage() {
   const user = await getCurrentUser();

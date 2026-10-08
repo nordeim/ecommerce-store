@@ -11,6 +11,7 @@ import { ProductCard, type ProductCardData } from "@/components/store/product-ca
 import { BuyPanel } from "@/components/store/buy-panel";
 import { discountPercent, formatCents } from "@/lib/money";
 import { humanizeSlug } from "@/lib/format";
+import { OG_IMAGE_URL, SITE_DESCRIPTION } from "@/lib/metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -25,29 +26,59 @@ async function getProduct(slug: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProduct(slug);
   // Reference parity (session-4 TITLE-2 + session-7 TITLE-NF-1): the
   // reference's SPA derives the tab title from the URL slug regardless of
   // whether the product resolves — an unknown slug still titles as the
   // HUMANIZED SLUG ("wireless-noise-cancelling-headphones" → "Wireless Noise
   // Cancelling Headphones | Lumina", measured live). The h1/page body keeps
-  // the not-found branch; only the metadata mirrors the URL. og:title follows
-  // the product name for richer social cards (superset).
-  if (!product) return { title: humanizeSlug(slug) };
+  // the not-found branch; only the metadata mirrors the URL.
+  //
+  // og/twitter parity (session-9, METADATA-OG-1 — measured live 2026-10-08):
+  // the reference's PDP head is og:title = the SAME humanized-slug title (not
+  // the product name), og:description = the site description (not the
+  // product's), og:image = the site LOGO (not the product art), and
+  // twitter:title/description/image with NEITHER twitter:card NOR
+  // twitter:url. Next's engine cannot express that shape through the
+  // Metadata API (postProcessMetadata auto-fills the typed twitter from
+  // openGraph, and the resolver force-defaults twitter:card whenever twitter
+  // images exist) — so the PDP renders its social tags as React 19-hoisted
+  // <meta> elements below, with NO openGraph/twitter fields here. The
+  // product-specific og (name/description/image) the clone previously
+  // shipped was drift.
   return {
     title: humanizeSlug(slug),
-    description: product.description,
-    openGraph: {
-      title: product.name,
-      description: product.description,
-      images: [{ url: product.image }],
-    },
+    description: SITE_DESCRIPTION,
   };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const product = await getProduct(slug);
+
+  // Reference PDP social head (session-9, METADATA-OG-1 — measured live
+  // 2026-10-08): og:title = the humanized-slug title, og:description = the
+  // site description, og:image = the site LOGO, og:url = the canonical PDP
+  // URL, og:type/site_name as everywhere; twitter:title/description/image
+  // with NEITHER twitter:card NOR twitter:url. React 19 hoists these <meta>
+  // elements into <head>; the Metadata API cannot express the card-less
+  // shape (Next auto-fills the typed twitter from openGraph and force-
+  // defaults the card). Rendered for EVERY slug, matching the reference's
+  // SPA (which derives its head from the URL, not the product).
+  const socialTitle = `${humanizeSlug(slug)} | Lumina`;
+  const socialUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/product/${slug}`;
+  const socialMetas = (
+    <>
+      <meta property="og:title" content={socialTitle} />
+      <meta property="og:description" content={SITE_DESCRIPTION} />
+      <meta property="og:image" content={OG_IMAGE_URL} />
+      <meta property="og:url" content={socialUrl} />
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content="Lumina" />
+      <meta name="twitter:title" content={socialTitle} />
+      <meta name="twitter:description" content={SITE_DESCRIPTION} />
+      <meta name="twitter:image" content={OG_IMAGE_URL} />
+    </>
+  );
 
   // Reference parity (captured live 2026-10-07): an unknown product slug
   // renders an in-chrome minimal block — h2 "Product not found" + the
@@ -56,6 +87,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+        {socialMetas}
         <h2 className="text-2xl font-bold mb-4">Product not found</h2>
         <Button asChild>
           <Link href="/shop">Back to Shop</Link>
@@ -90,6 +122,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      {socialMetas}
       {/* Breadcrumb geometry (session-8, BREADCRUMB-1): the reference uses
           gap-2 + mb-8 (measured live — the clone's gap-1.5/mb-6 offset the
           entire PDP 8px). No flex-wrap: product names render single-line. */}

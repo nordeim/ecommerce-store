@@ -161,4 +161,98 @@ test.describe("smoke", () => {
       "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/76cff797e_logo.png",
     );
   });
+
+  test("home carries the reference's full OpenGraph head set (session-9, METADATA-OG-1)", async ({ page }) => {
+    // Pattern decoded live on the reference 2026-10-08: every route renders
+    // og:title/og:description/og:image/og:url/og:type/og:site_name +
+    // twitter:* + the PWA metas. Home is the PLAIN pattern (no "X on
+    // Lumina." prefix) with the bare "Lumina" title. og:image is the site
+    // LOGO (1200x630 fill variant), site-wide.
+    await page.goto("/");
+    const meta = async (sel: string) => (await page.locator(sel).getAttribute("content")) ?? "";
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "Lumina");
+    expect(await meta('meta[property="og:description"]')).toBe(
+      "An elegant, high-end e-commerce destination offering curated essentials for a modern lifestyle.",
+    );
+    expect(await meta('meta[property="og:image"]')).toBe(
+      "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/76cff797e_logo.png/v1/fill/w_1200,h_630/76cff797e_logo.png",
+    );
+    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+      "content",
+      "http://localhost:3000",
+    );
+    await expect(page.locator('meta[property="og:type"]')).toHaveAttribute("content", "website");
+    await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute("content", "Lumina");
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
+      "content",
+      "summary_large_image",
+    );
+    // PWA metas (site-wide).
+    await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
+    await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute(
+      "content",
+      "Lumina",
+    );
+    await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute(
+      "content",
+      "black",
+    );
+  });
+
+  test("static pages carry the prefixed description + twitter:url (session-9)", async ({ page }) => {
+    await page.goto("/shop");
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "Shop | Lumina");
+    await expect(page.locator('meta[property="og:description"]')).toHaveAttribute(
+      "content",
+      "Shop on Lumina. An elegant, high-end e-commerce destination offering curated essentials for a modern lifestyle.",
+    );
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      "content",
+      "Shop on Lumina. An elegant, high-end e-commerce destination offering curated essentials for a modern lifestyle.",
+    );
+    await expect(page.locator('meta[name="twitter:url"]')).toHaveAttribute(
+      "content",
+      "http://localhost:3000/shop",
+    );
+    // Cart carries the same static pattern.
+    await page.goto("/cart");
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "Cart | Lumina");
+    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+      "content",
+      "http://localhost:3000/cart",
+    );
+  });
+
+  test("shop og:url preserves the query string (session-9)", async ({ page }) => {
+    await page.goto("/shop?category=electronics");
+    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+      "content",
+      "http://localhost:3000/shop?category=electronics",
+    );
+  });
+
+  test("PDP og metadata follows the reference's plain pattern (session-9)", async ({ page }) => {
+    // Reference PDP: og:title = HUMANIZED SLUG (not the product name),
+    // og:description = the plain site description, og:image = the site LOGO
+    // (not the product image), and NO twitter:card / twitter:url.
+    await page.goto("/product/wireless-headphones");
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
+      "content",
+      "Wireless Headphones | Lumina",
+    );
+    await expect(page.locator('meta[property="og:description"]')).toHaveAttribute(
+      "content",
+      "An elegant, high-end e-commerce destination offering curated essentials for a modern lifestyle.",
+    );
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      "content",
+      "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/76cff797e_logo.png/v1/fill/w_1200,h_630/76cff797e_logo.png",
+    );
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveCount(0);
+    await expect(page.locator('meta[name="twitter:url"]')).toHaveCount(0);
+    await expect(page.locator('meta[name="twitter:title"]')).toHaveAttribute(
+      "content",
+      "Wireless Headphones | Lumina",
+    );
+  });
 });

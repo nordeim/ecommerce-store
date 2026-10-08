@@ -49,11 +49,19 @@ export type AddressRow = {
   isDefault: boolean;
 };
 
+// Reference badge anatomy (session-9, ACCOUNT-ORDER-ROW-1 — measured live
+// on both sites 2026-10-08): the status chip is a button-classed element —
+// delivered = the primary variant (bg-primary rgb(230,107,26) + white text
+// + shadow), in_transit = the secondary variant (bg-secondary
+// rgb(242,240,237)). Only these two statuses are observable on the
+// reference's seeded orders; unmeasured statuses fall back to secondary.
 const STATUS_STYLES: Record<string, string> = {
-  delivered: "bg-emerald-100 text-emerald-700",
-  in_transit: "bg-amber-100 text-amber-700",
-  processing: "bg-blue-100 text-blue-700",
-  cancelled: "bg-red-100 text-red-700",
+  delivered:
+    "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+  in_transit:
+    "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  processing: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  cancelled: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -149,50 +157,59 @@ export function AccountTabs({
                 <p className="text-sm text-muted-foreground">{user.email}</p>
               </div>
             </div>
-            <form action={profileAction} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                {/* Reference field geometry (session-8, LABEL-BLOCK-1): inline
-                    label + Input mt-1.5 — matches the reference's measured 18px
-                    inline label line-box and 6px input margin. */}
-                <Label htmlFor="acc-first">First Name</Label>
-                <Input id="acc-first" name="firstName" defaultValue={user.firstName ?? ""} required className="mt-1.5" />
-                {fieldError(profileState, "firstName") && (
-                  <p className="text-xs text-destructive mt-1">{fieldError(profileState, "firstName")}</p>
+            <form action={profileAction}>
+              {/* Reference structure (session-9, ACCOUNT-BTN-W-1): the
+                  fields live in their OWN grid; the Save button is a FLOW
+                  sibling of the grid carrying mt-4 — an inline-flex button
+                  in flow sizes to its content on EVERY viewport (mobile
+                  127px). The session-8 grid-child approach matched desktop
+                  computed values but grid items STRETCH by default, and the
+                  sm:col-span-2/sm:w-fit constraints only applied ≥640px —
+                  mobile rendered full-width (308px vs the reference's
+                  127px). */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  {/* Reference field geometry (session-8, LABEL-BLOCK-1): inline
+                      label + Input mt-1.5 — matches the reference's measured 18px
+                      inline label line-box and 6px input margin. */}
+                  <Label htmlFor="acc-first">First Name</Label>
+                  <Input id="acc-first" name="firstName" defaultValue={user.firstName ?? ""} required className="mt-1.5" />
+                  {fieldError(profileState, "firstName") && (
+                    <p className="text-xs text-destructive mt-1">{fieldError(profileState, "firstName")}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="acc-last">Last Name</Label>
+                  <Input id="acc-last" name="lastName" defaultValue={user.lastName ?? ""} required className="mt-1.5" />
+                  {fieldError(profileState, "lastName") && (
+                    <p className="text-xs text-destructive mt-1">{fieldError(profileState, "lastName")}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="acc-email">Email</Label>
+                  <Input id="acc-email" name="email" type="email" defaultValue={user.email} required className="mt-1.5" />
+                  {fieldError(profileState, "email") && (
+                    <p className="text-xs text-destructive mt-1">{fieldError(profileState, "email")}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="acc-phone">Phone</Label>
+                  <Input id="acc-phone" name="phone" defaultValue={user.phone ?? ""} placeholder="+1 (555) 123-4567" className="mt-1.5" />
+                </div>
+                {profileState && !profileState.ok && !profileState.error.fieldErrors && (
+                  <p role="alert" className="text-sm text-destructive col-span-full">
+                    {profileState.error.message}
+                  </p>
+                )}
+                {profileState?.ok && (
+                  <p role="status" aria-label="Profile saved" className="text-sm text-emerald-600 col-span-full">
+                    Profile updated.
+                  </p>
                 )}
               </div>
-              <div>
-                <Label htmlFor="acc-last">Last Name</Label>
-                <Input id="acc-last" name="lastName" defaultValue={user.lastName ?? ""} required className="mt-1.5" />
-                {fieldError(profileState, "lastName") && (
-                  <p className="text-xs text-destructive mt-1">{fieldError(profileState, "lastName")}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="acc-email">Email</Label>
-                <Input id="acc-email" name="email" type="email" defaultValue={user.email} required className="mt-1.5" />
-                {fieldError(profileState, "email") && (
-                  <p className="text-xs text-destructive mt-1">{fieldError(profileState, "email")}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="acc-phone">Phone</Label>
-                <Input id="acc-phone" name="phone" defaultValue={user.phone ?? ""} placeholder="+1 (555) 123-4567" className="mt-1.5" />
-              </div>
-              {profileState && !profileState.ok && !profileState.error.fieldErrors && (
-                <p role="alert" className="text-sm text-destructive col-span-full">
-                  {profileState.error.message}
-                </p>
-              )}
-              {profileState?.ok && (
-                <p role="status" aria-label="Profile saved" className="text-sm text-emerald-600 col-span-full">
-                  Profile updated.
-                </p>
-              )}
-              {/* No mt-4 (session-8): the button is a grid child, so the
-                  grid's gap-4 (16px) already supplies the reference's
-                  field→button spacing — adding mt-4 doubled it to 32px
-                  and pushed the card/footer 16px low. */}
-              <Button type="submit" className="rounded-xl sm:col-span-2 sm:w-fit" disabled={profilePending}>
+              {/* mt-4 (the reference's own class): 16px below the grid on
+                  every viewport — a single flow margin, nothing stacks. */}
+              <Button type="submit" className="rounded-xl mt-4" disabled={profilePending}>
                 {profilePending ? "Saving…" : "Save Changes"}
               </Button>
             </form>
@@ -212,27 +229,28 @@ export function AccountTabs({
                 <p className="text-muted-foreground">No orders yet.</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="space-y-4">
                 {orders.map((o) => (
                   <div
                     key={o.id}
-                    className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary/30 rounded-xl gap-3"
                   >
                     <div>
-                      <p className="font-medium">{o.number}</p>
+                      <p className="font-semibold">{o.number}</p>
                       <p className="text-sm text-muted-foreground">
                         {formatDate(o.placedAt)} · {o.itemCount} {o.itemCount === 1 ? "item" : "items"}
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                          STATUS_STYLES[o.status] ?? "bg-secondary text-secondary-foreground"
+                        className={`inline-flex items-center border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full ${
+                          STATUS_STYLES[o.status] ??
+                          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80"
                         }`}
                       >
                         {STATUS_LABELS[o.status] ?? o.status}
                       </span>
-                      <span className="font-semibold">{formatCents(o.total)}</span>
+                      <span className="font-bold">{formatCents(o.total)}</span>
                     </div>
                   </div>
                 ))}

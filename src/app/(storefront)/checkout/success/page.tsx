@@ -3,14 +3,14 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { pageMetadata } from "@/lib/metadata";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Order Confirmed",
-};
+// Clone-only route (superset): the static-page og pattern for consistency.
+export const metadata: Metadata = pageMetadata({ title: "Order Confirmed", path: "/checkout/success" });
 
 export default async function CheckoutSuccessPage({
   searchParams,

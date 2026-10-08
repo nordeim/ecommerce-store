@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { db } from "@/lib/db";
+import { pageMetadata } from "@/lib/metadata";
 import { HeroCarousel, type HeroSlide } from "@/components/store/hero-carousel";
 import { CategoryCard, FeatureBar } from "@/components/store/category-card";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
+
+// Reference parity (session-9, METADATA-OG-1): home renders the PLAIN
+// pattern — bare "Lumina" title, plain site description, og:url = origin,
+// twitter:card present.
+export const metadata = pageMetadata({ title: "Lumina", path: "/", bare: true, plain: true });
 
 const HERO_SLIDES: HeroSlide[] = [
   {

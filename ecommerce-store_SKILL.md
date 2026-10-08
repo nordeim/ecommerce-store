@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.8.0
+version: 1.9.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -28,7 +28,7 @@ tags:
 > Companion docs: `AGENTS.md` (agent cheat-sheet), `CLAUDE.md` (workflow),
 > `Project_Architecture_Document.md` (PAD — ADRs and rationale),
 > `docs/Tailwind-V4-Validation-Report.md` (trap log detail),
-> `docs/remediation-plan-session1.md` … `session4.md` (post-push audits).
+> `docs/remediation-plan-session1.md` … `session9.md` (post-push audits).
 
 ---
 
@@ -471,6 +471,8 @@ There are no custom hooks; one context covers all state:
 | 28 | `locator("main")` strict-mode violation on admin pages | Every admin page nested its own `<main>` inside the storefront layout's `<main>` (two landmarks — invalid HTML) | Admin pages wrap in `<div className="flex-1">`; ONE `<main>` per page, owned by the layout (session-7 MAIN-NEST-1) |
 | 29 | Dev-mode live-verification login never navigates (no POST in dev.log) | Writing/editing scripts INSIDE the repo while `next dev` runs triggers Fast Refresh full reloads mid-fill — React's DOM adoption wipes the form values (and `networkidle` never fires under the HMR websocket) | Settle the server after repo-file edits; wait for the input + a beat, retry the submit once; drive Server-Action flows with Playwright (direct), not through the sandbox proxy |
 | 30 | Auth/register cards render 8px SHORT per field (register card 490px vs the reference's 514px); account panel 32px below the tablist; PDP everything 8px low | Tailwind v4 trap 8: `space-y-*` emits `margin-block-end` on NON-LAST children — inert on inline `<label>` first children (v3 landed `margin-top` on following blocks); same engine stacks Tabs `space-y-6` + panel `mt-2`; breadcrumb `mb-6` ≠ `mb-8` | Give the block input wrapper `mt-2` (keep `space-y-2` on the wrapper — computed parity, DOM parity); Tabs roots carry NO `space-y-*` (base `mt-6` supplies 24px); measure label rects + computed margins on BOTH sites before "fixing" spacing (session-8, ADR-016) |
+| 31 | Profile Save button passes the DESKTOP audit (127px, 16px below the fields) yet renders 308px full-width on iPhone 14 | Tailwind v4 trap 9 + a CSS universal: grid items STRETCH by default — `sm:col-span-2 sm:w-fit` only constrains width at ≥640px, and grid `gap-4` COINCIDES with the reference's flow spacing on desktop (session-8's fix masked the mobile break) | Reproduce the reference's actual anatomy — button OUTSIDE the grid as a flow child with `mt-4` (fit-content every viewport); audit mobile viewports SEPARATELY (desktop computed parity ≠ mobile parity) (session-9, ADR-017) |
+| 32 | PDP `<head>` shows `twitter:card` (or a duplicate `mobile-web-app-capable`, or derived duplicate twitter tags) no matter how the Metadata object omits them | Next's metadata ENGINE fills gaps: the twitter resolver force-defaults `card` when the typed twitter field carries images; `openGraph` presence derives a twitter layer; `appleWebApp.capable` auto-emits `mobile-web-app-capable` | Use the typed twitter field for every route that WANTS the card (omit `card` deliberately); `twitter:url` rides in `other`; the card-less PDP shape is inexpressible via the Metadata API — render plain `<meta name="twitter:…">` in the page body (React 19 hoists them into `<head>`) (session-9, ADR-017) |
 
 ## 10. Debugging Guide
 
@@ -884,4 +886,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session8.md` | the post-push audits this skill distills (latest: session-8) |
+| `docs/remediation-plan-session1.md` … `session9.md` | the post-push audits this skill distills (latest: session-9) |

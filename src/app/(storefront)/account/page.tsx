@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { pageMetadata } from "@/lib/metadata";
 import { AccountTabs, type OrderRow, type AddressRow } from "@/components/account/account-tabs";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Account",
-};
+export const metadata: Metadata = pageMetadata({ title: "Account", path: "/account" });
 
 export default async function AccountPage() {
   const user = await getCurrentUser();

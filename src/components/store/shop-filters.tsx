@@ -115,7 +115,10 @@ export function ShopFilters({ categories, activeCategory, activePrice, activeSor
       </Select>
 
       <Select value={activeSort} onValueChange={(v) => setParam("sort", v)}>
-        <SelectTrigger className="w-[170px]" aria-label="Sort products">
+        {/* w-[150px] (session-9, SORT-W-1): the reference's sort trigger
+            class ends w-[150px] (measured live, computed 150px) — the clone
+            had shipped w-[170px]. */}
+        <SelectTrigger className="w-[150px]" aria-label="Sort products">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

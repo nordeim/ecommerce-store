@@ -118,6 +118,75 @@ test.describe("account", () => {
     await expect(history.getByText("In Transit").first()).toBeVisible();
   });
 
+  test("order rows match the reference anatomy (session-9, ACCOUNT-ORDER-ROW-1)", async ({ page }) => {
+    // Reference rows (measured live 2026-10-08, both sites):
+    //   container space-y-4 (16px between rows) inside p-6 pt-0
+    //   row: flex flex-col sm:flex-row sm:items-center justify-between
+    //        p-4 bg-secondary/30 rounded-xl gap-3 — tinted fill, NO border,
+    //        stacks on mobile
+    //   number p.font-semibold / total span.font-bold
+    //   status badge: button-classed div — Delivered = bg-primary
+    //   (rgb(230,107,26), white text, shadow, rounded-full, 22px tall),
+    //   In Transit = bg-secondary (rgb(242,240,237)).
+    // Pre-fix clone: border 1px + hover, weights 500/600, emerald/amber
+    // chips, 12px row gap.
+    await page.getByRole("tab", { name: "Orders" }).click();
+
+    const geometry = await page.evaluate(() => {
+      const panel = document.querySelector('[role=tabpanel][data-state="active"]');
+      if (!panel) throw new Error("orders panel missing");
+      const row = [...panel.querySelectorAll("div")].find(
+        (d) => d.className.includes("justify-between") && /ORD-2026-001/.test(d.textContent ?? ""),
+      );
+      if (!row) throw new Error("order row missing");
+      const cs = getComputedStyle(row);
+      const number = row.querySelector("p");
+      const total = [...row.querySelectorAll("span")].find((s) => /^\$/.test(s.textContent ?? ""));
+      const badge = [...row.querySelectorAll("div, span")].find((e) =>
+        (e.textContent ?? "").trim() === "Delivered",
+      );
+      const container = row.parentElement;
+      const row2 = container?.children[1] as HTMLElement | undefined;
+      const gap = row2
+        ? row2.getBoundingClientRect().y - (row.getBoundingClientRect().y + row.getBoundingClientRect().height)
+        : null;
+      return {
+        bg: cs.backgroundColor,
+        borderWidth: cs.borderTopWidth,
+        numberWeight: number ? getComputedStyle(number).fontWeight : null,
+        totalWeight: total ? getComputedStyle(total).fontWeight : null,
+        badgeBg: badge ? getComputedStyle(badge).backgroundColor : null,
+        badgeRadius: badge ? getComputedStyle(badge).borderRadius : null,
+        gap,
+        containerCls: container?.className ?? null,
+      };
+    });
+
+    // bg-secondary/30 — v4 serializes alpha utilities as lab() (trap log 6).
+    expect(geometry.bg).toMatch(/rgba\(242, 240, 237, 0\.3\)|lab\([\d.]+ [\d.]+ [\d.]+ \/ 0\.3\)/);
+    expect(geometry.borderWidth).toBe("0px");
+    expect(geometry.numberWeight).toBe("600"); // font-semibold
+    expect(geometry.totalWeight).toBe("700"); // font-bold
+    expect(geometry.badgeBg).toBe("rgb(230, 107, 26)"); // bg-primary (Delivered)
+    // rounded-full serializes as the huge pixel value on both engines.
+    expect(parseFloat(geometry.badgeRadius ?? "0")).toBeGreaterThan(1000);
+    expect(geometry.gap).toBe(16); // space-y-4
+    expect(geometry.containerCls).toContain("space-y-4");
+
+    // In Transit badge = the secondary variant.
+    const transit = await page.evaluate(() => {
+      const panel = document.querySelector('[role=tabpanel][data-state="active"]');
+      const row = [...panel?.querySelectorAll("div") ?? []].find(
+        (d) => d.className.includes("justify-between") && /ORD-2026-002/.test(d.textContent ?? ""),
+      );
+      const badge = [...(row?.querySelectorAll("div, span") ?? [])].find((e) =>
+        (e.textContent ?? "").trim() === "In Transit",
+      );
+      return badge ? getComputedStyle(badge).backgroundColor : null;
+    });
+    expect(transit).toBe("rgb(242, 240, 237)"); // bg-secondary
+  });
+
   test("addresses tab shows the seeded default address", async ({ page }) => {
     await page.getByRole("tab", { name: "Addresses" }).click();
     await expect(page.getByRole("button", { name: "Add New" })).toBeVisible();
@@ -195,5 +264,58 @@ test.describe("account", () => {
     await page.getByRole("main").getByLabel("Confirm Password").fill("NewPass1234!");
     await page.getByRole("button", { name: "Update Password" }).click();
     await expect(page.getByRole("main").getByText("Incorrect password")).toBeVisible();
+  });
+});
+
+test.describe("account mobile (session-9)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("profile Save button is fit-content on mobile (session-9, ACCOUNT-BTN-W-1)", async ({ page }) => {
+    // Reference (iPhone 14, measured live 2026-10-08): the Save button is a
+    // FLOW sibling of the fields grid (own mt-4) — inline-flex buttons in
+    // flow layout size to their content: 127px wide. The clone had the
+    // button INSIDE the grid; grid items stretch by default and the
+    // `sm:col-span-2 sm:w-fit` constraints only apply ≥640px — mobile
+    // rendered 308px. Desktop was 127px on both sites (the sm: mask).
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { name: "My Account" })).toBeVisible();
+    // The reference measured 127px in its Chrome; Playwright's Chromium
+    // renders the same fit-content layout at 125px (font-metric drift of
+    // 2px across builds). Pin the STRUCTURE (content-driven width, not
+    // grid-stretched) with a range instead of a single engine's pixel.
+    const btn = page.getByRole("button", { name: "Save Changes" });
+    const width = await btn.evaluate((el) => el.getBoundingClientRect().width);
+    expect(width).toBeGreaterThanOrEqual(110);
+    expect(width).toBeLessThanOrEqual(140);
+    // The pre-fix bug stretched the button to the full grid cell (~308px).
+    expect(width).toBeLessThan(200);
+    // Flow child of the form (not a grid item) — the structural fix.
+    const isFlowChild = await btn.evaluate(
+      (el) => (el.parentElement as HTMLElement).tagName === "FORM",
+    );
+    expect(isFlowChild).toBe(true);
+  });
+
+  test("order rows stack vertically on mobile (session-9, ACCOUNT-ORDER-ROW-1)", async ({ page }) => {
+    // The reference row is flex flex-col → sm:flex-row: on a 390px viewport
+    // the badge/total block sits BELOW the number block.
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { name: "My Account" })).toBeVisible();
+    await page.getByRole("tab", { name: "Orders" }).click();
+    const stacked = await page.evaluate(() => {
+      const panel = document.querySelector('[role=tabpanel][data-state="active"]');
+      const row = [...panel?.querySelectorAll("div") ?? []].find(
+        (d) => d.className.includes("justify-between") && /ORD-2026-001/.test(d.textContent ?? ""),
+      );
+      if (!row) return null;
+      const cs = getComputedStyle(row);
+      const [left, right] = [...row.children] as HTMLElement[];
+      return {
+        flexDirection: cs.flexDirection,
+        stacksVertically: right.getBoundingClientRect().y >= left.getBoundingClientRect().bottom - 1,
+      };
+    });
+    expect(stacked?.flexDirection).toBe("column");
+    expect(stacked?.stacksVertically).toBe(true);
   });
 });
