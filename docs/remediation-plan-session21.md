@@ -108,4 +108,4 @@ Calibrated max: 56ms. **Budget: INP ≤ 200ms per surface** (the ADR-025 convent
 - [x] Screenshots captured under `docs/screenshots/` (116-120) + VLM-verified
 - [x] Docs updated: AGENTS.md, CLAUDE.md, README.md, PAD v1.21 (ADR-029 + revision row), SKILL v1.21.0, session log (session_40), worklog
 - [x] `.env.example` verified current (no new env plumbing — the gate reuses the e2e server contract)
-- [ ] Committed on `main` and pushed via the SSH wrapper (final step — checked off in the session log after the push lands)
+- [x] Committed on `main` and pushed via the SSH wrapper (final step — checked off in the session log after the push lands)
