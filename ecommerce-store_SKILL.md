@@ -6,8 +6,8 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.18.0
-last_updated: "2026-10-08"
+version: 1.19.0
+last_updated: "2026-10-09"
 tags:
   - e-commerce
   - nextjs
@@ -785,6 +785,30 @@ Then:
     .hero-mut { display: none } }`) — it fails ONLY the mobile identity
     pin while every desktop test stays green, the same proof shape as
     ADR-024's mobile menu-button mutation.
+29. **axe's `label` rule accepts a non-empty PLACEHOLDER as a last-resort
+    name source — reference-parity placeholders MASK label-association
+    defects (L29, session-19 auth-screens round).** Four facts from
+    building A11Y-GATE-3. (1) The `label` rule's `any` checks include
+    `non-empty-placeholder`: an input with NO label, NO aria-label, NO
+    title still PASSES if it carries a non-empty placeholder — the auth
+    screens' password inputs carry the reference-parity
+    `placeholder="••••••••"`, so removing `<Label htmlFor>` reads GREEN.
+    Mutation designs in the label-association class on placeholder-
+    carrying inputs must ALSO remove the placeholder or they never bite
+    (the session-19 mutation-2 design revision, discovered live when the
+    first mutation failed to fire). (2) Inputs whose ONLY name source is
+    an `aria-label` (the verify-email 6-digit collector — an
+    `opacity-0` input overlaid on visual digit-box divs) have NO such
+    mask: dropping the aria-label fails `label` immediately at both
+    viewports. (3) The reference's `/verify-email` route renders its
+    client-side platform 404 — the reference's verify screen is a state
+    INSIDE its register flow, not a standalone route; a clone's
+    standalone superset screen gets a QUALITY census pin (the admin-gate
+    precedent), never a parity pin. (4) Auth screens render standalone
+    for anonymous visitors — the gate's auth-screen tests run in anon
+    contexts (`browser.newContext({ storageState: { cookies: [],
+    origins: [] } })`), which also means zero rate-limit impact (no
+    login per test).
 
 ## 13. Pitfalls to Avoid
 
@@ -1086,6 +1110,7 @@ Full records with context/rationale/consequences in
 | 024 | The a11y gate extended to both viewports + the admin console — the SAME pins re-asserted at iPhone 14 (mobile census byte-identical to the desktop's) + the admin QUALITY census 8/7/7/7; dual-mutation-proven |
 | 025 | The standing Core Web Vitals budget gate (PERF-GATE-1) — LCP ≤ 2500ms + CLS ≤ 0.03 + LCP-element identity floors on home/shop/PDP; pre-paint PerformanceObservers; E2E-condition-calibrated; dual-mutation-proven (a hidden hero img fails only the identity pin, a late-injected banner fails only the CLS pin) |
 | 026 | The mobile-viewport CWV gate (PERF-GATE-2) — the SAME pin families at `devices["iPhone 14"]` with mobile-scale identity floors (79,000/19,000/85,000 px², calibrated at the 390×664 device viewport); triple-mutation-proven (the mobile-only hero hide fails only the mobile identity pin with all desktop tests green; the late banner fails the mobile CLS pin at 0.2088; the L27 PDP unsized image fails the mobile CLS pin at 0.3776 with the desktop PDP green) |
+| 027 | The auth-screens axe gate (A11Y-GATE-3) — register/forgot-password/verify-email at BOTH viewports in anonymous contexts; register + forgot-password at PARITY pins ({color-contrast} × 2, both sites byte-identical), verify-email at the QUALITY pin (× 1 — the reference's route 404s client-side, the clone's standalone screen is a superset surface); dual-mutation-proven incl. the L29 placeholder-masking lesson |
 
 ## Appendix B: The Meticulous Workflow
 

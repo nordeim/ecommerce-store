@@ -206,3 +206,72 @@ test.describe("a11y admin gate (session-16, A11Y-GATE-2)", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// A11Y-GATE-3 (session-19, ADR-027): the gate extended to the auth family's
+// REMAINING screens — register / forgot-password / verify-email, the
+// session-34-nominated completion round. Login was the only auth screen in
+// the standing gate (desktop + mobile); a defect introduced on the other
+// three (an unlabeled input, a broken label association, an added landmark)
+// passes the gate forever — the A11Y-GATE-2 structural-blindness story, now
+// for the auth family's routes.
+//   - register + forgot-password: PARITY pins — the round-19 live
+//     differential measured the censuses byte-identical on BOTH sites at
+//     BOTH viewports ({color-contrast} × 2 — scripts/axe-diff-session19.mjs).
+//   - verify-email: a QUALITY pin — the reference has NO standalone route
+//     (its /verify-email renders the client-side platform 404; the
+//     reference's verify screen is a state INSIDE its register flow), so
+//     the clone's standalone screen is a SUPERSET surface (the admin-gate
+//     precedent). E2E-calibrated at 1 (scripts/axe-calibrate-session19.mjs).
+//   - Both viewports per the A11Y-GATE-2 lesson (a viewport-only gate has a
+//     blind side); the counts are viewport-invariant on these screens
+//     (live-measured + E2E-calibrated identical). All six tests run in
+//     ANONYMOUS contexts (the auth screens render standalone for anon
+//     visitors — the auth.spec pattern; zero rate-limit impact).
+// TDD trail: the RED step ran the zero-tolerance form of these assertions
+// and failed on all six for the RIGHT reason — the measured {color-contrast}
+// censuses at 2/2/1 — before the profile was pinned
+// (docs/remediation-plan-session19.md).
+// ---------------------------------------------------------------------------
+
+const AUTH_PROFILE: Record<string, { path: string; contrast: number }> = {
+  register: { path: "/register", contrast: 2 },
+  "forgot-password": { path: "/forgot-password", contrast: 2 },
+  // verify-email: the QUALITY pin (superset surface — see the comment block)
+  "verify-email": { path: "/verify-email", contrast: 1 },
+};
+
+test.describe("a11y auth screens gate (session-19, A11Y-GATE-3)", () => {
+  // Desktop: 1280x720 anon contexts (the login-gate pattern).
+  for (const [desc, r] of Object.entries(AUTH_PROFILE)) {
+    test(`${desc} (desktop): the violation census is exactly {color-contrast} with the pinned count`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, storageState: { cookies: [], origins: [] } });
+      const page = await ctx.newPage();
+      await page.goto(r.path, { waitUntil: "networkidle" });
+      const violations = await runAxe(page);
+      const ids = violations.map((v) => v.id).sort();
+      expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+      expect(violations[0].nodes).toBe(r.contrast);
+      await ctx.close();
+    });
+  }
+
+  // Mobile: iPhone 14 anon contexts (the mobile login-gate pattern — the
+  // device descriptor spread into the newContext, so the census measures
+  // at the exact 390x844 DPR 3 touch context).
+  const { defaultBrowserType: _ignoredMobile, ...iPhoneAuth } = devices["iPhone 14"];
+  void _ignoredMobile;
+
+  for (const [desc, r] of Object.entries(AUTH_PROFILE)) {
+    test(`${desc} (mobile): the violation census is exactly {color-contrast} with the pinned count`, async ({ browser }) => {
+      const ctx = await browser.newContext({ ...iPhoneAuth, storageState: { cookies: [], origins: [] } });
+      const page = await ctx.newPage();
+      await page.goto(r.path, { waitUntil: "networkidle" });
+      const violations = await runAxe(page);
+      const ids = violations.map((v) => v.id).sort();
+      expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+      expect(violations[0].nodes).toBe(r.contrast);
+      await ctx.close();
+    });
+  }
+});
