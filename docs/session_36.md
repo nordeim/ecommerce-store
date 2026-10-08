@@ -213,3 +213,12 @@ set like the cart stepper or the search typeahead), an email provider
 to activate the ADR-011 verification gate (external credentials), or
 Stripe Payment Element (ADR-007's documented next step, external
 credentials). Just say the word.
+
+## Ship
+
+Committed `3cc091e` (feat: session-19 auth-screens axe gate, ADR-027) and
+pushed to `main` via `docs/ssh_git_wrapper_v3.py` (the paramiko-shim
+Appendix-A deployment — no OpenSSH binary in this sandbox): the wrapper's
+post-push verification confirmed `refs/heads/main @ 3cc091e == local HEAD`
+and synced `refs/remotes/origin/main`. The operator key shredded. The
+remediation plan's final sign-off item checked off in the follow-up commit.
