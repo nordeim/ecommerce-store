@@ -275,4 +275,4 @@ the 18th mobile-nav screenshot compared by md5 against the 13th–17th
 - [x] Screenshots captured under `docs/screenshots/` (101–105) + VLM-verified
 - [x] Docs updated: AGENTS.md, CLAUDE.md, README.md, PAD v1.18 (ADR-026), SKILL v1.18.0 (L28), session log (session_34), worklog
 - [x] `.env.example` verified current (no new env plumbing — the gate is test-level)
-- [ ] Committed on `main` and pushed via the SSH wrapper (final step — checked off in the session log after the push lands)
+- [x] Committed on `main` and pushed via the SSH wrapper (final step — checked off in the session log after the push lands)
