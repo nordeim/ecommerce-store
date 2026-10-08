@@ -10,6 +10,7 @@
 import { PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { scryptHash } from "../src/lib/password";
+import { hashResetToken } from "../src/lib/reset-token";
 
 const db = new PrismaClient();
 
@@ -370,6 +371,36 @@ async function main() {
       verificationHash: scryptHash("123456"),
       verificationExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
       verificationAttempts: 0,
+    },
+  });
+
+  // ---- Reset fixture (session-20, RESET-ROUTE-1) ----------------------------
+  // A dedicated user whose password the reset spec rotates (john@example.com
+  // stays untouched so the demo/storageState login budget is unaffected —
+  // the login rate limit is keyed per IP+email). Carries the deterministic
+  // token "reset-fixture-token" (scrypt-hashed) so E2E can drive the
+  // /reset-password?token= happy path without the email seam.
+  const resetHash = scryptHash("Reset1234!");
+  await db.user.upsert({
+    where: { email: "resetuser@example.com" },
+    update: { passwordHash: resetHash },
+    create: {
+      email: "resetuser@example.com",
+      passwordHash: resetHash,
+      name: "Reset Fixture",
+    },
+  });
+  await db.passwordResetToken.deleteMany({ where: {} });
+  await db.passwordResetToken.create({
+    data: {
+      tokenHash: hashResetToken("reset-fixture-token"),
+      userId: (
+        await db.user.findUnique({
+          where: { email: "resetuser@example.com" },
+          select: { id: true },
+        })
+      )!.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     },
   });
 

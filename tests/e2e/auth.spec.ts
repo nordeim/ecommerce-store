@@ -259,4 +259,108 @@ test.describe("forgot password (session-3 parity)", () => {
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   });
+
+  // Session-20 (RESET-ROUTE-1): the reference ships a REAL /reset-password
+  // route — the auth family's missing member on the clone (discovered via
+  // the reference's own sitemap, which lists it). Two states, both measured
+  // live 2026-10-09: no token -> the "Invalid reset link" screen; any
+  // token -> the "New password" form. The e2e-reset fixture seeds
+  // resetuser@example.com (Reset1234!) with the deterministic token
+  // "reset-fixture-token".
+  test("reset-password without a token renders the invalid-link screen (session-20)", async ({ page }) => {
+    await page.goto("/reset-password");
+    await expect(page).toHaveTitle("Reset Password | Lumina");
+    await expect(page.getByRole("heading", { name: "Invalid reset link" })).toBeVisible();
+    // The measured card copy.
+    await expect(page.locator(".bg-card")).toContainText(
+      "The link you used appears to be incomplete. Please request a new password reset email.",
+    );
+    // The "Request a new link" link routes to forgot-password (measured).
+    await expect(page.getByRole("link", { name: "Request a new link" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
+    // og:url is the clean canonical (no query) — the reference preserves
+    // the query when present; absent means absent.
+    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+      "content",
+      "http://localhost:3000/reset-password",
+    );
+  });
+
+  test("reset-password with a token renders the New password form (session-20)", async ({ page }) => {
+    await page.goto("/reset-password?token=reset-fixture-token");
+    await expect(page).toHaveTitle("Reset Password | Lumina");
+    await expect(page.getByRole("heading", { name: "New password" })).toBeVisible();
+    // Both fields carry the Label htmlFor association + the reference's
+    // placeholder + new-password autocomplete (measured on the reference).
+    const pw = page.getByLabel("New Password", { exact: true });
+    await expect(pw).toHaveAttribute("placeholder", "••••••••");
+    await expect(pw).toHaveAttribute("autocomplete", "new-password");
+    const confirm = page.getByLabel("Confirm Password");
+    await expect(confirm).toHaveAttribute("placeholder", "••••••••");
+    await expect(confirm).toHaveAttribute("autocomplete", "new-password");
+    await expect(page.getByRole("button", { name: "Reset password" })).toBeVisible();
+    // og:url preserves the token query (measured on the reference with
+    // ?token=test123).
+    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+      "content",
+      "http://localhost:3000/reset-password?token=reset-fixture-token",
+    );
+  });
+
+  test("a bogus token surfaces the reference's error copy (session-20)", async ({ page }) => {
+    await page.goto("/reset-password?token=bogus-token");
+    await page.getByLabel("New Password", { exact: true }).fill("BrandNewPass1!");
+    await page.getByLabel("Confirm Password").fill("BrandNewPass1!");
+    await page.getByRole("button", { name: "Reset password" }).click();
+    // Measured live with a bogus token: the tinted error box carrying
+    // "Invalid or expired reset token".
+    await expect(page.locator("div.mb-4.p-3.rounded-lg")).toContainText(
+      "Invalid or expired reset token",
+    );
+  });
+
+  test("the full reset flow: new password works, old fails, sessions die (session-20)", async ({ page, browser }) => {
+    // Pre-step: create a session for the fixture user, so the
+    // session-invalidation pin has a live session to kill. The context
+    // stays OPEN across the reset (its cookie is the probe).
+    const ctxA = await browser.newContext();
+    const pageA = await ctxA.newPage();
+    await pageA.goto("/login");
+    await pageA.getByLabel("Email").fill("resetuser@example.com");
+    await pageA.getByLabel("Password", { exact: true }).fill("Reset1234!");
+    await pageA.getByRole("button", { name: "Log in" }).click();
+    await expect(pageA).toHaveURL(/\/account$/);
+
+    // The reset itself (in the main, storageState-less context).
+    await page.goto("/reset-password?token=reset-fixture-token");
+    await page.getByLabel("New Password", { exact: true }).fill("NewPass4567!");
+    await page.getByLabel("Confirm Password").fill("NewPass4567!");
+    await page.getByRole("button", { name: "Reset password" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    // The pre-reset session was invalidated: pageA's cookie no longer
+    // authenticates — /account gates it to /login (the ADR-014 redirect).
+    await pageA.goto("/account");
+    await expect(pageA).toHaveURL(/\/login\?redirect=/);
+    await ctxA.close();
+
+    // The NEW password logs in.
+    await page.getByLabel("Email").fill("resetuser@example.com");
+    await page.getByLabel("Password", { exact: true }).fill("NewPass4567!");
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page).toHaveURL(/\/account$/);
+
+    // The OLD password no longer works (the pinned copy) — probed in a
+    // fresh anonymous context (the main page holds the new session).
+    const ctxB = await browser.newContext();
+    const pageB = await ctxB.newPage();
+    await pageB.goto("/login");
+    await pageB.getByLabel("Email").fill("resetuser@example.com");
+    await pageB.getByLabel("Password", { exact: true }).fill("Reset1234!");
+    await pageB.getByRole("button", { name: "Log in" }).click();
+    await expect(pageB.locator("div.mb-4.p-3.rounded-lg")).toContainText("Invalid email or password");
+    await ctxB.close();
+  });
 });

@@ -121,8 +121,46 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   }));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <>
+      {/* Session-20 (JSON-LD-1): the Product node — rendered OUTSIDE the
+          root div (the home-page precedent: the fragment-sibling placement
+          keeps the div's child list untouched; inline scripts inside a
+          reconciled subtree delay Radix Presence cleanup on client-side
+          navigation away from the PDP — measured live this session). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            name: product.name,
+            description: product.description,
+            image: product.image,
+            brand: { "@type": "Brand", name: "Lumina" },
+            offers: {
+              "@type": "Offer",
+              url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/product/${slug}`,
+              price: product.price / 100,
+              priceCurrency: "USD",
+              availability: product.stock > 0
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+            },
+            ...(product.rating > 0
+              ? {
+                  aggregateRating: {
+                    "@type": "AggregateRating",
+                    ratingValue: product.rating,
+                    reviewCount: product.reviewCount,
+                  },
+                }
+              : {}),
+          }),
+        }}
+      />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {socialMetas}
+      
       {/* Breadcrumb geometry (session-8, BREADCRUMB-1): the reference uses
           gap-2 + mb-8 (measured live — the clone's gap-1.5/mb-6 offset the
           entire PDP 8px). No flex-wrap: product names render single-line. */}
@@ -256,5 +294,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </div>
       </section>
     </div>
+    </>
   );
 }

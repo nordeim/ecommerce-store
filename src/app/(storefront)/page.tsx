@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { db } from "@/lib/db";
-import { pageMetadata } from "@/lib/metadata";
+import { pageMetadata, OG_IMAGE_URL } from "@/lib/metadata";
 import { HeroCarousel, type HeroSlide } from "@/components/store/hero-carousel";
 import { CategoryCard, FeatureBar } from "@/components/store/category-card";
 import { ProductCard, type ProductCardData } from "@/components/store/product-card";
@@ -107,7 +107,39 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div>
+    <>
+      {/* Session-20 (JSON-LD-1): site identity structured data — data
+          blocks (non-executable, CSP-exempt), rendering-neutral by
+          construction. Rendered OUTSIDE the home wrapper div: the wrapper's
+          child list is a pinned parity contract (the session-5 divider
+          test counts exactly 8 children — hero, features, |, trending,
+          categories, new, |, on-sale). The reference (a base44 SPA) ships
+          no structured data — this is the SEO superset member. One node
+          per script (the standard shape). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "Lumina",
+            url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+            logo: OG_IMAGE_URL,
+          }),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: "Lumina",
+            url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+          }),
+        }}
+      />
+      <div>
       <HeroCarousel slides={HERO_SLIDES} />
       <FeatureBar />
       {/* Session-5 (HOME-DIVIDER-1): the reference frames the product
@@ -157,6 +189,7 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

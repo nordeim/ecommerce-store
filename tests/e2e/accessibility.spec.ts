@@ -239,6 +239,15 @@ const AUTH_PROFILE: Record<string, { path: string; contrast: number }> = {
   "forgot-password": { path: "/forgot-password", contrast: 2 },
   // verify-email: the QUALITY pin (superset surface — see the comment block)
   "verify-email": { path: "/verify-email", contrast: 1 },
+  // Session-20 (RESET-ROUTE-1): the auth family's fifth member, both
+  // measured states. The route is a TRUE parity surface (the reference
+  // ships it — discovered via its own sitemap). No-token state = the
+  // "Invalid reset link" screen; with-token = the "New password" form
+  // (the e2e-reset fixture's deterministic token). Live-measured on the
+  // reference at {color-contrast} x 1 at both viewports in both states
+  // (scripts/axe-diff-session20.mjs); E2E-calibrated at 1.
+  "reset-password (no token)": { path: "/reset-password", contrast: 1 },
+  "reset-password (token)": { path: "/reset-password?token=reset-fixture-token", contrast: 1 },
 };
 
 test.describe("a11y auth screens gate (session-19, A11Y-GATE-3)", () => {

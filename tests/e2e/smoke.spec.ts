@@ -66,7 +66,15 @@ test.describe("smoke", () => {
     // strict-dynamic and kill hydration — this pins the plumbing on the
     // dynamic home route AND the force-dynamic'd register screen (the
     // one auth page that was static before session-14).
-    for (const path of ["/", "/register"]) {
+    //
+    // Session-20 (JSON-LD-1) refinement: script tags with a NON-executable
+    // type (e.g. type="application/ld+json") are data blocks — CSP-exempt
+    // per the spec (script-src governs execution; data blocks never
+    // execute) — so they are skipped. Executable scripts (no type /
+    // module / text/javascript) keep the strict nonce pin.
+    const isDataBlock = (tag: string) =>
+      /\btype\s*=\s*["'](?!module\b|text\/javascript|application\/javascript)[^"']*["']/i.test(tag);
+    for (const path of ["/", "/register", "/product/wireless-headphones"]) {
       const res = await request.get(path);
       const csp = res.headers()["content-security-policy"];
       const nonce = csp?.match(/'nonce-([^']+)'/)?.[1];
@@ -75,6 +83,7 @@ test.describe("smoke", () => {
       const scripts = html.match(/<script\b[^>]*>/g) ?? [];
       expect(scripts.length).toBeGreaterThan(0);
       for (const tag of scripts) {
+        if (isDataBlock(tag)) continue;
         expect(tag, `${path}: ${tag}`).toContain(`nonce="${nonce}"`);
       }
     }

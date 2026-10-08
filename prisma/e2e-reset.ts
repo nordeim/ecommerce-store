@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { scryptHash } from "../src/lib/password";
+import { hashResetToken } from "../src/lib/reset-token";
 
 /**
  * Resets transient commerce state so every E2E run starts identical:
@@ -54,6 +55,27 @@ async function main() {
       verificationHash: scryptHash("123456"),
       verificationExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
       verificationAttempts: 0,
+    },
+  });
+
+  // Session-20 (RESET-ROUTE-1): the reset spec CONSUMES the fixture's token
+  // (the action deletes the row on success) and rotates the fixture user's
+  // password — restore both so every run can drive the happy path.
+  await db.user.update({
+    where: { email: "resetuser@example.com" },
+    data: { passwordHash: scryptHash("Reset1234!") },
+  });
+  await db.passwordResetToken.deleteMany({ where: {} });
+  await db.passwordResetToken.create({
+    data: {
+      tokenHash: hashResetToken("reset-fixture-token"),
+      userId: (
+        await db.user.findUnique({
+          where: { email: "resetuser@example.com" },
+          select: { id: true },
+        })
+      )!.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     },
   });
 

@@ -30,6 +30,7 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]
+  resetTokens  PasswordResetToken[]
   addresses    Address[]
   orders       Order[]
 }
@@ -37,6 +38,19 @@ model User {
 model Session {
   id        String   @id @default(cuid())
   token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Session-20 (RESET-ROUTE-1): single-use password-reset tokens. The link
+// carries ONLY the token, so the lookup is keyed by the token's scrypt
+// hash (the verification-code pattern — plaintext tokens never touch the
+// DB). One row per issued link; consumed rows are deleted on success.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime

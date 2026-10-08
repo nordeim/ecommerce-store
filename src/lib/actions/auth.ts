@@ -12,7 +12,7 @@ import { createSession, destroySession, getCurrentUser } from "../auth";
 import { scryptHash, scryptVerify } from "../password";
 import { CART_COOKIE, mergeGuestCartIntoUserCart } from "../cart";
 import { mergeGuestWishlistIntoUser } from "../wishlist";
-import { deriveDisplayName, loginSchema, passwordResetSchema, registerSchema, verifyEmailSchema } from "../validation";
+import { deriveDisplayName, loginSchema, passwordResetSchema, registerSchema, resetPasswordSchema, verifyEmailSchema } from "../validation";
 import { clientIp, rateLimit } from "../rate-limit";
 import { generateVerificationCode } from "../format";
 import {
@@ -23,6 +23,12 @@ import {
   isVerificationRequired,
   shouldBlockUnverifiedLogin,
 } from "../verification";
+import {
+  INVALID_RESET_TOKEN_MESSAGE,
+  RESET_TOKEN_TTL_MS,
+  generateResetToken,
+  hashResetToken,
+} from "../reset-token";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -252,10 +258,86 @@ export async function requestPasswordResetAction(
   }
   // Look the user up ONLY to log the request — never in the response.
   const user = await db.user.findUnique({ where: { email }, select: { id: true } });
-  // EMAIL SEAM: plug a transactional provider here (Resend/SES/Postmark).
-  // Until then the request is only logged server-side.
-  console.info(`[password-reset] requested for ${user ? "known" : "unknown"} account ${email}`);
+  // Session-20 (RESET-ROUTE-1): a known account gets a real single-use
+  // token (sha256-indexed, 30-min TTL; prior rows replaced — one active
+  // link per user). The DB write is invisible to the response, so the
+  // anti-enumeration contract is unchanged.
+  if (user) {
+    const token = generateResetToken();
+    await db.passwordResetToken.deleteMany({ where: { userId: user.id } });
+    await db.passwordResetToken.create({
+      data: {
+        tokenHash: hashResetToken(token),
+        userId: user.id,
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+    });
+    // EMAIL SEAM: plug a transactional provider here (Resend/SES/Postmark).
+    // Until then the reset LINK is only logged server-side — the operator
+    // can copy it from the log to drive the flow.
+    console.info(`[password-reset] link for ${email}: /reset-password?token=${token}`);
+  } else {
+    console.info(`[password-reset] requested for unknown account ${email}`);
+  }
   return { ok: true, data: null };
+}
+
+/**
+ * Consumes a reset token and rotates the password (session-20,
+ * RESET-ROUTE-1 — the /reset-password?token= form's action).
+ *
+ * Contract notes:
+ * - The token is looked up by its SHA-256 index (the Session-token
+ *   pattern — deterministic for high-entropy tokens; plaintext never
+ *   stored).
+ * - Unknown / expired tokens read identically ("Invalid or expired reset
+ *   token" — measured copy); the client-side match check already fired.
+ * - On success: the password rotates, the token row is deleted
+ *   (single-use), and EVERY session for the user is deleted (a password
+ *   reset invalidates all active logins — the standard security
+ *   behavior; the reference's post-success state is unmeasurable without
+ *   a real email, so this is the registered superset decision).
+ * - The action does NOT create a session: the island routes to /login.
+ */
+export async function resetPasswordAction(
+  _prev: ActionResult<null> | null,
+  formData: FormData,
+): Promise<ActionResult<null>> {
+  const parsed = resetPasswordSchema.safeParse({
+    token: formData.get("token"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: {
+        message: parsed.error.issues[0]?.message ?? "Invalid input",
+        fieldErrors: Object.fromEntries(
+          parsed.error.issues.map((i) => [i.path[0]?.toString() ?? "", i.message]),
+        ),
+      },
+    };
+  }
+  const { token, password } = parsed.data;
+  try {
+    const row = await db.passwordResetToken.findUnique({ where: { tokenHash: hashResetToken(token) } });
+    if (!row || row.expiresAt.getTime() < Date.now()) {
+      return { ok: false, error: { message: INVALID_RESET_TOKEN_MESSAGE } };
+    }
+    // Single atomic rotation: password + token consumption + session
+    // invalidation. A crash mid-transaction leaves the old state intact.
+    await db.$transaction([
+      db.user.update({ where: { id: row.userId }, data: { passwordHash: scryptHash(password) } }),
+      db.passwordResetToken.delete({ where: { id: row.id } }),
+      db.session.deleteMany({ where: { userId: row.userId } }),
+    ]);
+    console.info(`[password-reset] completed for user ${row.userId}`);
+    return { ok: true, data: null };
+  } catch (e) {
+    console.error("[resetPasswordAction]", e);
+    return { ok: false, error: { message: INVALID_RESET_TOKEN_MESSAGE } };
+  }
 }
 
 export async function currentUserAction() {

@@ -187,6 +187,15 @@ test.describe("cart", () => {
     await expect(page.getByText("$69.99").first()).toBeVisible();
     // Line total alongside the unit price (drawer-anatomy consistency).
     expect(await page.getByText("$69.99").count()).toBeGreaterThanOrEqual(2);
-    await expect(page.getByRole("link", { name: "Checkout" })).toBeVisible();
+    // Session-20 refinement: scoped to the MAIN region. The unscoped
+    // locator raced the cart drawer's exit animation — navigating away
+    // closes the drawer, but its portal content (with its own Checkout
+    // link) persists through the ~500ms animate-out + the re-animation
+    // on the /cart hydration commit, and a strict-mode getByRole matches
+    // BOTH links when the assertion lands inside that window. The
+    // drawer's exit timing is byte-identical to the baseline (measured:
+    // animationend 137/487ms vs the baseline's 142/506ms); the page's
+    // own Checkout link is what this test means.
+    await expect(page.getByRole("main").getByRole("link", { name: "Checkout" })).toBeVisible();
   });
 });

@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.19.0
+version: 1.20.0
 last_updated: "2026-10-09"
 tags:
   - e-commerce
@@ -809,6 +809,39 @@ Then:
     contexts (`browser.newContext({ storageState: { cookies: [],
     origins: [] } })`), which also means zero rate-limit impact (no
     login per test).
+30. **The drawer's exit-animation remnant races UNSCOPED strict-mode
+    locators — post-navigation role assertions must scope to the region
+    (L30, session-20 SEO round).** The cart drawer's exit leaves its
+    portal CONTENT in the DOM for ~500ms (animationend 137→487ms; a
+    re-animation fires on the destination page's hydration commit), so
+    an unscoped `getByRole("link", { name })` matches BOTH the page's
+    link AND the exiting drawer's link when the assertion lands in that
+    window. The behavior is byte-identical to the baseline (measured on
+    both builds — the TIMING of what ran before the test decides whether
+    the race fires; four new axe-gate tests shifted the suite's timing
+    enough to expose a latent 19-round-old race). Fix: assert
+    intent-precisely with `getByRole("main").getByRole(...)` — the
+    region scope, not a sleep, not a weaker locator. Bisection
+    discipline for suite-only failures: A/B the SAME spec list (the
+    pre-sequence IS the timing variable), and remember
+    `reuseExistingServer: true` can serve a stale pre-rebuild build (the
+    L25 :3100 variant — one false "still failing" mid-bisection was a
+    stale server, not the code).
+31. **High-entropy tokens are indexed by DETERMINISTIC sha256 — scrypt
+    can NEVER serve as a lookup key (L31, session-20 reset-token round).**
+    A scrypt hash carries a per-call random salt: the same input yields a
+    DIFFERENT digest every call, so `findUnique({ where: { tokenHash:
+    scryptHash(token) } })` can never match a stored row — the live
+    failure (every reset attempt read "Invalid or expired reset token"
+    until the hash was swapped for sha256). The codebase convention is
+    `src/lib/auth.ts`'s `tokenHash()` (sha256 hex) for 256-bit random
+    values (deterministic, infeasible to invert); scrypt stays for
+    LOW-entropy passwords where the salt defends against dictionary
+    attacks. Mirror the Session pattern for ANY new token class. Same
+    family: JSON-LD data blocks render OUTSIDE pinned child lists (the
+    home wrapper's 8 children are a parity contract — fragment siblings,
+    not div children), and schema.org `offers.price` is DECIMAL USD
+    (`price / 100`), never integer cents.
 
 ## 13. Pitfalls to Avoid
 
@@ -1111,6 +1144,7 @@ Full records with context/rationale/consequences in
 | 025 | The standing Core Web Vitals budget gate (PERF-GATE-1) — LCP ≤ 2500ms + CLS ≤ 0.03 + LCP-element identity floors on home/shop/PDP; pre-paint PerformanceObservers; E2E-condition-calibrated; dual-mutation-proven (a hidden hero img fails only the identity pin, a late-injected banner fails only the CLS pin) |
 | 026 | The mobile-viewport CWV gate (PERF-GATE-2) — the SAME pin families at `devices["iPhone 14"]` with mobile-scale identity floors (79,000/19,000/85,000 px², calibrated at the 390×664 device viewport); triple-mutation-proven (the mobile-only hero hide fails only the mobile identity pin with all desktop tests green; the late banner fails the mobile CLS pin at 0.2088; the L27 PDP unsized image fails the mobile CLS pin at 0.3776 with the desktop PDP green) |
 | 027 | The auth-screens axe gate (A11Y-GATE-3) — register/forgot-password/verify-email at BOTH viewports in anonymous contexts; register + forgot-password at PARITY pins ({color-contrast} × 2, both sites byte-identical), verify-email at the QUALITY pin (× 1 — the reference's route 404s client-side, the clone's standalone screen is a superset surface); dual-mutation-proven incl. the L29 placeholder-masking lesson |
+| 028 | The /reset-password parity route (RESET-ROUTE-1 — the reference's fifth auth route, discovered via its own sitemap; both measured states, sha256-indexed single-use tokens with 30-min TTL, session invalidation on reset, the console.info email seam) + the SEO standing gate (SEO-GATE-1 — `tests/e2e/seo.spec.ts` pins the sitemap census 17 URLs + the robots rule block + the JSON-LD nodes) + the structured-data layer (JSON-LD-1 — Organization/WebSite on home, Product/offers/aggregateRating on the PDP, data blocks outside pinned child lists); quad-mutation-proven; L30 (the exit-animation locator race) + L31 (sha256 token indexing) |
 
 ## Appendix B: The Meticulous Workflow
 

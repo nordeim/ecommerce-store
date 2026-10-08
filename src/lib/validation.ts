@@ -28,6 +28,25 @@ export const passwordResetSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
 });
 
+/**
+ * Session-20 (RESET-ROUTE-1): the /reset-password?token= form. The
+ * password contract mirrors register (>= 8 chars, no complexity rule —
+ * the reference's platform rule); the mismatch refine fires client-side
+ * FIRST on the reference (measured: with a bogus token + mismatched
+ * passwords, "Passwords do not match" wins — the match check precedes
+ * the server's token validation).
+ */
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, "Reset token is required"),
+    password: z.string().min(8, "Password must be at least 8 characters long").max(128),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 /** Session-4 (AUTH-VERIFY-1): the 6-digit one-time code form. */
 export const verifyEmailSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
