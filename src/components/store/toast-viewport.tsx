@@ -19,7 +19,11 @@
  * Deliberate divergences (registered in AGENTS.md): the region is
  * pointer-events-none (the reference's toasts are inert on click — verified
  * — and click-through keeps the fixed overlay from eating drawer-Checkout
- * clicks) and carries aria-live="polite" (a11y superset).
+ * clicks) and carries aria-live="polite" (a11y superset, session-12
+ * A11Y-ARIA-1: the region is deliberately NAMELESS — aria-label on a
+ * role-less div is prohibited ARIA (axe aria-prohibited-attr); a live
+ * region announces its content, not its own name, and the reference's
+ * container carries no aria attributes at all).
  */
 import { CircleCheckBig } from "lucide-react";
 
@@ -34,7 +38,6 @@ export function ToastViewport({ toasts }: { toasts: ToastItem[] }) {
     <div
       className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
-      aria-label="Notifications"
     >
       {toasts.map((t) => (
         <div

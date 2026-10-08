@@ -432,4 +432,49 @@ test.describe("storefront computed-style parity", () => {
     expect(fontRes.status()).toBe(200);
     expect((await fontRes.body()).byteLength).toBe(27348);
   });
+
+  test("exactly one main landmark per page (session-12, A11Y-MAIN-1)", async ({ page }) => {
+    // The (storefront) layout owns the page's single <main> (the session-7
+    // contract). Four shopper pages rendered their OWN <main
+    // className="flex-1"> INSIDE it (account, checkout ×2 code paths,
+    // checkout/success, wishlist ×2 code paths) — invalid HTML (main's
+    // content model forbids nesting) and axe flagged
+    // landmark-main-is-top-level + landmark-no-duplicate-main +
+    // landmark-unique on the account page. The reference renders exactly
+    // one main.flex-1 on every route (live-counted). The inner wrapper is
+    // now a <div className="flex-1"> (layout-inert either way — the parent
+    // main is not a flex container).
+    for (const path of ["/account", "/wishlist", "/checkout", "/checkout/success"]) {
+      await page.goto(path);
+      const mains = await page.locator("main").count();
+      expect(mains, `${path} renders exactly one <main>`).toBe(1);
+    }
+  });
+
+  test("the toast region is a valid nameless live region (session-12, A11Y-ARIA-1)", async ({ page }) => {
+    // ARIA 1.2+ prohibits aria-label on role-less (generic) elements — the
+    // toast viewport's aria-label="Notifications" tripped axe's
+    // aria-prohibited-attr (serious) on every storefront route. The
+    // reference's toast container carries no aria attributes at all; the
+    // live region needs no name — its content is what gets announced.
+    await page.goto("/");
+    const viewport = page.locator("div.fixed.bottom-6.right-6");
+    await expect(viewport).toHaveCount(1);
+    await expect(viewport).toHaveAttribute("aria-live", "polite");
+    await expect(viewport).not.toHaveAttribute("aria-label");
+  });
+
+  test("the PDP rating row is a labeled image role (session-12, A11Y-ARIA-2)", async ({ page }) => {
+    // The star row's aria-label="Rated X out of 5" sat on a role-less div
+    // (the same aria-prohibited-attr violation). role="img" +
+    // aria-label is the canonical WCAG pattern for a decorative glyph row
+    // with a text alternative — the label becomes valid and screen readers
+    // announce the rating. (The reference's row is unlabeled; the label
+    // stays as the clone's documented aria superset.)
+    await page.goto("/product/wireless-headphones");
+    const rating = page.locator('main div[aria-label^="Rated"]');
+    await expect(rating).toHaveCount(1);
+    await expect(rating).toHaveAttribute("role", "img");
+    await expect(rating).toHaveAttribute("aria-label", "Rated 4.8 out of 5");
+  });
 });

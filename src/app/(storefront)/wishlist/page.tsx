@@ -17,7 +17,8 @@ export default async function WishlistPage() {
 
   if (products.length === 0) {
     return (
-      <main className="flex-1">
+      // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.
+      <div className="flex-1">
         <div className="max-w-7xl mx-auto px-4 py-20 text-center">
           <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center mx-auto mb-6">
             <Heart className="h-10 w-10 text-muted-foreground" />
@@ -28,12 +29,13 @@ export default async function WishlistPage() {
             <Link href="/shop">Explore Products</Link>
           </Button>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex-1">
+    // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.
+    <div className="flex-1">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Your Wishlist</h1>
@@ -62,6 +64,6 @@ export default async function WishlistPage() {
           ))}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

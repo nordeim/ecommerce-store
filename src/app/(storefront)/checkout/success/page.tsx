@@ -29,7 +29,8 @@ export default async function CheckoutSuccessPage({
   const visible = order && (!order.userId || order.userId === user?.id);
 
   return (
-    <main className="flex-1">
+    // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.
+    <div className="flex-1">
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <div className="h-24 w-24 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
           <CheckCircle2 className="h-12 w-12 text-emerald-600" />
@@ -75,6 +76,6 @@ export default async function CheckoutSuccessPage({
           </Button>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

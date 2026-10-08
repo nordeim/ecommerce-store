@@ -12,6 +12,22 @@ test.describe("smoke", () => {
     expect(body.db).toBe(true);
   });
 
+  test("security headers match the reference baseline (session-12, SEC-HEADERS-1)", async ({ request }) => {
+    // Live-measured on the reference: referrer-policy
+    // strict-origin-when-cross-origin, strict-transport-security
+    // max-age=31536000, x-content-type-options nosniff — a bare Next
+    // standalone server ships none of them. The clone now matches those
+    // three (parity) plus X-Frame-Options: DENY (superset clickjacking
+    // hardening). HSTS over plain HTTP is a spec-defined no-op (RFC 6797
+    // §7.2), so the unconditional value is safe for localhost/E2E.
+    const res = await request.get("/");
+    const headers = res.headers();
+    expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(headers["x-content-type-options"]).toBe("nosniff");
+    expect(headers["strict-transport-security"]).toBe("max-age=31536000");
+    expect(headers["x-frame-options"]).toBe("DENY");
+  });
+
   test("home renders the storefront chrome", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle("Lumina");

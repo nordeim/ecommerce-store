@@ -19,19 +19,21 @@ export default async function CheckoutPage() {
     // 2026-10-07): minimal centered block, h1 + default button, no icon,
     // no paragraph, default button size (h-9 px-4).
     return (
-      <main className="flex-1">
+      // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.
+      <div className="flex-1">
         <div className="max-w-7xl mx-auto px-4 py-20 text-center">
           <h1 className="text-2xl font-bold mb-4">No items in cart</h1>
           <Button asChild>
             <Link href="/shop">Continue Shopping</Link>
           </Button>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex-1">
+    // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.
+    <div className="flex-1">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <h1 className="text-3xl font-bold mb-8">Checkout</h1>
         <CheckoutFlow
@@ -43,6 +45,6 @@ export default async function CheckoutPage() {
           }}
         />
       </div>
-    </main>
+    </div>
   );
 }

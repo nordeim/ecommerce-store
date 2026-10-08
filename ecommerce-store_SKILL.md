@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.11.0
+version: 1.12.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -601,6 +601,32 @@ Then:
     DOM-swap structure cannot have). `inert` is the complete fix (tab
     order + a11y tree, whole subtree). Audit keyboard navigation with a
     real Tab-walk census — AT-facing properties do not govern focus.
+
+18. **Run an automated axe differential — computed-style parity cannot
+    see invalid ARIA or landmark structure (L18).** Eleven rounds of
+    computed-style parity never noticed that four shopper pages rendered
+    a NESTED `<main>` (Playwright `locator("main")` chains dedupe shared
+    descendants, so every spec kept passing) or that `aria-label` sat on
+    role-less divs (prohibited by ARIA 1.2+, axe `aria-prohibited-attr`).
+    Inject the SAME axe-core version into both sites and diff the
+    violation sets rule-by-rule. Guard the interpretation: the reference
+    gates its product sections behind framer-motion `whileInView`
+    wrappers (`opacity: 0` until scrolled) — axe SKIPS invisible text, so
+    scroll the page incrementally before reading the scan (the ref's
+    contrast count jumped 7 -> 28 after a full reveal, exactly matching
+    the clone). A shared violation is PARITY (do not "fix" the reference's
+    own contrast traits — that breaks visual parity); a clone-only
+    violation is the finding.
+
+19. **The raw `next build` is not the repo's build (L19).** Running
+    `bunx next build` regenerates `.next/standalone` WITHOUT the
+    `cp -r .next/static` + `cp -r public` steps the `bun run build` wrapper
+    performs — every static chunk then serves the HTML 200 fallback,
+    every page throws `Unexpected token '<'`, and hydration never lands
+    (fills wiped, actions dead, E2E setup fails). It looks exactly like an
+    app regression but is a build artifact. Always build through the
+    wrapper; if the suite fails at login with empty inputs, check the
+    chunk MIME types first.
 
 ## 13. Pitfalls to Avoid
 

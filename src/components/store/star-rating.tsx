@@ -25,7 +25,11 @@ export function StarRating({
   const dimension = size === "md" ? "h-4 w-4" : "h-3.5 w-3.5";
   const filled = Math.floor(Math.max(0, Math.min(5, rating)));
   return (
-    <div className={`flex items-center gap-1 ${className}`} aria-label={`Rated ${rating} out of 5`}>
+    <div
+      className={`flex items-center gap-1 ${className}`}
+      role="img"
+      aria-label={`Rated ${rating} out of 5`}
+    >
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}

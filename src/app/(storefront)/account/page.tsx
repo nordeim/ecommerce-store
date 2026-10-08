@@ -49,11 +49,16 @@ export default async function AccountPage() {
   }));
 
   return (
-    <main className="flex-1">
+    // session-12 (A11Y-MAIN-1): a <div>, NOT a <main> — the (storefront)
+    // layout already renders the page's single <main> landmark (the
+    // session-7 contract); a nested pair is invalid HTML and tripped axe's
+    // landmark rules. flex-1 is layout-inert here either way (the parent
+    // main is not a flex container).
+    <div className="flex-1">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <h1 className="text-3xl font-bold mb-8">My Account</h1>
         <AccountTabs user={user} orders={orderRows} addresses={addressRows} />
       </div>
-    </main>
+    </div>
   );
 }
