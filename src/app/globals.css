@@ -94,7 +94,26 @@
   --color-slate-700: #334155;
   --color-slate-800: #1e293b;
 
-  --font-sans: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+}
+
+/* Trap 13 (session-11, FONT-FILE-1): next/font's subsetting pipeline strips
+ * the woff2 `prep` table (the TrueType hinting pre-program) — same outlines,
+ * same advances, DIFFERENT rasterization (a halo on every glyph, 1-4.8%
+ * text-band pixel diffs, live-measured against the reference). The reference
+ * serves Google's own `plusjakartasans/v12` variable woff2 WITH its prep
+ * table. Parity fix: self-host the reference's EXACT file (md5-verified,
+ * public/fonts/plus-jakarta-sans.woff2, wght 200-800) under the same
+ * declared family name, and drop the next/font wrapper (its repackaged
+ * copy and its metric-adjusted "Plus Jakarta Sans Fallback" face are both
+ * divergences — the reference's stack is exactly "Plus Jakarta Sans",
+ * sans-serif). */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans.woff2") format("woff2");
 }
 
 :root {
@@ -109,7 +128,13 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    /* Trap 12 (session-11, FONT-SMOOTH-1): NO `antialiased` here — the
+     * shadcn v4 starter ships `-webkit-font-smoothing: antialiased` on the
+     * body, but the reference computes `auto` (the browser's default
+     * subpixel LCD antialiasing, live-measured). Grayscale-AA text renders
+     * visibly lighter strokes; the fix is to simply not set the property.
+     * The layout's body class matches (no `antialiased` utility). */
+    @apply bg-background text-foreground font-sans;
   }
 }
 

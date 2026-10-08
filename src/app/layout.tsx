@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import { SITE_DESCRIPTION } from "@/lib/metadata";
 import "./globals.css";
+
+/* Trap 13 (session-11, FONT-FILE-1): the site font is a self-hosted copy of
+ * the reference's exact Google-served woff2 (public/fonts/ + @font-face in
+ * globals.css) — next/font's repackaged copy strips the `prep` hinting
+ * table and rasterizes differently. No next/font import remains. */
 
 /**
  * Root layout — deliberately minimal. Only the document shell (fonts,
@@ -10,12 +14,6 @@ import "./globals.css";
  * platform-level 404 (src/app/not-found.tsx) render WITHOUT the storefront
  * chrome, which lives in `src/app/(storefront)/layout.tsx` instead.
  */
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-jakarta",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
   title: {
     default: "Lumina",
@@ -53,7 +51,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${jakarta.variable} font-sans antialiased`}>{children}</body>
+      {/* No `antialiased` utility — trap 12 (session-11, FONT-SMOOTH-1): the
+          reference computes -webkit-font-smoothing: auto (subpixel AA);
+          the shadcn v4 starter default made our text render lighter. No
+          font variable — trap 13 (FONT-FILE-1): the body font comes from the
+          self-hosted @font-face in globals.css. */}
+      <body className="font-sans">{children}</body>
     </html>
   );
 }

@@ -353,4 +353,83 @@ test.describe("storefront computed-style parity", () => {
       await ctx.close();
     }
   });
+
+  test("hero inactive slides are inert — no focusable CTAs in the tab order (session-11, A11Y-FOCUS-1)", async ({ page }) => {
+    // The clone renders all 3 slides in the DOM (crossfade structure);
+    // inactive slides are aria-hidden + opacity-0, but aria-hidden alone
+    // does NOT remove their CTA links from the TAB ORDER — Tab from the
+    // active CTA landed on the invisible "Explore"/"Browse" anchors
+    // (live-measured on the clone; the reference swaps slides in the DOM,
+    // so its tab order is CTA → prev → next → dots). Fixed with
+    // inert={i !== index} on the inactive slide containers.
+    await page.goto("/");
+    const carousel = page.locator('[aria-roledescription="carousel"]');
+    await expect(carousel).toBeVisible();
+    const activeCta = carousel.locator("a[href]").first();
+    await activeCta.focus();
+    await page.keyboard.press("Tab");
+    const stop = await page.evaluate(() => {
+      const el = document.activeElement;
+      return {
+        tag: el?.tagName.toLowerCase() ?? "body",
+        label: el?.getAttribute("aria-label") ?? "",
+        inHiddenSlide: !!el?.closest('[aria-hidden="true"]'),
+      };
+    });
+    // The next focusable after the active CTA must be the prev-arrow
+    // BUTTON — never an anchor inside an aria-hidden slide.
+    expect(stop.inHiddenSlide).toBe(false);
+    expect(stop.tag).toBe("button");
+    expect(stop.label).toBe("Previous slide");
+  });
+
+  test("text renders with the reference's subpixel smoothing (session-11, FONT-SMOOTH-1)", async ({ page }) => {
+    // Trap 12: the shadcn v4 starter template ships
+    // `-webkit-font-smoothing: antialiased` on the body (the port carried
+    // it in globals.css @apply + the layout body class); the reference
+    // computes `auto` — the browser's default subpixel LCD antialiasing.
+    // Live-measured on both sites; the clone's text rendered with lighter
+    // grayscale strokes, elevating every route's text-band pixel diff.
+    // Live-measured reference value: auto (subpixel).
+    await page.goto("/");
+    const smoothing = await page.evaluate(() =>
+      getComputedStyle(document.body).getPropertyValue("-webkit-font-smoothing"),
+    );
+    expect(smoothing).toBe("auto");
+  });
+
+  test("the body font is the reference's exact woff2 — no next/font repackaging (session-11, FONT-FILE-1)", async ({ page }) => {
+    // Trap 13: next/font's subsetting pipeline strips the woff2 `prep`
+    // table (TrueType hinting pre-program). Outlines, advances and kerning
+    // stay byte-identical, but rasterization changes — a halo on every
+    // glyph, 1-4.8% text-band pixel diffs vs the reference (live-measured;
+    // the VLM saw "a halo around the letters" on every text element). The
+    // reference serves Google's plusjakartasans/v12 variable woff2 WITH
+    // its prep table. Fix: self-host the reference's exact file under the
+    // same declared family name (public/fonts/plus-jakarta-sans.woff2) and
+    // drop the next/font wrapper.
+    await page.goto("/");
+    const state = await page.evaluate(async () => {
+      await document.fonts.ready;
+      const faces = [...document.fonts].map((f) => `${f.family} ${f.weight}`);
+      const stack = getComputedStyle(document.body).fontFamily;
+      const c = document.createElement("canvas");
+      const ctx = c.getContext("2d")!;
+      ctx.font = '100px "Plus Jakarta Sans", sans-serif';
+      // Live-measured on the REFERENCE with the same engine: 1009px for
+      // this string (the next/font-repackaged build measured 1013).
+      const width = Math.round(ctx.measureText("Handgloves 0123 jam").width);
+      return { faces, stack, width };
+    });
+    // exactly ONE face — no next/font metric-adjusted "Fallback" companion
+    expect(state.faces).toEqual(["Plus Jakarta Sans 200 800"]);
+    // the reference's exact computed stack
+    expect(state.stack).toBe('"Plus Jakarta Sans", sans-serif');
+    // the reference's measured glyph metrics (±2px engine tolerance)
+    expect(Math.abs(state.width - 1009)).toBeLessThanOrEqual(2);
+    // the self-hosted file is served byte-identical to the reference's
+    const fontRes = await page.request.get("/fonts/plus-jakarta-sans.woff2");
+    expect(fontRes.status()).toBe(200);
+    expect((await fontRes.body()).byteLength).toBe(27348);
+  });
 });

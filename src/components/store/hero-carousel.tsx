@@ -69,6 +69,14 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
             key={slide.title}
             className={cn("absolute inset-0 transition-opacity duration-700", i === index ? "opacity-100" : "opacity-0")}
             aria-hidden={i !== index}
+            // Trap 12 companion (session-11, A11Y-FOCUS-1): aria-hidden removes
+            // the inactive slide from the a11y tree but NOT from the tab order
+            // — its CTA link stayed focusable while invisible (live-measured:
+            // Tab from the active CTA landed on the invisible "Explore"/
+            // "Browse" anchors; the reference swaps slides in the DOM so its
+            // tab order is CTA → prev → next → dots). `inert` removes the
+            // subtree from the tab order too — no computed visual change.
+            inert={i !== index}
           >
             { }
             <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
@@ -88,6 +96,10 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                     i === index ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 absolute",
                   )}
                   aria-hidden={i !== index}
+                  // Same A11Y-FOCUS-1 fix as the media slides above: the CTA
+                  // Link inside an inactive (aria-hidden) slide must not be
+                  // tabbable — the text block is where the Link lives.
+                  inert={i !== index}
                 >
                   <span className="inline-block bg-white/20 backdrop-blur-md text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-4">
                     {slide.promo}

@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.10.0
+version: 1.11.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -582,6 +582,26 @@ Then:
     had coverage; `stock.spec.ts` and `guest-checkout.spec.ts` exist so no
     seam is untested again.
 
+16. **Font parity is FILE parity (L16).** next/font's repackaged woff2
+    byte-compared IDENTICAL to the reference's Google-served file on every
+    table that affects layout (hmtx advances, glyf outlines, GPOS kerning,
+    gvar deltas) — yet rendered measurably different (canvas 1013 vs 1009;
+    a VLM-visible "halo" on every glyph; 1–4.8% text-band pixel diffs)
+    because the repackaging pipeline STRIPS the `prep` hinting table.
+    When a reference serves a font file, self-host that exact file under
+    the same declared family name; never trust a subsetting pipeline to
+    preserve rasterization. And remember `-webkit-font-smoothing` is
+    invisible to headless screenshots (no subpixel AA there) — assert the
+    computed property instead.
+
+17. **aria-hidden does not remove descendants from the tab order (L17).**
+    The hero carousel's invisible slides were correctly `aria-hidden` and
+    `opacity-0`, yet Tab from the active CTA landed on the invisible
+    "Explore"/"Browse" anchors (a WCAG 2.4.3 defect the reference's
+    DOM-swap structure cannot have). `inert` is the complete fix (tab
+    order + a11y tree, whole subtree). Audit keyboard navigation with a
+    real Tab-walk census — AT-facing properties do not govern focus.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -612,6 +632,19 @@ Then:
   pinning the responsive line-heights (trap 10) — v4's sort order lets the
   base leading win at every width; v3's media layers re-override it. The
   hero h1 carries `sm:leading-[2.5rem] lg:leading-none`.
+- **Don't** add `antialiased` (or any `-webkit-font-smoothing` override) to
+  the body (trap 12) — the reference computes `auto` (subpixel LCD AA);
+  headless screenshots cannot catch this divergence, so it is pinned as a
+  computed-style assertion.
+- **Don't** re-introduce `next/font` for the site font (trap 13) — its
+  repackaged woff2 strips the `prep` hinting table and rasterizes away
+  from the reference's file. The font is `public/fonts/plus-jakarta-sans.
+  woff2` + a plain `@font-face` in globals.css; `--font-sans` is the
+  reference's exact two-entry stack.
+- **Don't** rely on `aria-hidden` alone for hidden-but-in-DOM interactive
+  content (A11Y-FOCUS-1) — pair it with `inert` so focus order matches the
+  reference's DOM-swap behavior (hero inactive slides are the pinned
+  example).
 
 ## 14. Best Practices
 
