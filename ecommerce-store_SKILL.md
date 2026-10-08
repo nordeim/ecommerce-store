@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.12.0
+version: 1.13.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -628,6 +628,33 @@ Then:
     wrapper; if the suite fails at login with empty inputs, check the
     chunk MIME types first.
 
+20. **Non-retrying assertions race client-side navigations (L20).**
+    `waitForURL` resolves the moment `router.push` paints the address
+    bar — the RSC payload and the re-rendered DOM land AFTER it. An
+    immediate `isVisible()` probe in a live-verification script then
+    reads the PREVIOUS page state and reports a false failure (the
+    session-13 verify script failed its empty-state checks exactly this
+    way while the debug probe with a settle delay passed). Use retrying
+    `expect(...).toBeVisible()` assertions in verify scripts (same as
+    the specs). The same family bites paired pixel captures: a
+    client-island route captured on a fixed 3s timer can land
+    mid-hydration and diff 22% (the settled re-capture read the 0.34%
+    baseline) — wait for networkidle plus a settle on island routes.
+
+21. **Mirror the repo's own conventions when extending a superset
+    surface (L21).** The admin orders filter bar (session-13) reuses the
+    storefront's filter pattern (URL-deep-linkable params, merged
+    `router.push` navigation, the adjust-during-render input sync, a
+    count line, a guided empty state) instead of inventing a new one.
+    When a feature gap appears on a superset surface, first ask "where
+    has this repo already solved this?" — one mental model, one URL
+    shape, and the new surface inherits every hard-won lesson the
+    existing one carries (hydration races, deep-link semantics, the
+    e2e-reset contract). Extract the parser as a pure lib seam for
+    unit pinning where reference parity does NOT hold the code
+    page-local (the shop's parser stayed page-local precisely because
+    its shape is a measured reference contract).
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -918,6 +945,11 @@ Full records with context/rationale/consequences in
 | 014 | Redirect-after-login with validated same-origin targets (per-page paths on admin sub-pages) |
 | 015 | Admin order-detail view rendering the OrderEvent timeline + fresh-clone build reproducibility + admin E2E expansion (session-7 operational set) |
 | 016 | Computed-geometry parity round — v4 `space-y` inline-margin trap (auth field spacing, account tab/label/button geometry), flat floor() PDP stars, gap-2/mb-8 breadcrumb, reference feature glyphs, humanized-path unknown-route titles |
+| 017 | Mobile-geometry + social-metadata parity round (out-of-grid fit-content Save button, order-row anatomy, pageMetadata OG/Twitter/PWA layer, sort trigger width) |
+| 018 | Interaction-engine parity round — v4.3 hover-variant `@media (hover: hover)` gate un-gated via `@custom-variant`, hero h1 line-height v3 cascade pins |
+| 019 | Typography + keyboard-a11y parity round — self-hosted exact-reference woff2 (FILE parity), subpixel smoothing, inert hero slides |
+| 020 | axe-core differential a11y round — single `<main>` landmarks, valid ARIA labels (nameless live region, role=img rating row), security headers |
+| 021 | URL-deep-linkable admin order filters — status + number/email search, count line, guided empty state (the ShopFilters pattern applied to the console) |
 
 ## Appendix B: The Meticulous Workflow
 

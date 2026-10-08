@@ -158,6 +158,22 @@ from the injected location) — the repo contract itself is test-pinned in
   orders list AND the dashboard's Recent Orders. Unknown ids render an
   in-admin "Order not found" block. Read-only — status changes stay on the
   list row's Select (one mutation seam). Pinned by `tests/e2e/admin.spec.ts`.
+- **The admin orders list is URL-deep-linkable filterable (session-13,
+  ADMIN-SEARCH-1):** `/admin/orders` takes `?status=` (validated against
+  the four canonical combobox statuses — anything else falls through to
+  the unfiltered list, never an error) and `?q=` (SQLite `contains` on
+  order number OR customer email — the two identifiers a customer
+  relays). The pure seam is `src/lib/admin-orders.ts`
+  (`parseAdminOrderFilters` + `buildAdminOrderWhere`, unit-pinned; the
+  shop's parser stayed page-local for reference-parity reasons, the
+  admin surface is a superset so it gets the lib seam). The filter
+  island (`admin-order-filters.tsx`) mirrors `ShopFilters` (merged
+  params via `router.push`, the adjust-during-render input sync). The
+  count line ("N orders" / "100+ of N orders") makes the `take: 100`
+  bound visible; the empty state offers "Clear all filters". Zero
+  parity risk — no storefront surface is touched. Pinned by
+  `tests/e2e/admin.spec.ts` (3 tests: status deep-link, number/email
+  search, empty state + Clear).
 - **One `<main>` landmark per page (session-7, MAIN-NEST-1; extended session-12):** the admin AND shopper content pages (account, checkout ×2 code paths, checkout/success, wishlist ×2 code paths) wrap their content in `<div className="flex-1">` — NOT `<main>` — because the `(storefront)` layout already renders the `<main>`; a nested pair is invalid HTML, trips axe's landmark rules, and confuses AT landmark navigation. The session-1 originals shipped nested mains on those four routes for eleven rounds — invisible to every computed-style audit because `locator("main")` chains dedupe shared descendants; the axe differential (session-12) exposed them. The inner `flex-1` is layout-inert either way (the parent main is not a flex container).
 - **ARIA labels never land on role-less divs (session-12, A11Y-ARIA-1/2).** `aria-label` on a plain `<div>` (role=generic) is prohibited by ARIA 1.2+ (axe `aria-prohibited-attr`): the toast viewport is a NAMELESS `aria-live="polite"` region (a live region announces its content, not its name; the reference's container carries no aria attributes at all), and the PDP star-rating row is `role="img"` + `aria-label="Rated X out of 5"` (the canonical glyph-row pattern — role=img allows naming). Pinned by the storefront-parity spec.
 - **Security headers ship in `next.config.ts` `headers()` (session-12, SEC-HEADERS-1):** Referrer-Policy `strict-origin-when-cross-origin`, X-Content-Type-Options `nosniff`, Strict-Transport-Security `max-age=31536000` (the reference's live-measured baseline; HSTS over HTTP is a spec no-op per RFC 6797 §7.2), plus X-Frame-Options `DENY` (superset). CSP deferred (needs nonce plumbing). Pinned by the smoke spec.
@@ -211,6 +227,16 @@ from the injected location) — the repo contract itself is test-pinned in
   every navigation into `/checkout` (step 1, empty address fields) — specs
   that re-enter checkout must refill the form.
 - `guest-cart.spec.ts` and `guest-checkout.spec.ts` opt OUT of storageState (`test.use({ storageState: { cookies: [], origins: [] } })`) — they are the only specs exercising the cookie-token cart path (the latter end-to-end through a guest order placement); every other cart/wishlist/checkout spec runs authenticated.
+- **Non-retrying probes race client navigations (session-13 verify-script
+  lesson):** `waitForURL` resolves the moment `router.push` updates the
+  address bar — the RSC payload (and the re-rendered DOM) lands AFTER it.
+  An immediate `isVisible()` check therefore reads the PREVIOUS page
+  state. Live-verification scripts must use retrying `expect(…)`
+  assertions (same as the specs); `isVisible()` is only safe on
+  server-rendered content or after an explicit settle. Same family as the
+  paired-pixel-capture rule: client-island routes need networkidle + a
+  settle in A/B sweeps (the round-13 account capture measured 22% on a
+  mid-hydration frame; the settled re-capture read the 0.34% baseline).
 - The verify-email happy path consumes the seeded `unverified@example.com` fixture (code `123456`); `prisma/e2e-reset.ts` restores its unverified state + code every run, so specs can rely on it.
 - Toast specs: assert position only after the enter spring settles (~450ms) and with ±2px tolerance (the reference's own live values oscillate mid-spring); `getByText("… added to cart!")` resolves to the toast ITEM itself — do not climb to the parent (that's the region).
 - Drawer specs cannot assert the header badge while the Radix dialog is open (aria-hidden hides it from the role tree) — assert the drawer's own totals instead.

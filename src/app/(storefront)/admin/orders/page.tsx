@@ -3,10 +3,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { AdminOrderRow } from "@/components/account/admin-order-row";
-import { formatCents } from "@/lib/money";
+import { AdminOrderFilters } from "@/components/account/admin-order-filters";
+import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
+import { buildAdminOrderWhere, parseAdminOrderFilters } from "@/lib/admin-orders";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +15,37 @@ export const metadata: Metadata = {
   title: "Admin · Orders",
 };
 
-export default async function AdminOrdersPage() {
+// Admin order-list filters (session-13, ADMIN-SEARCH-1): URL-deep-linkable
+// ?status= + ?q= (the shop's filter-bar pattern, applied to the console's
+// fulfillment surface). The take stays bounded at 100; the count line makes
+// the filtered size visible so truncation can never read as "everything".
+const TAKE = 100;
+
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/admin/orders");
   if (!isAdmin(user)) redirect("/");
 
-  const orders = await db.order.findMany({
-    orderBy: { placedAt: "desc" },
-    include: { items: true },
-    take: 100,
-  });
+  const params = await searchParams;
+  const filters = parseAdminOrderFilters(params);
+  const where = buildAdminOrderWhere(filters);
+
+  const [orders, total] = await Promise.all([
+    db.order.findMany({
+      where,
+      orderBy: { placedAt: "desc" },
+      include: { items: true },
+      take: TAKE,
+    }),
+    db.order.count({ where }),
+  ]);
+
+  const countLabel =
+    total > TAKE ? `${TAKE}+ of ${total} orders` : `${total} ${total === 1 ? "order" : "orders"}`;
 
   return (
     <div className="flex-1">
@@ -35,11 +57,31 @@ export default async function AdminOrdersPage() {
           <h1 className="text-3xl font-bold">Orders</h1>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-          <div className="p-6 pt-0">
-            {orders.length === 0 ? (
-              <p className="text-muted-foreground py-12 text-center">No orders yet.</p>
-            ) : (
+        <AdminOrderFilters
+          activeStatus={filters.status ?? "all"}
+          activeQuery={filters.q ?? ""}
+        />
+
+        <p className="text-sm text-muted-foreground mb-4">{countLabel}</p>
+
+        {orders.length === 0 ? (
+          <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+            <div className="text-center py-12">
+              <div className="h-16 w-16 rounded-full bg-secondary flex items-center justify-center mx-auto mb-4">
+                <Search className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No orders match your filters</h3>
+              <p className="text-muted-foreground mb-4">
+                Try a different order number, email, or status.
+              </p>
+              <Button asChild>
+                <Link href="/admin/orders">Clear all filters</Link>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+            <div className="p-6 pt-0">
               <div className="flex flex-col gap-3">
                 {orders.map((o) => (
                   <AdminOrderRow
@@ -56,9 +98,9 @@ export default async function AdminOrdersPage() {
                   />
                 ))}
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

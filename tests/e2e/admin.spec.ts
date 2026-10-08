@@ -120,4 +120,66 @@ test.describe("admin console (admin session)", () => {
     await admin.goto("/shop");
     await expect(admin.getByRole("link", { name: /Silk Pajama Set/ }).first()).toBeVisible();
   });
+
+  // Admin order-list filters (session-13, ADMIN-SEARCH-1): the orders
+  // surface is URL-deep-linkable (?status= + ?q=) exactly like the shop's
+  // filter bar — select changes push merged params, the count line reports
+  // the filtered size, and the empty state offers a way out.
+  test("orders filter by status with a deep-linkable URL", async () => {
+    await admin.goto("/admin/orders");
+    await admin.waitForLoadState("networkidle");
+    // Canonical seed: 001 delivered, 002 in_transit, 003 delivered.
+    await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
+
+    await admin.getByRole("combobox", { name: "Filter by status" }).click();
+    await admin.getByRole("option", { name: "Delivered" }).click();
+    await expect(admin).toHaveURL(/\/admin\/orders\?status=delivered$/);
+    await expect(admin.getByText("2 orders", { exact: true })).toBeVisible();
+    // Only the delivered rows remain (002 is in_transit).
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toHaveCount(0);
+
+    // Deep-link lands in the same filtered state with the bar reflecting it.
+    await admin.goto("/admin/orders?status=in_transit");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("1 order", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toHaveCount(0);
+  });
+
+  test("orders search by number fragment and email fragment", async () => {
+    await admin.goto("/admin/orders");
+    await admin.waitForLoadState("networkidle");
+    const search = admin.getByLabel("Search orders");
+    await search.fill("001");
+    await search.press("Enter");
+    await expect(admin).toHaveURL(/\/admin\/orders\?q=001$/);
+    await expect(admin.getByText("1 order", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toHaveCount(0);
+
+    // The email branch of the OR: all three canonical orders are
+    // john@example.com.
+    await search.fill("john@");
+    await search.press("Enter");
+    await expect(admin).toHaveURL(/\/admin\/orders\?q=john%40$/);
+    await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
+  });
+
+  test("orders empty state offers Clear, filters combine", async () => {
+    await admin.goto("/admin/orders");
+    await admin.waitForLoadState("networkidle");
+    const search = admin.getByLabel("Search orders");
+    await search.fill("zzz-no-such-order");
+    await search.press("Enter");
+    await expect(admin.getByRole("heading", { name: "No orders match your filters" })).toBeVisible();
+
+    // Combined filters: status narrows an already-empty set stays empty —
+    // then Clear restores the full list.
+    await admin.getByRole("button", { name: "Clear" }).click();
+    await expect(admin).toHaveURL(/\/admin\/orders$/);
+    await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+  });
 });
