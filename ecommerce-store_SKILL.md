@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.14.0
+version: 1.15.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -692,6 +692,37 @@ Then:
     register/login form-fill specs fail loudly on the first un-nonced
     script.
 
+24. **A standing gate is only proven once it has failed — mutation-check
+    new gates (L24, session-15 a11y round).** Converting a manual audit
+    into an automated gate (the session-12 axe differential →
+    `tests/e2e/accessibility.spec.ts`) has a silent-failure risk: a gate
+    that asserts the wrong thing passes forever while protecting nothing.
+    The discipline: (1) run the zero-violation form of the assertion
+    first (RED) so the baseline profile is a DELIBERATE contract — the
+    shared color-contrast parity trait failing the zero-violation form
+    documents that the pin is a parity decision, not an oversight; (2)
+    MUTATION-CHECK the gate: temporarily re-introduce a real past defect
+    (the session-12 `aria-label`-on-role-less-div class) and watch the
+    gate FAIL (aria-prohibited-attr in the census) before trusting it;
+    (3) calibrate pinned counts under the gate's OWN runtime conditions
+    (the E2E server, viewport, and DB — 28/23/14/8/8/3 held, but only
+    after an explicit calibration run proved it).
+
+25. **A standalone server outlives its build directory; sandbox servers
+    hide from lsof/ps (L25, session-15).** After `bun run build` replaces
+    `.next/standalone`, a still-running server keeps serving SSR from its
+    cached manifest but every `/_next/static/chunks/*.js` request 500s
+    (the hashed filenames changed on disk) — the browser refuses the
+    500-body "scripts" (CSP MIME check), hydration dies, and `getByLabel`
+    times out on forms whose labels exist in the curl HTML. Worse, in the
+    managed sandbox the server process is INVISIBLE to `lsof`/`fuser`/
+    `ps` (no owning PID). The recovery: walk `/proc/net/tcp` for the
+    port's hex → LISTEN socket inode → scan `/proc/*/fd` for
+    `socket:[inode]` → `kill` that PID → reboot the server on the current
+    build. When the PID can't be found, run on a FRESH port instead —
+    the E2E suite parameterizes via `E2E_PORT`. Rule: after ANY rebuild,
+    restart the audit server before trusting live probes.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -988,6 +1019,7 @@ Full records with context/rationale/consequences in
 | 020 | axe-core differential a11y round — single `<main>` landmarks, valid ARIA labels (nameless live region, role=img rating row), security headers |
 | 021 | URL-deep-linkable admin order filters — status + number/email search, count line, guided empty state (the ShopFilters pattern applied to the console) |
 | 022 | Nonce-based Content-Security-Policy via `src/proxy.ts` (the Next 16 proxy convention) — per-request nonces, `strict-dynamic` scripts, directive set pinned to the measured footprint, static auth screens force-dynamic'd |
+| 023 | The self-hosted axe-core standing E2E gate — the manual a11y differential converted to a permanent regression pin (census exactly {color-contrast} + reference-identical counts, mutation-proven) |
 
 ## Appendix B: The Meticulous Workflow
 
