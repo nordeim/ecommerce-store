@@ -250,3 +250,227 @@ test.describe("CWV mobile gate (session-18, PERF-GATE-2)", () => {
     });
   }
 });
+
+// PERF-GATE-3 (session-21, ADR-029): the standing INP (Interaction to Next
+// Paint) interaction gate — the last Core Web Vitals family member (LCP/CLS
+// are pinned above; INP was the session-20 nomination: "the deterministic
+// next CWV family — needs a repeatably-driven interaction set like the cart
+// stepper or the search typeahead").
+//
+// The round-21 differential (scripts/inp-diff-session21.mjs, both sites,
+// both viewports, authenticated) drove the 5-interaction protocol and
+// measured ZERO parity defects — the architecture-level finding: the
+// clone's SERVER-ACTION mutations paint as fast as the reference's
+// CLIENT-STATE mutations (React 19 transitions keep the main thread free
+// through the action dispatch; the worst clone surface, the transactional
+// stepper, matches the reference's client-side stepper at 48/48ms desktop):
+//
+//   surface        | ref desktop | clone desktop | ref iPhone | clone iPhone
+//   pdp atc        | 24ms        | 16ms          | 40ms       | 32ms
+//   pdp heart      | (part of atc's page, 24ms)   | 40ms       | 16ms
+//   search typing  | 32ms        | 40ms          | 24ms       | 24ms
+//   drawer stepper | 48ms        | 48ms          | 40ms       | 32ms
+//   carousel next  | 24ms        | 48ms          | 16ms       | 40ms
+//
+// The gap: the interaction-latency defect classes ship silently today — a
+// long synchronous task in an event handler, layout thrash in a mutation
+// handler, or a blocking action dispatch that prevents React from painting
+// the pending state all raise INP with NO gate failing.
+//
+// Two methodological discoveries (L32/L33, load-bearing for any INP work):
+//   L32 — SYNTHETIC evaluate(() => el.click()) generates ZERO interaction
+//     entries: interactionId only attaches to real input events dispatched
+//     through the browser input pipeline. Playwright locator clicks and
+//     keyboard.type are trusted; DOM .click() from evaluate is not. An INP
+//     protocol must use trusted clicks.
+//   L33 — the default observer threshold hides fast interactions:
+//     observe({type: "event"}) defaults durationThreshold to 16ms, under
+//     which sub-16ms interactions never surface. The collector pins
+//     durationThreshold: 0 (the web-vitals-library approach).
+//
+// The zero-DB-pollution design — GUEST contexts: these tests opt OUT of
+// the project storageState (the guest-cart.spec precedent). The guest
+// cart/wishlist live in the context's cookie token and die with the test —
+// no e2e.db pollution, no cross-spec coupling (wishlist.spec sorts AFTER
+// performance.spec alphabetically; an authed protocol that toggles the
+// PDP heart would break its count assertions). The guest UI paths are the
+// identical interaction surfaces (guest-cart.spec proves the cookie-token
+// ATC -> drawer -> stepper path).
+//
+// Calibrated under exact E2E conditions (scripts/inp-calibrate-session21.mjs
+// — :3100 standalone, e2e DB, guest contexts, 2 runs per viewport):
+//   pdp-atc+heart 16-24ms | search-typing 24-40ms
+//   drawer-stepper 32-56ms | carousel-next 40-48ms
+// Budget: INP <= 200ms per surface (the Google "good" line — the ADR-025
+// convention of budgeting at the good line; 3.5-12.5x headroom). A QUALITY
+// gate, not a parity pin (the reference's numbers are not the target).
+//
+// TDD trail: the RED step ran the zero-tolerance form (inpMax: 0 —
+// impossible) and every test failed for the RIGHT reason: the failure
+// payload carried the measured per-surface INP (16-56ms) + the interaction
+// table, documenting the baseline as a DELIBERATE quality contract before
+// the budgets landed.
+
+type InpEvt = { name: string; startTime: number; duration: number; interactionId: number };
+type InpResult = { surface: string; inp: number; interactions: string };
+
+/** The event-timing collector, registered pre-load (PERF-GATE-1 pattern). */
+const collectInp = async (page: Page) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __evts: { name: string; startTime: number; duration: number; interactionId: number }[];
+    };
+    w.__evts = [];
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          const ie = e as PerformanceEntry & { interactionId: number };
+          if (ie.interactionId > 0) {
+            w.__evts.push({
+              name: ie.name,
+              startTime: Math.round(ie.startTime),
+              duration: ie.duration, // nextPaint - startTime (8ms granularity)
+              interactionId: ie.interactionId,
+            });
+          }
+        }
+      // durationThreshold is not in the TS DOM lib's PerformanceObserverInit
+      // (it postdates the lib) — the runtime accepts it; the cast is the
+      // standard workaround (L33: the default 16ms threshold hides fast
+      // interactions, so the collector MUST pass 0).
+      }).observe({ type: "event", buffered: true, durationThreshold: 0 } as PerformanceObserverInit);
+    } catch {
+      /* engines without event timing */
+    }
+  });
+};
+
+/** Group events by interactionId; INP = the max per-interaction duration. */
+const readInp = async (page: Page, surface: string): Promise<InpResult> => {
+  const evts = await page.evaluate<InpEvt[]>(() => (window as unknown as { __evts: InpEvt[] }).__evts);
+  const byId = new Map<number, { names: string[]; max: number }>();
+  for (const e of evts) {
+    const cur = byId.get(e.interactionId) ?? { names: [], max: 0 };
+    cur.names.push(e.name);
+    cur.max = Math.max(cur.max, e.duration);
+    byId.set(e.interactionId, cur);
+  }
+  const rows = [...byId.values()].map((r) => `${r.names.join("+")}:${r.max}ms`);
+  return { surface, inp: rows.length ? Math.max(...[...byId.values()].map((r) => r.max)) : 0, interactions: rows.join(" | ") };
+};
+
+// The interaction profile: one entry per protocol surface, the INP budget
+// (the Google "good" line — the ADR-025 convention of budgeting at the
+// good line, 2.8-12.5x headroom over the E2E-condition calibration: the
+// harness-measured RED payloads were 56-72ms desktop / 16-56ms mobile).
+const INP_PROFILE: Record<string, { inpMax: number }> = {
+  "pdp add-to-cart": { inpMax: 200 },
+  "pdp wishlist heart": { inpMax: 200 },
+  "search typing": { inpMax: 200 },
+  "drawer stepper": { inpMax: 200 },
+  "carousel next": { inpMax: 200 },
+};
+
+/**
+ * Drives one protocol surface with TRUSTED clicks (L32: synthetic
+ * evaluate-clicks generate no interaction entries). The structural
+ * locators are universal — the reference's icon-only buttons are
+ * unlabeled, so icon-bearing :has() selectors drive both engines.
+ */
+const runInpSurface = async (page: Page, surface: string): Promise<InpResult> => {
+  await collectInp(page);
+  switch (surface) {
+    case "pdp add-to-cart": {
+      await page.goto("/product/wireless-headphones", { waitUntil: "networkidle" });
+      await page.evaluate(async () => { await document.fonts.ready; });
+      await page.waitForTimeout(800);
+      // the action row's ATC (the related cards carry their own — the
+      // strict-mode trap, documented)
+      await page.locator('div.flex.items-center.gap-4.mb-4 button', { hasText: "Add to Cart" }).click();
+      await page.waitForTimeout(2000); // toast + badge paint + revalidate
+      return readInp(page, surface);
+    }
+    case "pdp wishlist heart": {
+      await page.goto("/product/wireless-headphones", { waitUntil: "networkidle" });
+      await page.evaluate(async () => { await document.fonts.ready; });
+      await page.waitForTimeout(800);
+      // the heart = the action row's LAST button ([-][+][ATC][heart])
+      await page.locator("div.flex.items-center.gap-4.mb-4 button").last().click();
+      await page.waitForTimeout(2000);
+      return readInp(page, surface);
+    }
+    case "search typing": {
+      await page.goto("/", { waitUntil: "networkidle" });
+      await page.evaluate(async () => { await document.fonts.ready; });
+      await page.waitForTimeout(800);
+      await page.locator("header button:has(svg.lucide-search)").first().click();
+      await page.waitForTimeout(600);
+      await page.locator("header input").first().click();
+      for (const ch of ["h", "e", "a", "d"]) {
+        await page.keyboard.type(ch, { delay: 0 });
+        await page.waitForTimeout(250);
+      }
+      await page.waitForTimeout(1200); // dropdown + typeahead fetch
+      return readInp(page, surface);
+    }
+    case "drawer stepper": {
+      // ONE page for the whole flow (the cookie-token cart): goto PDP,
+      // add, open the drawer, step — no reload between.
+      await page.goto("/product/wireless-headphones", { waitUntil: "networkidle" });
+      await page.waitForTimeout(600);
+      await page.locator('div.flex.items-center.gap-4.mb-4 button', { hasText: "Add to Cart" }).click();
+      await page.waitForTimeout(1500);
+      await page.locator("header button:has(svg.lucide-shopping-bag)").first().click();
+      await page.waitForTimeout(900);
+      await page.locator('[role="dialog"] div.gap-2 button:has(svg.lucide-plus)').first().click();
+      await page.waitForTimeout(2000); // server action + re-render + paint
+      return readInp(page, surface);
+    }
+    case "carousel next": {
+      await page.goto("/", { waitUntil: "networkidle" });
+      await page.evaluate(async () => { await document.fonts.ready; });
+      await page.waitForTimeout(800);
+      await page.locator('button:has(svg.lucide-chevron-right)').first().click();
+      await page.waitForTimeout(1500);
+      return readInp(page, surface);
+    }
+    default:
+      throw new Error("unknown INP surface " + surface);
+  }
+};
+
+test.describe("INP interaction gate (session-21, PERF-GATE-3)", () => {
+  // GUEST contexts (the zero-pollution design — see the header comment).
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const [surface, r] of Object.entries(INP_PROFILE)) {
+    test(`${surface}: INP within the calibrated budget`, async ({ page }) => {
+      const res = await runInpSurface(page, surface);
+      // (a) the interaction happened and was observed (a broken locator
+      // or a synthetic click reads 0 interactions — L32).
+      expect(res.interactions.length, JSON.stringify(res)).toBeGreaterThan(0);
+      // (b) the INP budget: the max per-interaction duration (nextPaint -
+      // startTime) under the calibrated ceiling. A main-thread-blocking
+      // regression (long task, layout thrash, blocking dispatch) blows
+      // this by 2-8x the measured value before a human notices.
+      expect(res.inp, JSON.stringify(res)).toBeLessThanOrEqual(r.inpMax);
+    });
+  }
+});
+
+test.describe("INP mobile gate (session-21, PERF-GATE-3)", () => {
+  // iPhone 14 (the A11Y-GATE-2 in-describe constraint) AND the guest
+  // storageState opt-out — a touch-context interaction defect is invisible
+  // at desktop (the both-viewport discipline; PERF-GATE-2's story).
+  const { defaultBrowserType: _ignored2, ...iPhoneInp } = devices["iPhone 14"];
+  void _ignored2;
+  test.use({ ...iPhoneInp, storageState: { cookies: [], origins: [] } });
+
+  for (const [surface, r] of Object.entries(INP_PROFILE)) {
+    test(`mobile ${surface}: INP within the mobile-calibrated budget`, async ({ page }) => {
+      const res = await runInpSurface(page, surface);
+      expect(res.interactions.length, JSON.stringify(res)).toBeGreaterThan(0);
+      expect(res.inp, JSON.stringify(res)).toBeLessThanOrEqual(r.inpMax);
+    });
+  }
+});

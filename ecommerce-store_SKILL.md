@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.20.0
+version: 1.21.0
 last_updated: "2026-10-09"
 tags:
   - e-commerce
@@ -492,9 +492,9 @@ There are no custom hooks; one context covers all state:
 ```bash
 bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
-bun run test          # 66 unit tests pass
-bun run build         # compiles; 21 routes
-bun run test:e2e      # 107 tests pass (106 spec + the setup login; requires the build)
+bun run test          # 104 unit tests pass
+bun run build         # compiles; 23 routes
+bun run test:e2e      # 202 tests pass (201 spec + the setup login; requires the build)
 ```
 
 Then:
@@ -843,6 +843,32 @@ Then:
     not div children), and schema.org `offers.price` is DECIMAL USD
     (`price / 100`), never integer cents.
 
+33. **Synthetic `evaluate(() => el.click())` generates ZERO interaction
+    entries (L32, session-21 INP round).** `interactionId` attaches only
+    to input events dispatched through the browser input pipeline (CDP
+    `Input.dispatchMouseEvent` / trusted keyboard events); Playwright
+    locator clicks and `keyboard.type` are trusted, a DOM `.click()` from
+    `page.evaluate` is NOT. The first round-21 INP draft measured "0
+    interactions everywhere" until this was diagnosed. Rule: when an
+    event-timing measurement reads empty, check WHO dispatched the event
+    before suspecting the observer — and any INP protocol must use
+    trusted clicks exclusively.
+
+34. **The event-timing observer's default durationThreshold hides fast
+    interactions (L33, session-21 INP round).** `observe({type: "event"})`
+    defaults `durationThreshold` to 16ms — sub-16ms interactions NEVER
+    surface as entries. The INP collector pins `durationThreshold: 0`
+    (the web-vitals-library approach); the TS DOM lib lacks the field
+    (`PerformanceObserverInit`) so the options object is cast. Rule: any
+    PerformanceObserver protocol must pin its threshold explicitly — the
+    default is a silent filter. Together with L32 these are the two
+    methodology pillars of the INP standing gate (PERF-GATE-3): trusted
+    clicks + zero threshold + `interactionId` grouping + per-interaction
+    MAX event duration; the gate runs in GUEST contexts (storageState
+    opt-out) so the interaction protocol leaves zero e2e.db pollution —
+    wishlist.spec sorts AFTER performance.spec alphabetically, so an
+    authed heart-toggle would break its count assertions.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1145,6 +1171,7 @@ Full records with context/rationale/consequences in
 | 026 | The mobile-viewport CWV gate (PERF-GATE-2) — the SAME pin families at `devices["iPhone 14"]` with mobile-scale identity floors (79,000/19,000/85,000 px², calibrated at the 390×664 device viewport); triple-mutation-proven (the mobile-only hero hide fails only the mobile identity pin with all desktop tests green; the late banner fails the mobile CLS pin at 0.2088; the L27 PDP unsized image fails the mobile CLS pin at 0.3776 with the desktop PDP green) |
 | 027 | The auth-screens axe gate (A11Y-GATE-3) — register/forgot-password/verify-email at BOTH viewports in anonymous contexts; register + forgot-password at PARITY pins ({color-contrast} × 2, both sites byte-identical), verify-email at the QUALITY pin (× 1 — the reference's route 404s client-side, the clone's standalone screen is a superset surface); dual-mutation-proven incl. the L29 placeholder-masking lesson |
 | 028 | The /reset-password parity route (RESET-ROUTE-1 — the reference's fifth auth route, discovered via its own sitemap; both measured states, sha256-indexed single-use tokens with 30-min TTL, session invalidation on reset, the console.info email seam) + the SEO standing gate (SEO-GATE-1 — `tests/e2e/seo.spec.ts` pins the sitemap census 17 URLs + the robots rule block + the JSON-LD nodes) + the structured-data layer (JSON-LD-1 — Organization/WebSite on home, Product/offers/aggregateRating on the PDP, data blocks outside pinned child lists); quad-mutation-proven; L30 (the exit-animation locator race) + L31 (sha256 token indexing) |
+| 029 | The INP standing interaction gate (PERF-GATE-3) — 10 tests = 5 interaction surfaces (PDP ATC · PDP heart · search typing · drawer stepper · carousel next) × 2 viewports in GUEST contexts, trusted-click event-timing collection (L32: synthetic evaluate-clicks generate no interaction entries; L33: the observer's default 16ms durationThreshold hides fast interactions), per-surface INP ≤ 200ms budgets (the good line; measured 16–72ms — the round-21 differential proved the clone's server-action mutations paint as fast as the reference's client-state mutations); dual-mutation-proven (the 400ms busy-wait in the stepper fails only drawer-stepper, the carousel's fails only carousel-next) |
 
 ## Appendix B: The Meticulous Workflow
 
