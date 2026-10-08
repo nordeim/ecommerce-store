@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.17.0
+version: 1.18.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -762,6 +762,29 @@ Then:
     against it must measure AUTHENTICATED state, or you are benchmarking
     the login form (the H1 "Welcome back" will appear as the LCP element
     on every route).
+28. **`devices["iPhone 14"]` is 390×664, not 844 — and the unsized-media
+    CLS class is CDN-timing-dependent (L28, session-18 mobile-CWV round).**
+    Four facts from building PERF-GATE-2. (1) The Playwright device
+    viewport is the physical screen MINUS browser chrome: 664, not 844.
+    `50vh` resolves to 332px at 664, so the mobile hero paints at
+    118,856 px² — a calibration script that hardcodes 844 measures a hero
+    27% larger than the gate ever will. Calibrate at the exact device
+    descriptor (`{...devices["iPhone 14"]}`), and remember e.size is
+    CSS-pixel area (DPR 3 does NOT multiply it). (2) A WARM CDN context
+    (login-first flow — the login/account pages warm media.base44.com via
+    the header logo) lets an unreserved image size itself before the first
+    rendered frame: ZERO layout-shift entries, the defect reads as CLS
+    0.0000. A COLD context (fresh direct goto — every Playwright per-test
+    context is network-isolated) reliably produced the 0.30+ shift, 3/3
+    runs. Manual CLS measurement must cold the context or it can silently
+    measure nothing. (3) Chrome's raw layout-shift API reports entries
+    even BEFORE FCP (the official field CLS / web-vitals library filters
+    them) — a raw-sum observer catches the pre-FCP unsized-image class
+    that field CLS would excuse. (4) The mobile gate's structural-blindness
+    mutation is viewport-scoped CSS (`@media (max-width: 640px) {
+    .hero-mut { display: none } }`) — it fails ONLY the mobile identity
+    pin while every desktop test stays green, the same proof shape as
+    ADR-024's mobile menu-button mutation.
 
 ## 13. Pitfalls to Avoid
 
@@ -1062,6 +1085,7 @@ Full records with context/rationale/consequences in
 | 023 | The self-hosted axe-core standing E2E gate — the manual a11y differential converted to a permanent regression pin (census exactly {color-contrast} + reference-identical counts, mutation-proven) |
 | 024 | The a11y gate extended to both viewports + the admin console — the SAME pins re-asserted at iPhone 14 (mobile census byte-identical to the desktop's) + the admin QUALITY census 8/7/7/7; dual-mutation-proven |
 | 025 | The standing Core Web Vitals budget gate (PERF-GATE-1) — LCP ≤ 2500ms + CLS ≤ 0.03 + LCP-element identity floors on home/shop/PDP; pre-paint PerformanceObservers; E2E-condition-calibrated; dual-mutation-proven (a hidden hero img fails only the identity pin, a late-injected banner fails only the CLS pin) |
+| 026 | The mobile-viewport CWV gate (PERF-GATE-2) — the SAME pin families at `devices["iPhone 14"]` with mobile-scale identity floors (79,000/19,000/85,000 px², calibrated at the 390×664 device viewport); triple-mutation-proven (the mobile-only hero hide fails only the mobile identity pin with all desktop tests green; the late banner fails the mobile CLS pin at 0.2088; the L27 PDP unsized image fails the mobile CLS pin at 0.3776 with the desktop PDP green) |
 
 ## Appendix B: The Meticulous Workflow
 
