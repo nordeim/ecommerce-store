@@ -28,6 +28,58 @@ test.describe("smoke", () => {
     expect(headers["x-frame-options"]).toBe("DENY");
   });
 
+  test("CSP header ships with a per-request nonce (session-14, SEC-CSP-1)", async ({ request }) => {
+    // The last nominated security item: the reference ships no CSP at all,
+    // so any working nonce-based policy is superset territory. The
+    // directive set is pinned to the codebase's actual footprint: the sole
+    // image host (media.base44.com), the self-hosted font, same-origin
+    // APIs/RSC fetches. No upgrade-insecure-requests — the app runs on
+    // plain-HTTP localhost in dev/E2E and that directive would rewrite
+    // same-origin subresources to https.
+    const res = await request.get("/");
+    const csp = res.headers()["content-security-policy"];
+    expect(csp).toBeTruthy();
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("script-src 'self' 'nonce-");
+    expect(csp).toContain("'strict-dynamic'");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("img-src 'self' https://media.base44.com data:");
+    expect(csp).toContain("font-src 'self'");
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self'");
+    // Per-request uniqueness: two loads must never share a nonce
+    const res2 = await request.get("/");
+    const csp2 = res2.headers()["content-security-policy"];
+    const nonce1 = csp?.match(/'nonce-([^']+)'/)?.[1];
+    const nonce2 = csp2?.match(/'nonce-([^']+)'/)?.[1];
+    expect(nonce1).toBeTruthy();
+    expect(nonce2).toBeTruthy();
+    expect(nonce1).not.toBe(nonce2);
+  });
+
+  test("every script the SSR document emits carries the page nonce (session-14, SEC-CSP-1)", async ({ request }) => {
+    // Next.js applies the middleware nonce to every bootstrap/flight
+    // script it renders. A single un-nonced script would be blocked by
+    // strict-dynamic and kill hydration — this pins the plumbing on the
+    // dynamic home route AND the force-dynamic'd register screen (the
+    // one auth page that was static before session-14).
+    for (const path of ["/", "/register"]) {
+      const res = await request.get(path);
+      const csp = res.headers()["content-security-policy"];
+      const nonce = csp?.match(/'nonce-([^']+)'/)?.[1];
+      expect(nonce).toBeTruthy();
+      const html = await res.text();
+      const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+      expect(scripts.length).toBeGreaterThan(0);
+      for (const tag of scripts) {
+        expect(tag, `${path}: ${tag}`).toContain(`nonce="${nonce}"`);
+      }
+    }
+  });
+
   test("home renders the storefront chrome", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle("Lumina");

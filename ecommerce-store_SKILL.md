@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.13.0
+version: 1.14.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -655,6 +655,43 @@ Then:
     page-local (the shop's parser stayed page-local precisely because
     its shape is a measured reference contract).
 
+22. **Cookie jars are per-host; a login on `localhost` does not carry to
+    `127.0.0.1` (L22, corrects the round-13 account-artifact diagnosis).**
+    A paired A/B sweep that logs in on one host and captures on the
+    other silently renders every authed surface as its GUEST state
+    (/account guest-gates to /login) — producing the byte-stable 22.08%
+    account pixel-diff that round-13 misattributed to a "mid-hydration
+    frame" (the giveaway: a hydration race produces frame variance; a
+    guest redirect is deterministic — the same 173,614 differing pixels
+    every run). The fix discipline: pick ONE host for the whole audit
+    lifecycle; verify `location.pathname` (JSON-quoted in agent-browser
+    eval output — compare against the quoted form) immediately before
+    authed captures; and when a suspiciously large diff appears on an
+    auth-gated route, check WHERE the page actually is before
+    re-capturing. The session-14 CSP round hit it three times before the
+    pattern surfaced (the sweep script's auth guard silently passed on a
+    quote mismatch). Related family: `agent-browser set device` can
+    reset the browser context — after any device/viewport change,
+    re-verify auth before trusting authed measurements.
+
+23. **Next 16 deprecated `middleware.ts` for `proxy.ts` (L23, session-14
+    CSP round).** The middleware file convention emits a build warning
+    ("The middleware file convention is deprecated. Please use proxy
+    instead") — same NextRequest/NextResponse/matcher API, but the file
+    is `src/proxy.ts` and the exported function is named `proxy` (or a
+    default export). The CSP nonce pipeline ships on the current
+    convention. The nonce mechanism itself: the proxy sets the CSP on
+    the REQUEST headers (Next parses it via
+    `getScriptNonceFromHeader` and nonces every bootstrap/flight
+    script) AND on the response (browser enforcement). Per-request
+    nonces require per-request rendering — any statically-prerendered
+    page needs `export const dynamic = "force-dynamic"` or its scripts
+    ship un-nonced and CSP blocks them (the reason the two static auth
+    screens opted out). The brick risk everyone fears is real but
+    testable: the full E2E suite is the hydration regression net — the
+    register/login form-fill specs fail loudly on the first un-nonced
+    script.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -950,6 +987,7 @@ Full records with context/rationale/consequences in
 | 019 | Typography + keyboard-a11y parity round — self-hosted exact-reference woff2 (FILE parity), subpixel smoothing, inert hero slides |
 | 020 | axe-core differential a11y round — single `<main>` landmarks, valid ARIA labels (nameless live region, role=img rating row), security headers |
 | 021 | URL-deep-linkable admin order filters — status + number/email search, count line, guided empty state (the ShopFilters pattern applied to the console) |
+| 022 | Nonce-based Content-Security-Policy via `src/proxy.ts` (the Next 16 proxy convention) — per-request nonces, `strict-dynamic` scripts, directive set pinned to the measured footprint, static auth screens force-dynamic'd |
 
 ## Appendix B: The Meticulous Workflow
 

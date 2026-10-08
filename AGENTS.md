@@ -177,6 +177,7 @@ from the injected location) — the repo contract itself is test-pinned in
 - **One `<main>` landmark per page (session-7, MAIN-NEST-1; extended session-12):** the admin AND shopper content pages (account, checkout ×2 code paths, checkout/success, wishlist ×2 code paths) wrap their content in `<div className="flex-1">` — NOT `<main>` — because the `(storefront)` layout already renders the `<main>`; a nested pair is invalid HTML, trips axe's landmark rules, and confuses AT landmark navigation. The session-1 originals shipped nested mains on those four routes for eleven rounds — invisible to every computed-style audit because `locator("main")` chains dedupe shared descendants; the axe differential (session-12) exposed them. The inner `flex-1` is layout-inert either way (the parent main is not a flex container).
 - **ARIA labels never land on role-less divs (session-12, A11Y-ARIA-1/2).** `aria-label` on a plain `<div>` (role=generic) is prohibited by ARIA 1.2+ (axe `aria-prohibited-attr`): the toast viewport is a NAMELESS `aria-live="polite"` region (a live region announces its content, not its name; the reference's container carries no aria attributes at all), and the PDP star-rating row is `role="img"` + `aria-label="Rated X out of 5"` (the canonical glyph-row pattern — role=img allows naming). Pinned by the storefront-parity spec.
 - **Security headers ship in `next.config.ts` `headers()` (session-12, SEC-HEADERS-1):** Referrer-Policy `strict-origin-when-cross-origin`, X-Content-Type-Options `nosniff`, Strict-Transport-Security `max-age=31536000` (the reference's live-measured baseline; HSTS over HTTP is a spec no-op per RFC 6797 §7.2), plus X-Frame-Options `DENY` (superset). CSP deferred (needs nonce plumbing). Pinned by the smoke spec.
+- **Content-Security-Policy ships via the proxy nonce pipeline (session-14, SEC-CSP-1, ADR-022):** `src/proxy.ts` (Next 16's renamed middleware convention — `middleware.ts` is deprecated) mints a per-request nonce, sets the CSP on the REQUEST headers (Next extracts it via `getScriptNonceFromHeader` and nonces every bootstrap/flight script) and the RESPONSE (browser enforcement). Directives are pinned to the codebase's measured footprint: `default-src 'self'`; `script-src 'self' 'nonce-…' 'strict-dynamic'`; `style-src 'self' 'unsafe-inline'` (framework insurance — the app itself ships zero inline styles); `img-src 'self' https://media.base44.com data:` (the sole art/favicon CDN); `font-src 'self'` (the self-hosted woff2); `connect-src 'self'`; `frame-ancestors 'none'`; `object-src/base-uri/form-action 'self'`. **No `upgrade-insecure-requests`** — the app runs on plain-HTTP localhost in dev/E2E and that directive would rewrite same-origin subresources to https. Per-request nonces require per-request rendering: `/register` and `/forgot-password` carry `export const dynamic = "force-dynamic"` (the only static HTML pages; `/_not-found` is unreachable — nothing calls `notFound()`). Pinned by the smoke spec (header + directive census + nonce uniqueness + every SSR script nonced on / and /register).
 - **Steppers post DELTAS, not absolutes** (ADR-011): the drawer and /cart
   steppers call `adjustQuantity(itemId, ±1)`; the server applies them inside
   `db.$transaction` (`changeQuantityBy`) so rapid clicks each land exactly
@@ -237,6 +238,20 @@ from the injected location) — the repo contract itself is test-pinned in
   paired-pixel-capture rule: client-island routes need networkidle + a
   settle in A/B sweeps (the round-13 account capture measured 22% on a
   mid-hydration frame; the settled re-capture read the 0.34% baseline).
+- **Paired-capture host consistency (session-14 lesson, corrects the
+  round-13 artifact diagnosis):** cookies do NOT cross hosts —
+  `localhost:3000` and `127.0.0.1:3000` are DIFFERENT cookie jars. A
+  login performed on localhost followed by a sweep against 127.0.0.1
+  silently renders every authed surface as its GUEST state (/account
+  guest-gates to /login) — producing the exact 22.08% account pixel-diff
+  artifact that round-13 misattributed to a "mid-hydration frame" (the
+  byte-stable diff number was the giveaway: a hydration race produces
+  frame variance, a guest redirect is deterministic). Rule: **pick ONE
+  host for the whole audit lifecycle, and verify `location.pathname` (not
+  just a cookie presence) immediately before authed captures.** The
+  agent-browser `eval "location.pathname"` output is JSON-quoted
+  (`"/login"` ≠ `/login` in shell string comparison — strip the quotes or
+  compare against the quoted form).
 - The verify-email happy path consumes the seeded `unverified@example.com` fixture (code `123456`); `prisma/e2e-reset.ts` restores its unverified state + code every run, so specs can rely on it.
 - Toast specs: assert position only after the enter spring settles (~450ms) and with ±2px tolerance (the reference's own live values oscillate mid-spring); `getByText("… added to cart!")` resolves to the toast ITEM itself — do not climb to the parent (that's the region).
 - Drawer specs cannot assert the header badge while the Radix dialog is open (aria-hidden hides it from the role tree) — assert the drawer's own totals instead.
@@ -294,3 +309,10 @@ Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — v
   `tailwindcss-animate` were removed (zero imports; the toast viewport is
   custom per ADR-011 and `tw-animate-css` is the v4 animation import).
   Re-verify with a grep before re-adding any of them.
+- **`src/proxy.ts` is the ONLY middleware-proxied file (session-14):**
+  Next 16 deprecated the `middleware` filename in favor of `proxy` (same
+  NextRequest/NextResponse/matcher API; the exported function is named
+  `proxy`). The repo ships the current convention — a `middleware.ts`
+  beside it would double-handle requests. The file exists to mint the
+  CSP nonce (ADR-022); route logic does NOT belong there (it runs before
+  every document request).
