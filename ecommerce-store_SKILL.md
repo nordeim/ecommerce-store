@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.16.0
+version: 1.17.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -743,6 +743,25 @@ Then:
     aria-live does NOT trip axe 4.14 under the wcag2x tag set — for
     mutation checks, target a live region or an icon-only button
     (button-name) instead.
+27. **CWV gates need pre-paint observers, entry-time element geometry,
+    and mutations that match the defect class — and the reference
+    auth-gates everything (L27, session-17 performance round).** Three
+    facts from building PERF-GATE-1. (1) PerformanceObservers must be
+    registered via `page.addInitScript` (pre-paint) — post-load
+    registration misses buffered LCP entries; and the element tag +
+    geometry must be captured INSIDE the observer callback, because a
+    DOM-swap carousel replaces the elements your query would re-find.
+    (2) A CLS mutation must GUARANTEE a post-FCP shift: an unsized image
+    container in a 2-column grid where the sibling column is taller
+    produces ZERO movement at desktop (the growth is absorbed) — the
+    late-injected banner (setTimeout post-hydration, unreserved, in the
+    flow) is the deterministic mutation; the unsized-image class needs
+    the MOBILE stacked layout to bite (the L26 blindness story, now for
+    CLS). (3) The reference renders the LOGIN screen client-side ON any
+    requested URL for anonymous contexts — CWV/pixel differentials
+    against it must measure AUTHENTICATED state, or you are benchmarking
+    the login form (the H1 "Welcome back" will appear as the LCP element
+    on every route).
 
 ## 13. Pitfalls to Avoid
 
@@ -1042,6 +1061,7 @@ Full records with context/rationale/consequences in
 | 022 | Nonce-based Content-Security-Policy via `src/proxy.ts` (the Next 16 proxy convention) — per-request nonces, `strict-dynamic` scripts, directive set pinned to the measured footprint, static auth screens force-dynamic'd |
 | 023 | The self-hosted axe-core standing E2E gate — the manual a11y differential converted to a permanent regression pin (census exactly {color-contrast} + reference-identical counts, mutation-proven) |
 | 024 | The a11y gate extended to both viewports + the admin console — the SAME pins re-asserted at iPhone 14 (mobile census byte-identical to the desktop's) + the admin QUALITY census 8/7/7/7; dual-mutation-proven |
+| 025 | The standing Core Web Vitals budget gate (PERF-GATE-1) — LCP ≤ 2500ms + CLS ≤ 0.03 + LCP-element identity floors on home/shop/PDP; pre-paint PerformanceObservers; E2E-condition-calibrated; dual-mutation-proven (a hidden hero img fails only the identity pin, a late-injected banner fails only the CLS pin) |
 
 ## Appendix B: The Meticulous Workflow
 
