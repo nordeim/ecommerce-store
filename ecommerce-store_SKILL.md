@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.15.0
+version: 1.16.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -723,6 +723,27 @@ Then:
     the E2E suite parameterizes via `E2E_PORT`. Rule: after ANY rebuild,
     restart the audit server before trusting live probes.
 
+26. **Desktop-only a11y gates are structurally blind to mobile-only
+    defects; a plain-div aria-label is not the prohibited-attr mutation
+    you think it is (L26, session-16 a11y round).** Extending the axe
+    gate to `devices["iPhone 14"]` surfaced two methodological facts.
+    (1) An element hidden at desktop (`lg:hidden`) is `display:none` at
+    1280×720 → axe SKIPS it → a defect that only renders at 390px passes
+    a desktop-only gate forever — the mutation that proves this (drop
+    the mobile menu button's aria-label) fails ONLY the mobile tests
+    while the desktop gate stays green; engineer viewport-specific
+    mutations when you add viewport-specific gates, or you have proven
+    nothing about the extension. Playwright mechanics:
+    `test.use({ ...devices["iPhone 14"] })` inside a describe REJECTS the
+    descriptor's `defaultBrowserType` (it forces a new worker) — strip
+    it; the project's storageState still applies at 390px. (2) The
+    session-12 prohibited-attr defect fired because the toast viewport
+    carries `aria-live="polite"` (aria-label on a LIVE REGION is
+    prohibited ARIA); the same label on a plain role-less div with no
+    aria-live does NOT trip axe 4.14 under the wcag2x tag set — for
+    mutation checks, target a live region or an icon-only button
+    (button-name) instead.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1020,6 +1041,7 @@ Full records with context/rationale/consequences in
 | 021 | URL-deep-linkable admin order filters — status + number/email search, count line, guided empty state (the ShopFilters pattern applied to the console) |
 | 022 | Nonce-based Content-Security-Policy via `src/proxy.ts` (the Next 16 proxy convention) — per-request nonces, `strict-dynamic` scripts, directive set pinned to the measured footprint, static auth screens force-dynamic'd |
 | 023 | The self-hosted axe-core standing E2E gate — the manual a11y differential converted to a permanent regression pin (census exactly {color-contrast} + reference-identical counts, mutation-proven) |
+| 024 | The a11y gate extended to both viewports + the admin console — the SAME pins re-asserted at iPhone 14 (mobile census byte-identical to the desktop's) + the admin QUALITY census 8/7/7/7; dual-mutation-proven |
 
 ## Appendix B: The Meticulous Workflow
 

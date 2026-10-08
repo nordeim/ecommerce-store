@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, devices, type Page } from "@playwright/test";
+import { adminLogin } from "./helpers";
 
 // A11y standing gate (session-15, A11Y-GATE-1, ADR-023): converts the
 // session-12 MANUAL axe-core differential into a permanent E2E check. The
@@ -105,4 +106,103 @@ test.describe("a11y standing gate (session-15, A11Y-GATE-1)", () => {
     expect(violations[0].nodes).toBe(3);
     await ctx.close();
   });
+});
+
+// ---------------------------------------------------------------------------
+// A11Y-GATE-2 (session-16, ADR-024): the gate extended to the two surface
+// families the desktop shopper gate structurally cannot see —
+//   (a) MOBILE viewports: an element hidden at desktop (lg:hidden) is
+//       display:none -> axe SKIPS it at 1280x720 -> a mobile-only defect
+//       passes the desktop gate forever. The mobile census is byte-identical
+//       to the desktop's (live-measured on BOTH sites at iPhone 14 + E2E-
+//       calibrated: 28/23/14/8/8/3 — scripts/axe-diff-session16.mjs +
+//       scripts/axe-calibrate-session16.mjs); the reference additionally
+//       carries button-name/link-name/label at mobile (the aria superset
+//       holds at mobile).
+//   (b) ADMIN surfaces (superset, no reference counterpart): a QUALITY
+//       census — the measured profile is {color-contrast} only, 8/7/7/7,
+//       zero aria violations on any console surface.
+// TDD trail: the RED step ran the zero-violation form of these assertions
+// and failed on every route for the RIGHT reason — the color-contrast
+// shared-parity trait (the same deliberate contract as the desktop gate) —
+// before the profile was pinned (docs/remediation-plan-session16.md).
+// ---------------------------------------------------------------------------
+
+// The admin surfaces' measured profile (Desktop 1280x720, E2E-calibrated).
+// The order detail is reached via the ORD-2026-001 link (the admin.spec
+// convention — the e2e.db cuid is not hardcodable across fresh clones).
+const ADMIN_PROFILE: { desc: string; path: string | null; viaOrders?: boolean }[] = [
+  { desc: "admin dashboard", path: "/admin" },
+  { desc: "admin orders", path: "/admin/orders" },
+  { desc: "admin products", path: "/admin/products" },
+  { desc: "admin order detail", path: null, viaOrders: true },
+];
+
+test.describe("a11y mobile gate (session-16, A11Y-GATE-2)", () => {
+  // iPhone 14 (the same device descriptor the calibration used), with its
+  // defaultBrowserType stripped — test.use cannot accept it inside a
+  // describe (it forces a new worker); the project already pins chromium.
+  // The project's storageState still applies — the demo user is authed at
+  // 390px.
+  const { defaultBrowserType: _ignored, ...iPhone } = devices["iPhone 14"];
+  void _ignored;
+  test.use(iPhone);
+
+  for (const [desc, r] of Object.entries(PROFILE)) {
+    test(`mobile ${desc}: the violation census is exactly {color-contrast} with the parity-pinned count`, async ({ page }) => {
+      await page.goto(r.path, { waitUntil: "networkidle" });
+      const violations = await runAxe(page);
+      const ids = violations.map((v) => v.id).sort();
+      expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+      // the mobile census is byte-identical to the desktop's — the SAME
+      // pins; a divergence between viewports is flagged exactly like a
+      // drift at either one.
+      expect(violations[0].nodes).toBe(r.contrast);
+    });
+  }
+
+  test("mobile login: the violation census is exactly {color-contrast} with the parity-pinned count", async ({ browser }) => {
+    const ctx = await browser.newContext({ ...iPhone, storageState: { cookies: [], origins: [] } });
+    const page = await ctx.newPage();
+    await page.goto("/login", { waitUntil: "networkidle" });
+    const violations = await runAxe(page);
+    const ids = violations.map((v) => v.id).sort();
+    expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+    expect(violations[0].nodes).toBe(3);
+    await ctx.close();
+  });
+});
+
+test.describe("a11y admin gate (session-16, A11Y-GATE-2)", () => {
+  let admin: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    // One admin login for the whole describe (the admin.spec pattern — the
+    // admin email draws from its own rate-limit bucket; with the stock and
+    // admin specs' logins that is 3 admin logins per E2E run, inside the
+    // 10/15min bucket even across two consecutive runs).
+    admin = await adminLogin(browser);
+  });
+
+  test.afterAll(async () => {
+    await admin.close();
+  });
+
+  for (const r of ADMIN_PROFILE) {
+    test(`${r.desc}: the violation census is exactly {color-contrast} with the quality-pinned count`, async () => {
+      if (r.viaOrders) {
+        await admin.goto("/admin/orders", { waitUntil: "networkidle" });
+        await admin.getByRole("link", { name: "ORD-2026-001" }).click();
+        await admin.waitForLoadState("networkidle");
+      } else {
+        await admin.goto(r.path!, { waitUntil: "networkidle" });
+      }
+      const violations = await runAxe(admin);
+      const ids = violations.map((v) => v.id).sort();
+      expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+      // the admin QUALITY pins (E2E-calibrated: dashboard 8, others 7 —
+      // no reference counterpart; drift in EITHER direction is flagged)
+      expect(violations[0].nodes).toBe(r.desc === "admin dashboard" ? 8 : 7);
+    });
+  }
 });
