@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.9.0
+version: 1.10.0
 last_updated: "2026-10-08"
 tags:
   - e-commerce
@@ -28,7 +28,7 @@ tags:
 > Companion docs: `AGENTS.md` (agent cheat-sheet), `CLAUDE.md` (workflow),
 > `Project_Architecture_Document.md` (PAD — ADRs and rationale),
 > `docs/Tailwind-V4-Validation-Report.md` (trap log detail),
-> `docs/remediation-plan-session1.md` … `session9.md` (post-push audits).
+> `docs/remediation-plan-session1.md` … `session10.md` (post-push audits).
 
 ---
 
@@ -603,6 +603,15 @@ Then:
   renders one star + numeric rating.
 - **Don't** create REST mutation routes; server actions are the only seam
   (3-endpoint route whitelist).
+- **Don't** re-add the `@media (hover: hover)` gate on hover variants or
+  remove `@custom-variant hover (&:hover);` from `globals.css` (trap 11) —
+  the reference is a v3 app; hover effects must render in touch/hybrid
+  contexts, and parity assertions read `getComputedStyle(img).scale` (v4's
+  `scale-*` sets the `scale` property, not `transform`).
+- **Don't** pair a base `leading-*` with responsive `text-*` sizes without
+  pinning the responsive line-heights (trap 10) — v4's sort order lets the
+  base leading win at every width; v3's media layers re-override it. The
+  hero h1 carries `sm:leading-[2.5rem] lg:leading-none`.
 
 ## 14. Best Practices
 
@@ -886,4 +895,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session9.md` | the post-push audits this skill distills (latest: session-9) |
+| `docs/remediation-plan-session1.md` … `session10.md` | the post-push audits this skill distills (latest: session-10) |

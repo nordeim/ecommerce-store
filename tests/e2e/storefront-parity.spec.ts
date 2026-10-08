@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { devices, expect, test } from "@playwright/test";
 
 // Visual-parity gate (computed styles are the ground truth — the
 // clone-app-pat-pro contract). Every value below was measured live on the
@@ -292,5 +292,65 @@ test.describe("storefront computed-style parity", () => {
     const sort = page.locator('button[aria-label="Sort products"]');
     await expect(sort).toBeVisible();
     await expect(sort).toHaveCSS("width", "150px");
+  });
+
+  test("hero h1 line-height follows the reference's v3 cascade (session-10, HERO-LH-1)", async ({ page }) => {
+    // Trap 10: the reference's h1 class string is byte-identical to ours
+    // (…text-3xl sm:text-4xl lg:text-5xl… leading-tight), but v3 emits
+    // responsive text utilities in media layers AFTER base utilities, so
+    // sm:text-4xl / lg:text-5xl re-override leading-tight with their own
+    // line-heights at ≥640 / ≥1024. v4 lets the base leading-tight (1.25)
+    // win at every width. Live-measured reference values:
+    //   630px viewport → fs 30 / lh 37.5 (leading-tight wins below sm)
+    //   768px viewport → fs 36 / lh 40   (the 4xl companion, 2.5rem)
+    //  1024px viewport → fs 48 / lh 48   (the 5xl companion, 1)
+    await page.goto("/");
+    const h1 = page.locator("main h1").first();
+    await expect(h1).toBeVisible();
+    await page.setViewportSize({ width: 630, height: 900 });
+    await expect(h1).toHaveCSS("font-size", "30px");
+    await expect(h1).toHaveCSS("line-height", "37.5px");
+    await page.setViewportSize({ width: 768, height: 900 });
+    await expect(h1).toHaveCSS("font-size", "36px");
+    await expect(h1).toHaveCSS("line-height", "40px");
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await expect(h1).toHaveCSS("font-size", "48px");
+    await expect(h1).toHaveCSS("line-height", "48px");
+  });
+
+  test("hover effects are not media-gated in touch contexts (session-10, HOVER-GATE-1)", async ({ browser }) => {
+    // Trap 11: v4.3 wraps every hover-family utility (hover:*, group-hover:*)
+    // in @media (hover: hover); v3 (the reference engine) does not. In a
+    // touch-emulated context the reference still renders card hover effects
+    // (live-measured: img matrix(1.05), hovered title rgb(230,107,26)); the
+    // gated clone renders nothing. Fixed via @custom-variant hover (&:hover).
+    // Mobile emulation is the decisive condition — it flips
+    // matchMedia('(hover: hover)') to false while :hover still matches.
+    const ctx = await browser.newContext({
+      ...devices["iPhone 14"],
+      storageState: "tests/e2e/.auth/user.json",
+    });
+    const page = await ctx.newPage();
+    try {
+      await page.goto("/shop", { waitUntil: "networkidle" });
+      const hvq = await page.evaluate(() => matchMedia("(hover: hover)").matches);
+      expect(hvq).toBe(false); // the trap's decisive condition
+      const card = page.locator("main div.group").first();
+      const img = card.locator("img");
+      const title = card.locator("h3");
+      await card.hover();
+      // Live-measured reference values under the same condition. Note: v3
+      // renders scale-105 as `transform: matrix(1.05, …)`; v4 uses the CSS
+      // `scale` property — the same visual result, different computed
+      // property. We pin the v4 spelling (serialized "1.05").
+      await expect
+        .poll(() => img.evaluate((el) => getComputedStyle(el).scale))
+        .toBe("1.05");
+      await expect
+        .poll(() => title.evaluate((el) => getComputedStyle(el).color))
+        .toBe("rgb(230, 107, 26)");
+    } finally {
+      await ctx.close();
+    }
   });
 });

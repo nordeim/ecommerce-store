@@ -3,6 +3,18 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Trap 11 (session-10, HOVER-GATE-1): v4.3's default `hover` variant wraps
+ * every hover-family utility (hover:*, group-hover:*, breakpoint compounds)
+ * in `@media (hover: hover)`; the reference was built on v3, where :hover
+ * rules apply unconditionally. In touch/hybrid contexts ((hover: hover)
+ * fails) the reference still renders its hover effects (live-measured: nav
+ * link text, card scale/title/quick-add, category icons, CTA arrows) while
+ * a gated build renders none. Restoring v3 semantics: a bare `&:hover`.
+ * The group-hover compound composes on top of this definition, so it is
+ * un-gated too while keeping v4's own selector shape. Pinned by the
+ * storefront-parity touch-context spec. */
+@custom-variant hover (&:hover);
+
 /* ---------------------------------------------------------------------------
  * LUXE Store — Tailwind v4 CSS-first theme, pinned to the reference app's
  * computed values (recon: fuzzy-lumina-style-hub.base44.app).

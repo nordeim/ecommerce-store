@@ -92,7 +92,15 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                   <span className="inline-block bg-white/20 backdrop-blur-md text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-4">
                     {slide.promo}
                   </span>
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 leading-tight">
+                  {/* Trap 10 (session-10, HERO-LH-1): the reference's class
+                      string is byte-identical INCLUDING leading-tight, but
+                      v3 emits responsive text utilities in media layers
+                      after base utilities, so sm:text-4xl / lg:text-5xl
+                      re-override leading-tight with their own line-heights
+                      (40px / 48px) at >=640 / >=1024; v4 lets the base
+                      leading-tight (1.25 -> 45/60px) win at every width.
+                      The two pins restore the v3 cascade values. */}
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 leading-tight sm:leading-[2.5rem] lg:leading-none">
                     {slide.title}
                   </h1>
                   <p className="text-white/80 text-base sm:text-lg mb-6">{slide.subtitle}</p>
