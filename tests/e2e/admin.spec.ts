@@ -28,6 +28,10 @@ test.describe("admin console (guest access)", () => {
     // The same contract holds for the orders sub-page.
     await page.goto("/admin/orders");
     await expect(page).toHaveURL(/\/login\?redirect=\/admin\/orders$/);
+    // And the payments surface (session-24, PAY-OPS-1) — the full path
+    // rides the redirect, exactly like every other admin sub-page.
+    await page.goto("/admin/payments");
+    await expect(page).toHaveURL(/\/login\?redirect=\/admin\/payments$/);
   });
 });
 
@@ -181,5 +185,110 @@ test.describe("admin console (admin session)", () => {
     await expect(admin).toHaveURL(/\/admin\/orders$/);
     await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
     await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Payment-ops surface (session-24, PAY-OPS-1, ADR-032): the /admin/payments
+// page renders the StripeEvent log — the webhook backstop's write path
+// (sessions 22/23) finally has its read surface. Every event's OUTCOME is
+// derived from DB state: a succeeded event resolves to the placed order
+// (deep link) or to the refund-needed family (the deterministic failures
+// the webhook records + 200s); failed events and ignored types render
+// their own honest copy. The canonical fixture set (e2e-reset restores it
+// every run): evt_demo_fixture_s → ORD-2026-003 (the Stripe-paid demo
+// order), evt_demo_fixture_f (payment_failed), evt_demo_fixture_r
+// (charge.refunded).
+// ---------------------------------------------------------------------------
+test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
+  let admin: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    admin = await adminLogin(browser);
+  });
+
+  test.afterAll(async () => {
+    await admin.close();
+  });
+
+  test("payments renders the fixture events with resolved outcomes", async () => {
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByRole("heading", { name: "Payments" })).toBeVisible();
+    // The unconfigured default is honest operator context (admin-only
+    // surface — the R10-2 customer-copy rule does not apply here).
+    await expect(admin.getByText("Stripe is in demo mode", { exact: false })).toBeVisible();
+
+    // Three fixture events, newest first, each with its honest outcome.
+    await expect(admin.getByText("3 payment events", { exact: true })).toBeVisible();
+    await expect(admin.getByText("payment_intent.succeeded", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByRole("link", { name: "ORD-2026-003" })
+    ).toBeVisible();
+    await expect(admin.getByText("payment_intent.payment_failed", { exact: true })).toBeVisible();
+    await expect(admin.getByText("Payment failed", { exact: true })).toBeVisible();
+    await expect(admin.getByText("charge.refunded", { exact: true })).toBeVisible();
+    await expect(admin.getByText("Ignored", { exact: true })).toBeVisible();
+  });
+
+  test("payments filters by family with a deep-linkable URL", async () => {
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByRole("combobox", { name: "Filter by family" }).click();
+    await admin.getByRole("option", { name: "Succeeded" }).click();
+    await expect(admin).toHaveURL(/\/admin\/payments\?family=succeeded$/);
+    await expect(admin.getByText("1 payment event", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toBeVisible();
+    await expect(admin.getByText("payment_intent.payment_failed", { exact: true })).toHaveCount(0);
+
+    // Deep-link lands in the same filtered state; a bad family value
+    // falls through to the unfiltered list (never an error).
+    await admin.goto("/admin/payments?family=bogus");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("3 payment events", { exact: true })).toBeVisible();
+  });
+
+  test("payments searches by intent id fragment", async () => {
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    const search = admin.getByLabel("Search payment events");
+    await search.fill("pi_demo_fixture_004");
+    await search.press("Enter");
+    await expect(admin).toHaveURL(/\/admin\/payments\?q=pi_demo_fixture_004$/);
+    await expect(admin.getByText("1 payment event", { exact: true })).toBeVisible();
+    await expect(admin.getByText("payment_intent.payment_failed", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+  });
+
+  test("payments empty state offers Clear, filters combine", async () => {
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    const search = admin.getByLabel("Search payment events");
+    await search.fill("zzz-no-such-event");
+    await search.press("Enter");
+    await expect(admin.getByRole("heading", { name: "No payment events match your filters" })).toBeVisible();
+
+    await admin.getByRole("button", { name: "Clear" }).click();
+    await expect(admin).toHaveURL(/\/admin\/payments$/);
+    await expect(admin.getByText("3 payment events", { exact: true })).toBeVisible();
+  });
+
+  test("the succeeded event deep-links to its order detail", async () => {
+    await admin.goto("/admin/payments?family=succeeded");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByRole("link", { name: "ORD-2026-003" }).click();
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/\/admin\/orders\/[a-z0-9]+$/);
+    // The detail page renders the Stripe-paid demo order's Charge row.
+    await expect(admin.getByText("Paid (Stripe)", { exact: true })).toBeVisible();
+  });
+});
+
+test.describe("admin payment-ops (role contract)", () => {
+  test("non-admins are redirected away from the payments surface", async ({ page }) => {
+    // The project's default storageState is the DEMO user (non-admin) —
+    // the console's role contract on the new surface: bounce to /.
+    await page.goto("/admin/payments");
+    await expect(page).toHaveURL(/\/$/);
   });
 });

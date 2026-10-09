@@ -52,6 +52,10 @@ export default async function AdminPage() {
             <Button asChild className="rounded-xl">
               <Link href="/admin/orders">Orders</Link>
             </Button>
+            {/* Session-24 (PAY-OPS-1): the payment-ops surface's entry point. */}
+            <Button asChild variant="outline" className="rounded-xl">
+              <Link href="/admin/payments">Payments</Link>
+            </Button>
           </div>
         </div>
 

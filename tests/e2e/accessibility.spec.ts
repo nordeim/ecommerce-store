@@ -205,6 +205,21 @@ test.describe("a11y admin gate (session-16, A11Y-GATE-2)", () => {
       expect(violations[0].nodes).toBe(r.desc === "admin dashboard" ? 8 : 7);
     });
   }
+
+  // Session-24 (PAY-OPS-1): the payments surface joins the admin gate —
+  // its own E2E-calibrated QUALITY pin (8 color-contrast nodes, the
+  // footer's shared trait). Note: under the full default tag set the
+  // console LIST pages (orders/products/payments) also share a
+  // best-practice heading-order observation (the lone h1 → the footer's
+  // h3 columns) — outside the gate's WCAG runOnly set and identical
+  // family-wide; documented in docs/session_46.md, not a per-page defect.
+  test("admin payments: the violation census is exactly {color-contrast} with the quality-pinned count", async () => {
+    await admin.goto("/admin/payments", { waitUntil: "networkidle" });
+    const violations = await runAxe(admin);
+    const ids = violations.map((v) => v.id).sort();
+    expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+    expect(violations[0].nodes).toBe(8);
+  });
 });
 
 // ---------------------------------------------------------------------------

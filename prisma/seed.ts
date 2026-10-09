@@ -478,6 +478,47 @@ async function main() {
     });
   }
 
+  // ---- Stripe payment-ops demo fixtures (session-24, PAY-OPS-1) --------
+  // ORD-2026-003 doubles as the Stripe-paid demo order (the order-detail
+  // Charge row's seeded instance), and the canonical StripeEvent set gives
+  // the /admin/payments surface its demo content. The seed SKIPS existing
+  // orders, so the paid columns are ALSO restored idempotently below —
+  // a DB seeded before session-24 converges on re-run.
+  await db.order.update({
+    where: { number: "ORD-2026-003" },
+    data: {
+      stripePaymentIntentId: "pi_demo_fixture_003",
+      paymentStatus: "paid",
+    },
+  });
+  const stripeEvents = [
+    {
+      eventId: "evt_demo_fixture_s",
+      type: "payment_intent.succeeded",
+      paymentIntentId: "pi_demo_fixture_003",
+      receivedAt: new Date("2026-02-20T18:45:40Z"),
+    },
+    {
+      eventId: "evt_demo_fixture_f",
+      type: "payment_intent.payment_failed",
+      paymentIntentId: "pi_demo_fixture_004",
+      receivedAt: new Date("2026-02-21T09:12:00Z"),
+    },
+    {
+      eventId: "evt_demo_fixture_r",
+      type: "charge.refunded",
+      paymentIntentId: "pi_demo_fixture_005",
+      receivedAt: new Date("2026-02-22T14:03:00Z"),
+    },
+  ];
+  for (const e of stripeEvents) {
+    await db.stripeEvent.upsert({
+      where: { eventId: e.eventId },
+      create: e,
+      update: e,
+    });
+  }
+
   const counts = {
     categories: await db.category.count(),
     products: await db.product.count(),

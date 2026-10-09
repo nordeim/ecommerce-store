@@ -174,6 +174,38 @@ from the injected location) — the repo contract itself is test-pinned in
   parity risk — no storefront surface is touched. Pinned by
   `tests/e2e/admin.spec.ts` (3 tests: status deep-link, number/email
   search, empty state + Clear).
+- **The admin payment-ops surface (session-24, PAY-OPS-1, ADR-032):**
+  `/admin/payments` renders the `StripeEvent` log — the webhook
+  backstop's write path (sessions 22/23) finally has its read surface.
+  Every event's OUTCOME derives from DB state via
+  `resolvePaymentEventOutcome` (`src/lib/admin-payments.ts`, unit-pinned):
+  a `payment_intent.succeeded` with a linked order → the order number
+  deep-linked to `/admin/orders/[id]`; succeeded with NO order → the
+  destructive "No order — refund via Stripe dashboard" line (exactly the
+  deterministic-failure family the webhook records + 200s per ADR-031 —
+  the signal an operator must act on); `payment_intent.payment_failed` →
+  "Payment failed"; anything else → "Ignored". The URL-deep-linkable
+  filters mirror the orders surface (`?family=` validated against
+  succeeded/failed/other — bad values fall through; `?q=` on
+  paymentIntentId OR eventId contains); the count line keeps the
+  `take: 100` bound visible. A one-line Stripe configuration status
+  ("demo mode" vs "configured", from `resolveStripeConfig`) renders as
+  operator context — the R10-2 customer-copy rule does not apply to the
+  console. The demo fixtures: `ORD-2026-003` is the Stripe-paid demo
+  order (`pi_demo_fixture_003` + `paymentStatus: "paid"` — the
+  order-detail Charge row's seeded instance) + the canonical
+  three-event set (`evt_demo_fixture_s/f/r`), seeded idempotently and
+  restored by `prisma/e2e-reset.ts` every run (the run-to-run isolation
+  contract extends to the new table). The dashboard's quick actions
+  gained the Payments button. Zero parity risk — admin-only surface.
+  Pinned by 6 `admin.spec.ts` tests (guest gating with intent, role
+  contract, fixture outcomes, family deep-link, q search, empty state +
+  Clear, the order deep-link) + the a11y admin gate's payments test
+  ({color-contrast} × 8, E2E-calibrated). Family observation (documented,
+  not a defect): under axe's FULL default tag set the console LIST pages
+  (orders/products/payments) share a best-practice heading-order
+  observation (the lone h1 → the footer's h3 columns) — outside the
+  gate's WCAG `runOnly` set and identical family-wide since session-7.
 - **One `<main>` landmark per page (session-7, MAIN-NEST-1; extended session-12):** the admin AND shopper content pages (account, checkout ×2 code paths, checkout/success, wishlist ×2 code paths) wrap their content in `<div className="flex-1">` — NOT `<main>` — because the `(storefront)` layout already renders the `<main>`; a nested pair is invalid HTML, trips axe's landmark rules, and confuses AT landmark navigation. The session-1 originals shipped nested mains on those four routes for eleven rounds — invisible to every computed-style audit because `locator("main")` chains dedupe shared descendants; the axe differential (session-12) exposed them. The inner `flex-1` is layout-inert either way (the parent main is not a flex container).
 - **ARIA labels never land on role-less divs (session-12, A11Y-ARIA-1/2).** `aria-label` on a plain `<div>` (role=generic) is prohibited by ARIA 1.2+ (axe `aria-prohibited-attr`): the toast viewport is a NAMELESS `aria-live="polite"` region (a live region announces its content, not its name; the reference's container carries no aria attributes at all), and the PDP star-rating row is `role="img"` + `aria-label="Rated X out of 5"` (the canonical glyph-row pattern — role=img allows naming). Pinned by the storefront-parity spec.
 - **Security headers ship in `next.config.ts` `headers()` (session-12, SEC-HEADERS-1):** Referrer-Policy `strict-origin-when-cross-origin`, X-Content-Type-Options `nosniff`, Strict-Transport-Security `max-age=31536000` (the reference's live-measured baseline; HSTS over HTTP is a spec no-op per RFC 6797 §7.2), plus X-Frame-Options `DENY` (superset). CSP deferred (needs nonce plumbing). Pinned by the smoke spec.

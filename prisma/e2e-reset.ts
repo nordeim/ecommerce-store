@@ -10,6 +10,29 @@ import { hashResetToken } from "../src/lib/reset-token";
  */
 const db = new PrismaClient();
 
+const FIXTURE_EVENT_IDS = ["evt_demo_fixture_s", "evt_demo_fixture_f", "evt_demo_fixture_r"];
+
+const FIXTURE_STRIPE_EVENTS = [
+  {
+    eventId: "evt_demo_fixture_s",
+    type: "payment_intent.succeeded",
+    paymentIntentId: "pi_demo_fixture_003",
+    receivedAt: new Date("2026-02-20T18:45:40Z"),
+  },
+  {
+    eventId: "evt_demo_fixture_f",
+    type: "payment_intent.payment_failed",
+    paymentIntentId: "pi_demo_fixture_004",
+    receivedAt: new Date("2026-02-21T09:12:00Z"),
+  },
+  {
+    eventId: "evt_demo_fixture_r",
+    type: "charge.refunded",
+    paymentIntentId: "pi_demo_fixture_005",
+    receivedAt: new Date("2026-02-22T14:03:00Z"),
+  },
+];
+
 async function main() {
   await db.cartItem.deleteMany();
   await db.cart.deleteMany();
@@ -77,6 +100,20 @@ async function main() {
       )!.id,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     },
+  });
+
+  // Session-24 (PAY-OPS-1): the payment-ops fixtures — the canonical
+  // StripeEvent set + the Stripe-paid ORD-2026-003 columns. The unconfigured
+  // webhook 400s before any write (the E2E default), so this normally only
+  // restores the seed's own fixtures; the guard keeps the surface's state
+  // canonical even if a future spec ever records events.
+  await db.stripeEvent.deleteMany({ where: { eventId: { notIn: FIXTURE_EVENT_IDS } } });
+  for (const e of FIXTURE_STRIPE_EVENTS) {
+    await db.stripeEvent.upsert({ where: { eventId: e.eventId }, create: e, update: e });
+  }
+  await db.order.update({
+    where: { number: "ORD-2026-003" },
+    data: { stripePaymentIntentId: "pi_demo_fixture_003", paymentStatus: "paid" },
   });
 
   console.log("[e2e-reset] transient state cleared");
