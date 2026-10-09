@@ -28,7 +28,11 @@ const HERO_SLIDES: HeroSlide[] = [
     title: "Tech Essentials",
     subtitle: "Premium gadgets for modern living",
     cta: "Explore",
-    href: "/shop?category=electronics",
+    // session-26, HERO-DRIFT-1b: the reference's CTAs all link plain /shop
+    // now (live-measured 2026-10-09, twice per slide) — the session-1
+    // category deep-links were the old truth. Pinned by the storefront
+    // parity hero-content test.
+    href: "/shop",
     image: "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/f0ae76854_generated_31ca432d.png",
   },
   {
@@ -36,8 +40,12 @@ const HERO_SLIDES: HeroSlide[] = [
     title: "Home & Comfort",
     subtitle: "Transform your living space with curated pieces",
     cta: "Browse",
-    href: "/shop?category=home-living",
-    image: "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/54a27de93_generated_4ebfd375.png",
+    href: "/shop",
+    // session-26, HERO-DRIFT-1a: the reference regenerated this slide's
+    // media (19ea6418a… — the old 54a27de93… is now its headphones PRODUCT
+    // image). Live-measured + sweep-caught; pinned by the hero-content
+    // test.
+    image: "https://media.base44.com/images/public/69d296f5d1237b9a1afec899/19ea6418a_generated_c69d9eaa.png",
   },
 ];
 

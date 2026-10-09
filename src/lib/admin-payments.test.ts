@@ -54,6 +54,44 @@ describe("parseAdminPaymentFilters", () => {
   it("ignores unknown keys", () => {
     expect(parseAdminPaymentFilters({ status: "delivered", page: "2" })).toEqual({});
   });
+
+  // ---- session-26, PAY-OPS-3: the date-range bounds (?from= + ?to=) ----
+
+  it("keeps a valid from/to date pair (session-26, PAY-OPS-3)", () => {
+    expect(parseAdminPaymentFilters({ from: "2026-02-22", to: "2026-02-23" })).toEqual({
+      from: "2026-02-22",
+      to: "2026-02-23",
+    });
+  });
+
+  it("keeps from-only and to-only bounds (open-ended ranges)", () => {
+    expect(parseAdminPaymentFilters({ from: "2026-02-22" })).toEqual({ from: "2026-02-22" });
+    expect(parseAdminPaymentFilters({ to: "2026-02-23" })).toEqual({ to: "2026-02-23" });
+  });
+
+  it("drops bounds that are not strict YYYY-MM-DD strings", () => {
+    expect(parseAdminPaymentFilters({ from: "02/22/2026" })).toEqual({});
+    expect(parseAdminPaymentFilters({ from: "2026-2-22" })).toEqual({});
+    expect(parseAdminPaymentFilters({ from: "2026-02-22T10:00:00Z" })).toEqual({});
+    expect(parseAdminPaymentFilters({ to: "not-a-date" })).toEqual({});
+    expect(parseAdminPaymentFilters({ from: "2026-13-01" })).toEqual({}); // no month 13
+    expect(parseAdminPaymentFilters({ to: "2026-02-30" })).toEqual({}); // no Feb 30
+  });
+
+  it("drops the pair when from is after to (an empty range is not a range)", () => {
+    expect(parseAdminPaymentFilters({ from: "2026-02-23", to: "2026-02-22" })).toEqual({});
+    // equal dates are a valid single-day range
+    expect(parseAdminPaymentFilters({ from: "2026-02-22", to: "2026-02-22" })).toEqual({
+      from: "2026-02-22",
+      to: "2026-02-22",
+    });
+  });
+
+  it("takes the first value of array date params (the ?from=a&from=b shape)", () => {
+    expect(parseAdminPaymentFilters({ from: ["2026-02-22", "2026-01-01"] })).toEqual({
+      from: "2026-02-22",
+    });
+  });
 });
 
 describe("buildAdminPaymentWhere", () => {
@@ -142,6 +180,60 @@ describe("buildAdminPaymentWhere", () => {
       type: "payment_intent.succeeded",
     });
     expect(buildAdminPaymentWhere({}, ["pi_a"])).toEqual({});
+  });
+
+  // ---- session-26, PAY-OPS-3: the receivedAt range clause ----
+
+  it("from+to builds the UTC day-boundary range [fromStart, toEnd)", () => {
+    expect(buildAdminPaymentWhere({ from: "2026-02-22", to: "2026-02-23" })).toEqual({
+      receivedAt: { gte: new Date("2026-02-22T00:00:00.000Z"), lt: new Date("2026-02-24T00:00:00.000Z") },
+    });
+  });
+
+  it("from-only and to-only build open-ended ranges", () => {
+    expect(buildAdminPaymentWhere({ from: "2026-02-22" })).toEqual({
+      receivedAt: { gte: new Date("2026-02-22T00:00:00.000Z") },
+    });
+    expect(buildAdminPaymentWhere({ to: "2026-02-23" })).toEqual({
+      receivedAt: { lt: new Date("2026-02-24T00:00:00.000Z") },
+    });
+  });
+
+  it("dates AND with the family branch", () => {
+    expect(buildAdminPaymentWhere({ family: "failed", from: "2026-02-22", to: "2026-02-23" })).toEqual({
+      AND: [
+        { type: "payment_intent.payment_failed" },
+        {
+          receivedAt: { gte: new Date("2026-02-22T00:00:00.000Z"), lt: new Date("2026-02-24T00:00:00.000Z") },
+        },
+      ],
+    });
+  });
+
+  it("dates AND with family + q (the triple composition)", () => {
+    expect(
+      buildAdminPaymentWhere({ family: "refund-needed", q: "pi_1", from: "2026-02-22", to: "2026-02-22" }, ["pi_a"]),
+    ).toEqual({
+      AND: [
+        {
+          type: "payment_intent.succeeded",
+          OR: [{ paymentIntentId: { notIn: ["pi_a"] } }, { paymentIntentId: null }],
+        },
+        { OR: [{ paymentIntentId: { contains: "pi_1" } }, { eventId: { contains: "pi_1" } }] },
+        {
+          receivedAt: { gte: new Date("2026-02-22T00:00:00.000Z"), lt: new Date("2026-02-23T00:00:00.000Z") },
+        },
+      ],
+    });
+  });
+
+  it("dates AND with q alone (no family)", () => {
+    expect(buildAdminPaymentWhere({ q: "pi_1", from: "2026-02-22" })).toEqual({
+      AND: [
+        { OR: [{ paymentIntentId: { contains: "pi_1" } }, { eventId: { contains: "pi_1" } }] },
+        { receivedAt: { gte: new Date("2026-02-22T00:00:00.000Z") } },
+      ],
+    });
   });
 });
 

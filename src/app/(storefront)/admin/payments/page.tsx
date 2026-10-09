@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 // Admin payment-ops surface (session-24, PAY-OPS-1, ADR-032; refined
-// session-25, PAY-OPS-2, ADR-033): the
+// session-25, PAY-OPS-2, ADR-033; session-26, PAY-OPS-3): the
 // StripeEvent log — the webhook backstop's write path (sessions 22/23)
 // finally has its read surface. Every event's OUTCOME is derived from DB
 // state: a succeeded event resolves to the placed order (deep link) or to
@@ -30,7 +30,11 @@ export const metadata: Metadata = {
 // vanished cart); failed events and ignored types render their own honest
 // copy. Session-25: the refund-needed family is a first-class FILTER (the
 // operator's most actionable signal) and every row renders its AMOUNT
-// beside the outcome ("how much needs refunding?"). The take stays
+// beside the outcome ("how much needs refunding?"). Session-26
+// (PAY-OPS-3): the `?from=`/`?to=` date-range bounds — the seam validates
+// strict YYYY-MM-DD (bad deep-links render the unfiltered list, never an
+// error) and composes the `receivedAt` UTC-day-boundary clause with the
+// family + q branches. The take stays
 // bounded at 100; the count line makes the filtered size visible so
 // truncation can never read as "everything".
 const TAKE = 100;
@@ -125,7 +129,12 @@ export default async function AdminPaymentsPage({
             : "Stripe is in demo mode — the checkout renders the demo flow. Events below are fixture data."}
         </div>
 
-        <AdminPaymentFilters activeFamily={filters.family ?? "all"} activeQuery={filters.q ?? ""} />
+        <AdminPaymentFilters
+          activeFamily={filters.family ?? "all"}
+          activeQuery={filters.q ?? ""}
+          activeFrom={filters.from ?? ""}
+          activeTo={filters.to ?? ""}
+        />
 
         <p className="text-sm text-muted-foreground mb-4">{countLabel}</p>
 
@@ -143,7 +152,7 @@ export default async function AdminPaymentsPage({
               </div>
               <h3 className="text-lg font-semibold mb-2">No payment events match your filters</h3>
               <p className="text-muted-foreground mb-4">
-                Try a different event family, payment intent, or event id.
+                Try a different event family, payment intent, event id, or date range.
               </p>
               <Button asChild>
                 <Link href="/admin/payments">Clear all filters</Link>

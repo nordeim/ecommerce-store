@@ -169,6 +169,90 @@ test.describe("storefront computed-style parity", () => {
     expect(duration).toBe("0.3s");
   });
 
+  test("hero slide content contract — images + CTA hrefs (session-26, HERO-DRIFT-1)", async ({ page }) => {
+    // The reference site drifts its MEDIA and LINK TARGETS silently — the
+    // 13-round pixel-sweep band held while the slide-3 image and the
+    // slide-2/3 CTA hrefs changed under it (live-measured 2026-10-09: the
+    // reference serves 19ea6418a… for "Home & Comfort" and links every CTA
+    // to plain /shop). The clone renders all 3 slides in the DOM
+    // (crossfade), so the pins read directly — this test converts the
+    // manual sweep's catches into standing gate failures.
+    await page.goto("/");
+    const carousel = page.locator("[aria-roledescription=\"carousel\"]");
+    const imgs = carousel.locator("img");
+    await expect(imgs).toHaveCount(3);
+    // The pinned hash tails of the reference's live slide media (the CDN
+    // prefix is the shared media.base44.com path).
+    const srcs = await imgs.evaluateAll((els) => els.map((el) => (el as HTMLImageElement).src));
+    expect(srcs[0]).toContain("7cfe01108_generated_076a6d07.png");
+    expect(srcs[1]).toContain("f0ae76854_generated_31ca432d.png");
+    expect(srcs[2]).toContain("19ea6418a_generated_c69d9eaa.png");
+    // The CTA hrefs: all three reference CTAs link plain /shop (measured
+    // live per-slide — "Shop Now" / "Explore" / "Browse"). Read via DOM
+    // traversal — the inactive slides are aria-hidden + inert (A11Y-FOCUS-1),
+    // invisible to role queries but present in the crossfade DOM.
+    const ctaHrefs = await carousel.locator("a").evaluateAll((els) =>
+      els.map((el) => ({ text: el.textContent?.trim(), href: el.getAttribute("href") })),
+    );
+    expect(ctaHrefs).toEqual([
+      { text: "Shop Now", href: "/shop" },
+      { text: "Explore", href: "/shop" },
+      { text: "Browse", href: "/shop" },
+    ]);
+  });
+
+  test("header row geometry contract — the gap-1 icon cluster + the justify-between distribution (session-26, HEADER-DRIFT-1)", async ({ page }) => {
+    // Live-measured on the reference 2026-10-09 at 1024×768: the icon
+    // cluster (search/heart/bag/user) is flex gap-1 (4px — 156px wide),
+    // which lands the justify-between nav row at x=270 (row 976 −
+    // children 660 = 316; half 158 → 24+88+158 = 270). The clone's old
+    // gap-2 (168px cluster) shifted the nav 6px left — invisible to every
+    // computed-style pin (the classes were never asserted), caught only by
+    // the pixel sweep. This pin makes the drift a gate failure.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    const navX = await nav.evaluate((el) => Math.round(el.getBoundingClientRect().x));
+    expect(navX).toBe(270);
+    // The icon cluster: the row's last flex child (the 4 icon buttons).
+    const cluster = nav.locator("..").locator("div.flex").last();
+    await expect(cluster).toHaveCSS("column-gap", "4px");
+    const clusterW = await cluster.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+    expect(clusterW).toBe(156);
+  });
+
+  test("mobile header row distributes three children — the bare logo + the gap-1 cluster (session-26, HEADER-DRIFT-1)", async ({ page }) => {
+    // Live-measured on the reference 2026-10-09 at 390×664: the mobile
+    // header row carries THREE children (menu button 16–52, the bare logo
+    // link 91–179, the icon cluster 218–374) distributed by
+    // justify-between — NOT a (menu+logo) group. The clone's wrapped
+    // gap-4 group sat the logo 23px left of the reference's on every
+    // mobile page. The three-child arithmetic: content 36+88+156 = 280;
+    // container 358; half-gap 39 → logo x = 91, cluster x = 218.
+    await page.setViewportSize({ width: 390, height: 664 });
+    await page.goto("/");
+    // The Main nav is display:none at 390 — invisible to role queries —
+    // so the row is located via the banner's LUXE logo link (a DIRECT row
+    // child after the unwrap fix; its parent IS the row).
+    const logoLink = page.getByRole("banner").getByRole("link", { name: "LUXE", exact: true });
+    const row = logoLink.locator("..");
+    const rowKids = await row.evaluate((el) =>
+      [...el.children]
+        .filter((c) => getComputedStyle(c).display !== "none")
+        .map((c) => {
+          const r = c.getBoundingClientRect();
+          return { tag: c.tagName, x: Math.round(r.x), w: Math.round(r.width) };
+        }),
+    );
+    expect(rowKids).toHaveLength(3); // menu, logo, cluster — no wrapper
+    const logo = rowKids[1];
+    expect(logo.x).toBe(91);
+    expect(logo.w).toBe(88);
+    const cluster = rowKids[2];
+    expect(cluster.x).toBe(218);
+    expect(cluster.w).toBe(156);
+  });
+
   test("home section dividers frame the product sections (session-5)", async ({ page }) => {
     // Measured live 2026-10-07 + present in the session-0 recon HTML: the
     // reference home renders exactly TWO hairline dividers —

@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.25.0
+version: 1.26.0
 last_updated: "2026-10-09"
 tags:
   - e-commerce
@@ -903,6 +903,33 @@ Then:
     dedup row ABSENT, and the re-delivery must place the order
     (`tests/stripe-webhook.integration.test.ts`, the H4d recovery proof).
 
+37. **Reference CONTENT drifts invisibly to computed-style gates — pin the
+    content observables of parity surfaces (L36, session-26 reference-drift
+    round).** The reference site silently regenerated its slide-3 hero image
+    and re-pointed all three hero CTAs to plain /shop while THIRTEEN rounds
+    of pixel-sweep band held — every standing gate (computed styles,
+    catalog order, money, a11y censuses, CWV/INP budgets) is
+    content-agnostic on exactly those seams, and NO spec pinned slide media
+    or CTA hrefs. The manual paired sweep caught it (home 62.07%
+    out-of-band); diff-band localization + live A/B measurement isolated
+    the three changes (the hero image, the CTA hrefs, and the header
+    cluster's gap — a 12px width difference that shifted the
+    justify-between row 6px). Rules: (a) the paired pixel sweep runs EVERY
+    round — it is the only instrument that sees content; (b) when a route
+    goes out-of-band, diff-band-localize then live-measure BOTH sites
+    (authenticated — the reference auth-gates) before touching code;
+    (c) every parity surface's CONTENT observables (image hash tails, link
+    hrefs, row geometry) get standing pins that read the DOM directly —
+    the crossfade carousel keeps inactive slides in the DOM (aria-hidden +
+    inert — invisible to role queries, queryable via DOM traversal); (d) a
+    hidden nav element (display:none at the viewport under test) is
+    invisible to role queries — locate its row via a VISIBLE sibling (the
+    banner's logo link). Proof shape: the hero-content pin (3 img srcs by
+    hash tail + 3 CTA hrefs) and the header-geometry pins (column-gap 4px +
+    cluster 156 + nav x=270 at 1024; the three-child row logo x=91 +
+    cluster x=218 at 390) — M1/M2 mutation-proven (the stale-hash revert
+    and the gap-2 revert each fail exactly one pin family).
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1210,6 +1237,7 @@ Full records with context/rationale/consequences in
 | 031 | The webhook H4d hardening (PAY-STRIPE-2) — the dedup row commits WITH the side effects; the honest 200/500 failure policy (session-23): the StripeEvent insert moved INSIDE the placement transaction (a transient failure rolls it back + answers 500 → Stripe retries → the retry re-places — the recovery the backstop exists for; the session-22 pre-committed-row + always-200 shape permanently orphaned captured payments); the `classifyWebhookPlacementError` seam (duplicate: P2002 on eventId/intent-anchor → 200 with the winner's order | permanent: the STOCK_SHORT marker → record + 200 + refund trail | transient: everything else incl. P2002 on `number` → 500); `isIntentAnchorP2002` (the action path's P2002 TARGET check — a number race no longer masquerades as the anchor); the webhook's order-number generation inside the tx; the island's "Try again" mint-retry affordance; and the repo's FIRST integration-test layer (`tests/stripe-webhook.integration.test.ts` — the REAL route handler + REAL HMAC-signed events + a scratch `db/webhook-test.db`; 11 tests incl. the H4d recovery proof; triple-mutation-proven); L35 |
 | 032 | The admin payment-ops surface (PAY-OPS-1, session-24) — the StripeEvent log's read surface at /admin/payments: honest per-event outcome resolution via the pure `resolvePaymentEventOutcome` seam (succeeded + linked order → the deep-linked order number; succeeded with NO order → the destructive refund-needed line — exactly the ADR-031 deterministic-failure family; payment_failed → "Payment failed"; anything else → "Ignored"; ONE findMany, no N+1), URL-deep-linkable `?family=` (validated against succeeded/failed/other — bad values fall through) + `?q=` (paymentIntentId OR eventId contains), the count line (take: 100), the honest demo-mode/configured status line (resolveStripeConfig — operator context; R10-2 governs customer surfaces only), the Stripe-paid ORD-2026-003 + canonical three-event demo fixtures (seed idempotent + e2e-reset isolation), the dashboard Payments entry point; 19 seam + 6 E2E + 1 a11y-gate tests; triple-mutation-proven (the outcome resolution, the family validation, the admin gate); the heading-order console-family observation documented (best-practice tag, outside the WCAG runOnly set, identical family-wide) |
 | 033 | The payment-ops observability refinement + the console heading-order fix (PAY-OPS-2 + A11Y-HEADING-1, session-25) — the refund-needed OUTCOME promoted to a first-class filter family (`buildAdminPaymentWhere(filters, placedIntentIds = [])`: a PURE second parameter the page feeds with ONE bounded placed-intent query; `{ type: succeeded, OR: [notIn placed, null] }`; family+q keeps the type+notIn group intact inside the AND element; the E2E deep-link test is the integration guard — the seam owns the shape), the event AMOUNT persisted + rendered (`StripeEvent.amount Int?` — the webhook writes `data.object.amount` at BOTH write sites; the rows render the magnitude beside the outcome via formatCents), the honest intent column (`stripeEventIntentId` = `payment_intent ?? object.id` — charge-family deliveries record the REAL intent id, integration-pinned), the console LIST pages' heading-order family observation RESOLVED (sr-only h2s on orders/products/payments; the best-practice census pinned EXACTLY EMPTY via the parameterized `runAxeTags`; the storefront keeps the reference's own shape — parity); a FOURTH canonical fixture (`evt_demo_fixture_n` — succeeded, NO order, amount 14900) + amounts on the set; the payments a11y pin recalibrated 8 → 9 (the fourth fixture's destructive line, node-enumerated); +12 Vitest + 4 E2E (416 total); triple-mutation-proven (the placed-intent fetch, the amount persistence, the sr-only h2s) |
+| 034 | The reference-drift remediation + the payments date-range filter (HERO-DRIFT-1 + HEADER-DRIFT-1 + PAY-OPS-3, session-26) — the reference SILENTLY regenerated its slide-3 hero image + re-pointed all three CTAs to plain /shop + tightened its header icon cluster to gap-1 + re-structured its mobile row to three direct children; the 13-round pixel-sweep band held throughout (every standing gate is content-agnostic); fixes: the slide-3 image + plain-/shop CTAs (page.tsx), the unwrapped mobile row + gap-1 cluster (header.tsx), and the NEW standing content pins (the hero-content test — 3 img srcs by hash tail + 3 CTA hrefs via DOM traversal; the header-geometry tests — column-gap 4px + cluster 156 + nav x=270 at 1024, the three-child distribution at 390 located via the banner's logo link — the display:none nav is invisible to role queries); post-fix the sweep reads home 0% (6 px); PAY-OPS-3: the payments date-range filter (`?from=`/`?to=` strict YYYY-MM-DD — shape regex + Date round-trip, bad bounds fall through, from>to drops the pair; ONE receivedAt clause at UTC day boundaries — gte from's midnight, lt the midnight AFTER to; the composable-AND where refactor — each dimension one element, single elements render bare, pre-session-26 shapes byte-identical; two URL-controlled date inputs pushing merged params in canonical order — the props are PRE-navigation state, so a Select change would otherwise append family last); +10 Vitest + 7 E2E (433 total); triple-mutation-proven (M1 the image revert, M2 the gap revert, M3 the clause drop — each reverted byte-exact); L36 |
 
 ## Appendix B: The Meticulous Workflow
 

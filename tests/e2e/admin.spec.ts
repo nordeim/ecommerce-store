@@ -332,6 +332,78 @@ test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
     await expect(admin.getByText("$89.99", { exact: true })).toBeVisible();
   });
 
+  // session-26, PAY-OPS-3: the date-range filter — an operator triaging
+  // refund-needed payments asks "which events arrived in THIS window?".
+  // The fixture set is staggered: s=2026-02-20, f=2026-02-21,
+  // r=2026-02-22, n=2026-02-23 (UTC) — so a 22nd–23rd range keeps
+  // exactly {r, n}, a from=2026-02-22 keeps {r, n}, and the
+  // refund-needed family + from narrows to {n} alone.
+  test("payments filters by date range with a deep-linkable URL (session-26, PAY-OPS-3)", async () => {
+    await admin.goto("/admin/payments?from=2026-02-22&to=2026-02-23");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/from=2026-02-22/);
+    await expect(admin.getByText("2 payment events", { exact: true })).toBeVisible();
+    // The in-range rows: the 22nd's charge.refunded + the 23rd's
+    // refund-needed n fixture.
+    await expect(admin.getByText("charge.refunded", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText("No order — refund via Stripe dashboard", { exact: true })
+    ).toBeVisible();
+    // The out-of-range rows are gone (the 20th's s, the 21st's f).
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByText("Payment failed", { exact: true })).toHaveCount(0);
+
+    // The date inputs mirror the URL state (adjust-during-render).
+    await expect(admin.getByLabel("From date")).toHaveValue("2026-02-22");
+    await expect(admin.getByLabel("To date")).toHaveValue("2026-02-23");
+
+    // A bad bound falls through to the unfiltered list (the family
+    // pattern — never an error).
+    await admin.goto("/admin/payments?from=02/22/2026");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("4 payment events", { exact: true })).toBeVisible();
+  });
+
+  test("payments filters by an open-ended from bound (from-only)", async () => {
+    await admin.goto("/admin/payments?from=2026-02-22");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("2 payment events", { exact: true })).toBeVisible();
+    await expect(admin.getByText("charge.refunded", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText("No order — refund via Stripe dashboard", { exact: true })
+    ).toBeVisible();
+    // The 20th/21st fixtures are before the bound.
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByText("Payment failed", { exact: true })).toHaveCount(0);
+  });
+
+  test("the date range ANDs with the succeeded family (the combined shape)", async () => {
+    // succeeded + from=2026-02-23: only the n fixture (the 23rd) — the s
+    // fixture (the 20th, the placed ORD-2026-003) falls OUT of the range.
+    // The discriminating pin: the ORD-2026-003 link is a succeeded-family
+    // member excluded by the date bound (without the date filter it
+    // renders).
+    await admin.goto("/admin/payments?family=succeeded&from=2026-02-23");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("1 payment event", { exact: true })).toBeVisible();
+    await expect(admin.getByText("pi_demo_fixture_006")).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByText("charge.refunded", { exact: true })).toHaveCount(0);
+  });
+
+  test("the date inputs push merged params from the filter bar", async () => {
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByLabel("From date").fill("2026-02-22");
+    await expect(admin).toHaveURL(/\/admin\/payments\?from=2026-02-22$/);
+    await expect(admin.getByText("2 payment events", { exact: true })).toBeVisible();
+    // The family Select composes with the dates (merged params).
+    await admin.getByRole("combobox", { name: "Filter by family" }).click();
+    await admin.getByRole("option", { name: "Refund needed" }).click();
+    await expect(admin).toHaveURL(/family=refund-needed&from=2026-02-22/);
+    await expect(admin.getByText("1 payment event", { exact: true })).toBeVisible();
+  });
+
   test("the succeeded event deep-links to its order detail", async () => {
     await admin.goto("/admin/payments?family=succeeded");
     await admin.waitForLoadState("networkidle");

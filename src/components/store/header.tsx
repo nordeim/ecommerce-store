@@ -25,19 +25,23 @@ export function Header() {
 
   return (
     <div className="flex items-center justify-between h-16">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          aria-label="Open navigation menu"
-          aria-haspopup="dialog"
-          onClick={() => setMobileNavOpen(true)}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-        <Logo />
-      </div>
+      {/* session-26, HEADER-DRIFT-1: the menu button and the logo are
+          DIRECT row children (the reference's structure) — at mobile the
+          justify-between row distributes [menu, logo, icon-cluster]; the
+          old (menu+logo) gap-4 wrapper sat the logo 23px left of the
+          reference's. At desktop the menu is display:none, so the row is
+          [logo, nav, cluster] exactly as before. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="lg:hidden"
+        aria-label="Open navigation menu"
+        aria-haspopup="dialog"
+        onClick={() => setMobileNavOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      <Logo />
 
       <nav className="hidden lg:flex items-center gap-8" aria-label="Main">
         {NAV_LINKS.map((link) => (
@@ -52,7 +56,11 @@ export function Header() {
         ))}
       </nav>
 
-      <div className="flex items-center gap-2">
+      {/* session-26, HEADER-DRIFT-1: the reference's icon cluster is
+          gap-1 (4px — live-measured 2026-10-09; the 156px cluster lands
+          the justify-between nav row 6px right of the old gap-2 layout).
+          Pinned by the storefront-parity header-geometry test. */}
+      <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" aria-label="Search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}>
           <Search className="h-5 w-5" />
         </Button>

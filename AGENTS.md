@@ -224,6 +224,32 @@ from the injected location) — the repo contract itself is test-pinned in
   payments test ({color-contrast} × 9, E2E-calibrated — the fourth
   fixture's destructive line, the same app-wide class,
   node-enumerated) + the best-practice census test (below).
+- **The payments date-range filter (session-26, PAY-OPS-3, ADR-034):**
+  `/admin/payments` takes `?from=` / `?to=` — strict `YYYY-MM-DD` bounds
+  (the seam's `parseDateBound`: a shape regex + a Date round-trip —
+  `2026-02-30` normalizes to March 2, month 13 parses NaN; a bad bound
+  falls through to `undefined` so a bad deep-link renders the unfiltered
+  list, never an error; `from > to` drops the pair — lexicographic order
+  IS chronological for validated strings, and equal dates are a valid
+  single-day range). `buildAdminPaymentWhere` composes ONE `receivedAt`
+  clause — `gte` the UTC day boundary of `from` (`T00:00:00.000Z`),
+  `lt` the day AFTER `to` (exclusive — `to`'s whole day is in range;
+  either bound may stand alone) — via the composable-AND refactor: each
+  active dimension (family / q / dates) contributes one AND element, one
+  element renders bare (every pre-session-26 single-filter shape
+  byte-identical — the session-25 unit pins held unchanged), two or more
+  AND together. The island (`admin-payment-filters.tsx`) gains two
+  URL-controlled `<Input type="date">` bounds (aria-labels "From date"
+  / "To date", CalendarRange-led); a change pushes MERGED params in the
+  CANONICAL order (family, q, from, to — the island's props are the
+  PRE-navigation state, so a Select change on a date-filtered URL would
+  otherwise append family last: an unstable deep-link order);
+  `hasFilters` includes the dates so Clear shows. The fixture set's
+  staggered `receivedAt` dates (2026-02-20/21/22/23) make the filter
+  demonstrable with the seeded set — no schema change. Zero parity
+  risk — admin-only surface. Pinned by 10 unit + 4 E2E tests (the
+  deep-link pair, the open-ended from bound, the family+date combined
+  shape, the merged-params push).
 - **The console LIST pages' heading order is valid (session-25,
   A11Y-HEADING-1):** the three console list pages (orders/products/
   payments) each carry an `sr-only` h2 labelling their list region
@@ -264,6 +290,8 @@ from the injected location) — the repo contract itself is test-pinned in
   once. The old absolute API lost updates when two clicks raced one
   re-render. Remove is its own action (`removeCartItemAction`).
 - **Hero carousel inactive slides are INERT (session-11, A11Y-FOCUS-1).** The clone keeps all 3 slides in the DOM (the documented crossfade divergence); inactive slides carry `aria-hidden` AND `inert` (`src/components/store/hero-carousel.tsx` — both the media slide and the text block). `aria-hidden` alone leaves the inactive slides' CTA links in the TAB ORDER (live-measured: Tab from the active CTA landed on the invisible "Explore"/"Browse" anchors — a WCAG 2.4.3 defect; the reference's DOM-swap has only one CTA at a time). With `inert`, the tab order is exactly the reference's: CTA -> prev -> next -> dots. The auto-advance edge case matches too (a slide going inert while focused blurs to body — the same observable as the reference's DOM removal). Pinned by the storefront-parity spec.
+- **The hero slide MEDIA + CTA targets are pinned content contracts (session-26, HERO-DRIFT-1, ADR-034).** The reference site silently regenerated its slide-3 image ("Home & Comfort" now serves `19ea6418a_generated_c69d9eaa.png` — the old `54a27de93…` is now the reference's headphones PRODUCT image) and re-pointed its slide-2/3 CTAs from category-filtered `/shop?category=…` (the session-1 measurements) to plain `/shop` (all three CTAs, live-measured twice per slide, authenticated). The 13-round pixel-sweep band held throughout the drift — computed-style pins are content-agnostic, and NO gate pinned slide images or CTA hrefs; the manual sweep (home 62.07% out-of-band) caught what the gates could not. The round re-pinned the truth: all 3 slide img srcs by hash tail (`7cfe01108…` / `f0ae76854…` / `19ea6418a…`) + all 3 CTA hrefs to `/shop` — the hero-content test reads the crossfade DOM directly (inactive slides are aria-hidden+inert, invisible to role queries, but queryable via DOM traversal). Post-fix the sweep reads home 0% (6 px). **Systemic lesson: reference CONTENT drifts (media, link targets) invisibly to computed-style gates — pin parity-surface content observables, keep the paired pixel sweep in every round's protocol, and when a route goes out-of-band: diff-band-localize, then live-measure BOTH sites before touching code.**
+- **The storefront header row is a three-child justify-between contract (session-26, HEADER-DRIFT-1).** Live-measured on the reference at 1024×768: the icon cluster (search/heart/bag/user) is `flex items-center gap-1` (4px gaps — a 156px cluster), which lands the row's justify-between arithmetic at nav x=270 (row 976 − children 660 = 316; half 158); the clone's old `gap-2` (168px cluster) sat the nav 6px left. At 390×664 the reference row carries THREE direct children — the menu button (16–52), the bare logo link (91–179), the icon cluster (218–374) — NOT a (menu+logo) `gap-4` wrapper (the clone's old structure sat the logo 23px left of the reference's on every mobile page). `src/components/store/header.tsx`: the menu Button and the Logo are DIRECT children of the `flex items-center justify-between h-16` row (at desktop the menu is `display:none` — absent from flex layout, so [logo, nav, cluster] is unchanged); the icon cluster is `gap-1`. Pinned by the storefront-parity header-geometry tests: the cluster's computed `column-gap: 4px` + width 156 at 1024, and the three-child distribution (logo x=91 + cluster x=218) at 390 — the mobile row is located via the banner's LUXE logo link (the Main nav is `display:none` at 390, invisible to role queries — the locator lesson).
 - **Deliberate divergences (superset behavior, do not "fix"):** the mobile nav auto-closes on navigation (the reference's Sheet stays open — verified live twice, a demo quirk); the hero carousel pauses on hover (the reference keeps cycling — verified live 11s); the Settings tab keeps a Session/Log out card (the reference has NO logout anywhere); the newsletter form shows a real confirmation (the reference's submit is a no-op); `/cart` renders real contents (the reference hardcodes its empty state); the checkout wizard writes real orders (the reference's checkout cannot see its own cart); the reference's WISHLIST is cosmetic (heart toggles fire no network call, its wishlist page never fetches entities and always shows the empty state — the clone's DB-backed wishlist is the superset); shop filters/sort are URL-deep-linkable (the reference's SPA never updates the URL); the drawer keeps aria-labels + disabled-minus (the reference's stepper buttons are unlabeled); the footer's Shop-column links deep-link category filters (the reference's all point at plain `/shop` — its header links DO filter); the toast region is pointer-events-none + a NAMELESS aria-live=polite (the reference's toasts are inert on click AND unlabeled); the toast spring is a CSS approximation; the PDP rating row keeps its labeled role=img (the reference's is unlabeled); X-Frame-Options ships as the superset over the reference's three headers; `/verify-email` is titled "Verify Email | Lumina" (the reference keeps the SPA's stale "Register | Lumina"); verification is env-gated off by default (the reference always gates — no email provider is wired here); the "Continue with Google" buttons are visual-only (the reference's launch a real base44-platform Google OAuth flow — wiring real OAuth needs credentials that don't exist for a self-hosted clone; registered session-5).
 - **Server actions are the only mutation seam** (`src/lib/actions/*.ts`): every action Zod-parses input and returns `ActionResult<T>` (`{ ok: true, data } | { ok: false, error: { message, fieldErrors? } }`). Never throw across the boundary.
 - Route-handler whitelist: `/api/health`, `/api/search` (typeahead), `/api/newsletter`, `/api/stripe/webhook` (session-22, PAY-STRIPE-1 — Stripe's async delivery channel for payment events; the documented reason: the backstop for a payment captured while the client died between confirm and placement). Adding more needs a reason.
