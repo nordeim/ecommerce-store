@@ -1,4 +1,84 @@
-我将从上次会话中断的地方继续。让我先确认工作区状态以及第 26 轮（会话 51）的具体进度。
+I'll continue the workflow. Let me first set up my task tracking and check the workspace state.
+The workspace exists with the repo. I notice `docs/session_49.md` and `docs/remediation-plan-session25.md` are present, but I need to check for `session_50.md` — likely coming via git pull. Let me refresh the workspace.
+Local is at session-25 remediation sign-off. Let me pull the latest from remote to get session_50.
+Pull successful — `docs/session_50.md` is now present. Now let me review the core documents.
+Let me read the core documents, starting with the smaller ones.
+README 已完成。让我完整阅读已持久化输出中的 CLAUDE.md。
+Let me read CLAUDE.md directly in sections.
+Now let me read the latest session documents to understand current status.
+Now let me read the remediation plan and worklog tail.
+Let me check the worklog tail for the latest entry.
+I now have a clear picture: Round 25 (session 49) delivered PAY-OPS-2 + A11Y-HEADING-1; session_50 is the user's narrative log. This session will be **Round 26 / Session 51**. Let me complete the core doc review with AGENTS.md and the skills catalog.
+Let me search for the most recent contract sections and the trap log in AGENTS.md.
+AGENTS.md 审查已完成。现在我来查看技能目录，并针对代码库验证环境状态。
+技能已映射。现在让我验证环境状态并运行基线门。
+Environment verified: hard-link convergence intact (inode 395370 both paths), `.env` contract correct. Now running baseline gates.
+Lint 0/0, tsc clean, 198/198 unit+integration, build exit 0. Let me verify routes and launch the full E2E baseline detached.
+25 routes, no stale servers. Launching the full E2E baseline (218 expected) detached while I audit.
+E2E baseline running. While it runs, let me audit the session-25 commit's code changes.
+Core payment seams verified. Let me read the round's primary skill for payment-ops patterns.
+Let me review the StripeEvent schema and fixture dates (critical for the date-range filter design).
+Fixtures carry staggered dates (Feb 20–23, 2026) — good for date-range demonstrability. Let me check E2E baseline progress and start the live audit.
+agent-browser is available. Let me start the production server on :3000 for audit probes (careful not to touch the E2E's :3100 server).
+Production server up. Let me run the agent-browser A/B audit — reference site first.
+Logged into the reference. Let me check agent-browser's viewport capabilities for mobile nav verification.
+As documented, viewport emulation needs the Playwright script protocol. Let me examine the session-25 scripts to mirror for round 26.
+Let me check E2E baseline progress, then create the round-26 audit scripts.
+**26th mobile-nav verification: TOKEN-EXACT PARITY** — all 10 checks pass. Let me create the remaining round-26 audit scripts (sweep, watches, census).
+Pixel sweep shows an anomaly: `home 62.07%` — out of the baseline band. Let me investigate.
+The diff bands suggest the hero carousel may be on different slides. Let me re-run the sweep to check if this is transient (carousel timing) or a real reference-side change.
+The reference hero shows "Spring Collection 2026" / "Up to 40% Off". Let me compare against the clone's hero carousel slides.
+Slide titles match. The difference must be in the hero images. Let me compare image URLs.
+Let me step through the reference's carousel to identify its current 3 slides.
+The reference's slide 2 now uses a NEW image (`19ea6418a...`). Let me get slide 3.
+Let me use precise refs for the carousel controls.
+让我使用“下一页”按钮（ref e466）按顺序遍历所有幻灯片。
+Let me re-snapshot the reference hero to count slides/dots.
+Key finding: the reference's slide 3 "Home & Comfort" now uses `19ea6418a...` while the clone uses `54a27de93...`. Let me verify the full image inventory on both sites' home pages.
+Root cause identified: **the reference site changed its slide-3 hero image** (`54a27de93` → `19ea6418a`). All other imagery matches. Let me verify the slide 3 text/CTA contracts too.
+The reference's "Explore" CTA links to `/shop` — the clone uses `/shop?category=electronics`. Let me check the E2E pins and git history for this contract.
+Let me check the reference's slide 3 "Browse" CTA href as well.
+Reference slide 2/3 CTAs both point to plain `/shop` now; slide 3 image changed. Let me check the original measurement history.
+Let me check all E2E pins that touch the hero carousel before planning changes.
+Let me check the git history of when the hero slide hrefs were introduced.
+The category hrefs date from session-1 — the reference has since drifted (all CTAs now `/shop`, slide-3 image changed). This is the round's parity finding. Let me check E2E progress and complete the audit.
+**E2E 基准：218/218 全部通过 (7.9分钟)** —— 会话 25 交付状态已验证。让我运行剩余的审计监控。
+监控正常。现在开始执行 console census。
+**Console census: all CLEAN.** The audit is complete. Let me verify `.env.example` and then write the remediation plan.
+让我更精确地分析 53-67 的 header 差异带，以完全理解它。
+There's also a small header nav diff. Let me measure both sites' header geometry live.
+The reference lacks an explicit header element. Let me fix the measurement to use the nav element.
+The reference's DOM needs role-based queries. Let me measure directly with agent-browser.
+**Major finding: the reference's nav links shifted right (x=396 vs clone's x=264).** Let me map the reference's full header layout.
+Let me measure both headers at the same 1024x768 viewport with the working role-based nav query.
+The reference nav is 6px right of the clone's at 1024. Let me trace the reference's header positioning chain.
+The reference's `justify-between` math gives nav at x=264, but it renders at 270 — an extra 6px exists somewhere. Let me measure all row children on both sites.
+The math is clear: the reference's icon cluster is `gap-1` (156px wide) vs the clone's `gap-2` (168px). Let me confirm the clone's cluster.
+**HEADER-DRIFT-1 confirmed: reference uses `gap-1` (156px cluster), clone uses `gap-2` (168px).** Let me check the header component and any E2E pins on this geometry.
+The cluster fix is `gap-2` → `gap-1`. Let me also verify the mobile header at 390px on both sites.
+Mobile headers differ structurally too. Let me check the E2E mobile-header geometry pins.
+The mobile header also differs structurally (menu+logo grouping). Let me read the full header component.
+The fix is clear: unwrap the menu+logo group + `gap-1` on the icon cluster. Let me check for E2E pins that could be affected.
+All findings confirmed. Let me verify the new hero image URL is accessible, then write the remediation plan.
+Image accessible. Let me review the payments filter island for the PAY-OPS-3 design.
+Now let me review the existing unit tests to plan the RED extensions.
+All context gathered. Now let me write the round-26 remediation plan.
+Plan written and validated against the codebase. Now entering the TDD RED phase. Let me examine the parity spec structure first.
+Now writing the RED parity pins (the drift IS the red).
+Let me check the Logo component structure to validate the test locator.
+The hero content test needs DOM queries (inactive slides are aria-hidden, invisible to role queries). Let me check the carousel's anchor structure.
+Now let me verify RED — running the new parity tests against the current (drifted) build.
+RED confirmed — 3 failures. Let me verify the failure reasons are the expected drift values.
+RED verified — the exact stale hash received. Now the unit RED tests for the date-range filter.
+Writing the RED unit tests for the date-range contracts.
+Unit RED confirmed (9 failures). Now the E2E RED — let me examine the admin spec's payments tests.
+Adding the RED date-range E2E tests.
+Verifying E2E RED for the date-range tests.
+One test isn't discriminating pre-fix (passes either way). Let me strengthen it using the succeeded family with a date bound.
+RED fully established. Now the GREEN phase — §3.1 hero fixes first.
+Now §3.2 — the header fixes.
+Now §3.3 — the seam implementation for the date-range filter.
+
 The workspace confirms the GREEN phase is mid-flight: §3.1 (hero) and §3.2 (header) edits are applied, and I was about to start §3.3 (payments date-range filter). Let me read the round-26 remediation plan to re-anchor the full scope.
 The plan is fully documented. §3.1 (hero) and §3.2 (header) edits are applied; §3.3 (PAY-OPS-3) has NOT started yet — no `admin-payments.ts`, payments page, or filter island changes are in git status. Let me set up task tracking and verify the applied edits.
 §3.1 和 §3.2 已完成（页眉注释中有一个小拼写错误需要修正——"enu" → "menu"）。现在让我审查 RED 测试以及我需要为 §3.3 实现的 payments seam 文件。
