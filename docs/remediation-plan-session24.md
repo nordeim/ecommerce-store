@@ -240,5 +240,5 @@ sign-offs after the push.
 - [x] Screenshots 131-135 under `docs/screenshots/` + VLM-verified
 - [x] Docs updated (AGENTS/CLAUDE/README/PAD v1.24/SKILL v1.24.0/
       session_46/worklog); `.env.example` verified current
-- [ ] Committed on `main` + pushed via the SSH wrapper (remote verified,
-      the operator key shredded)
+- [x] Committed on `main` + pushed via the SSH wrapper (remote verified
+      `refs/heads/main @ fbaaeba == local HEAD`, the operator key shredded)
