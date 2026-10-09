@@ -423,3 +423,103 @@ test.describe("admin payment-ops (role contract)", () => {
     await expect(page).toHaveURL(/\/$/);
   });
 });
+
+// Admin products filters (session-27, ADMIN-PRODUCTS-1): the console
+// trifecta's last LIST surface takes the URL-deep-linkable treatment
+// (?q= + ?category= + ?visibility=) exactly like the orders (session-13)
+// and payments (sessions 24-26) bars — the seeded catalog is 12 products
+// across 6 categories (electronics 3, sports 2, beauty 1, accessories 2,
+// clothing 2, home-living 2). One admin login shares the file's bucket.
+test.describe("admin products filters (session-27, ADMIN-PRODUCTS-1)", () => {
+  let admin: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    admin = await adminLogin(browser);
+  });
+
+  test.afterAll(async () => {
+    await admin.close();
+  });
+
+  test("products search by name fragment with a deep-linkable URL", async () => {
+    await admin.goto("/admin/products");
+    await admin.waitForLoadState("networkidle");
+    const search = admin.getByLabel("Search products");
+    await search.fill("headphone");
+    await search.press("Enter");
+    await expect(admin).toHaveURL(/\/admin\/products\?q=headphone$/);
+    await expect(admin.getByText("1 of 12 products", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText("Wireless Noise-Cancelling Headphones", { exact: true })
+    ).toBeVisible();
+    await expect(admin.getByText("Smart Home Speaker Pro", { exact: true })).toHaveCount(0);
+  });
+
+  test("products filter by category with a deep-linkable URL", async () => {
+    await admin.goto("/admin/products");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByRole("combobox", { name: "Filter by category" }).click();
+    await admin.getByRole("option", { name: "Electronics", exact: true }).click();
+    await expect(admin).toHaveURL(/\/admin\/products\?category=electronics$/);
+    await expect(admin.getByText("3 of 12 products", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText("Wireless Noise-Cancelling Headphones", { exact: true })
+    ).toBeVisible();
+    await expect(admin.getByText("Yoga Mat Premium", { exact: true })).toHaveCount(0);
+    // A bad category deep-link falls through to the unfiltered list
+    // (the family contract — never an error).
+    await admin.goto("/admin/products?category=not-a-slug");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("12 products", { exact: true })).toBeVisible();
+  });
+
+  test("products filter by visibility (the eye-toggle seam's list-level answer)", async () => {
+    // Hide through the real seam (the eye button on the row), then the
+    // visibility filter answers "which products did I hide?".
+    await admin.goto("/admin/products");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByRole("button", { name: "Hide Ceramic Planter Set" }).click();
+    await admin.waitForTimeout(800);
+
+    await admin.goto("/admin/products?visibility=hidden");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("1 of 12 products", { exact: true })).toBeVisible();
+    await expect(admin.getByText("Ceramic Planter Set", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText("Wireless Noise-Cancelling Headphones", { exact: true })
+    ).toHaveCount(0);
+
+    // Restore the canonical state (the seed's upsert re-restores
+    // isActive: true every global-setup as the run-to-run backstop).
+    await admin.getByRole("button", { name: "Show Ceramic Planter Set" }).click();
+    await admin.waitForTimeout(800);
+    await admin.goto("/admin/products?visibility=active");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("12 of 12 products", { exact: true })).toBeVisible();
+  });
+
+  test("products filters combine (category AND search)", async () => {
+    await admin.goto("/admin/products?category=electronics&q=speaker");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("1 of 12 products", { exact: true })).toBeVisible();
+    await expect(admin.getByText("Smart Home Speaker Pro", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText("Wireless Noise-Cancelling Headphones", { exact: true })
+    ).toHaveCount(0);
+  });
+
+  test("products empty state offers Clear", async () => {
+    await admin.goto("/admin/products");
+    await admin.waitForLoadState("networkidle");
+    const search = admin.getByLabel("Search products");
+    await search.fill("zzz-no-such-product");
+    await search.press("Enter");
+    await expect(
+      admin.getByRole("heading", { name: "No products match your filters" })
+    ).toBeVisible();
+
+    await admin.getByRole("button", { name: "Clear" }).click();
+    await expect(admin).toHaveURL(/\/admin\/products$/);
+    await expect(admin.getByText("12 products", { exact: true })).toBeVisible();
+  });
+});

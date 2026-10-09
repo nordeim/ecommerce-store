@@ -250,6 +250,31 @@ from the injected location) — the repo contract itself is test-pinned in
   risk — admin-only surface. Pinned by 10 unit + 4 E2E tests (the
   deep-link pair, the open-ended from bound, the family+date combined
   shape, the merged-params push).
+- **The admin products list is URL-deep-linkable filterable (session-27,
+  ADMIN-PRODUCTS-1, ADR-035 — the console trifecta's completion):**
+  `/admin/products` takes `?q=` (name OR slug `contains` — the two
+  identifiers an operator relays), `?category=` (validated against the
+  slug set the PAGE fetches from the DB and passes to the seam as PURE
+  INPUT — the placedIntentIds precedent; the seam never imports Prisma
+  and never hard-codes the catalog, so a future category validates the
+  day it is seeded), and `?visibility=` (validated `active`/`hidden` —
+  the eye-toggle seam's list-level answer: "which products did I
+  hide?"). Bad deep-link values fall through to the unfiltered list,
+  never an error (the family contract). The pure seam is
+  `src/lib/admin-products.ts` (`parseAdminProductFilters(params,
+  categorySlugs)` + `buildAdminProductWhere` — the composable-AND
+  composition: each dimension one element, one element renders bare;
+  the category element is Prisma's relation filter `{ category: { slug
+  } }`, no id mapping needed). The island
+  (`admin-product-filters.tsx`) mirrors the payments/orders bars
+  (merged params via `router.push` in the CANONICAL order — category,
+  q, visibility; the adjust-during-render input sync); the count line
+  reports the filtered-of-total ("3 of 12 products" — the products
+  list carries no take bound, so no "100+" form); the guided empty
+  state offers "Clear all filters". Zero parity risk — admin-only
+  surface. Pinned by 18 unit + 5 E2E tests. The a11y admin gate's
+  products census pin is UNCHANGED by the island ({color-contrast} × 7
+  — re-run green post-change, no recalibration needed).
 - **The console LIST pages' heading order is valid (session-25,
   A11Y-HEADING-1):** the three console list pages (orders/products/
   payments) each carry an `sr-only` h2 labelling their list region
