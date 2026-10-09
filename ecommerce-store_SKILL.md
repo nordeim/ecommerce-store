@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.21.0
+version: 1.22.0
 last_updated: "2026-10-09"
 tags:
   - e-commerce
@@ -869,6 +869,22 @@ Then:
     wishlist.spec sorts AFTER performance.spec alphabetically, so an
     authed heart-toggle would break its count assertions.
 
+35. **`@stripe/stripe-js`'s DEFAULT entry eagerly injects js.stripe.com at
+    module scope (L34, session-22 Stripe round).** The default module runs
+    `Promise.resolve().then(() => getStripePromise())` — importing
+    `loadStripe` from `"@stripe/stripe-js"` fires a third-party request to
+    `js.stripe.com/<release-train>/stripe.js` (v10's train = `endive`) on
+    EVERY page whose client bundle evaluates the module, unconfigured or
+    not (measured live: the script tag in /checkout's DOM). The `/pure`
+    entry is the LAZY loader — it fetches ONLY when `loadStripe(pk)` is
+    actually called. Rule: **env-gated client SDKs must import their
+    lazy entry — an eager default entry turns "off" into a lie
+    (network-wise) on every parity surface.** Detection discipline: attach
+    the request listener BEFORE the navigation that loads the island chunk
+    (a listener attached after a beforeEach-driven load reads
+    false-green — reload under the listener). Pinned by
+    `tests/e2e/stripe.spec.ts`.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1172,6 +1188,7 @@ Full records with context/rationale/consequences in
 | 027 | The auth-screens axe gate (A11Y-GATE-3) — register/forgot-password/verify-email at BOTH viewports in anonymous contexts; register + forgot-password at PARITY pins ({color-contrast} × 2, both sites byte-identical), verify-email at the QUALITY pin (× 1 — the reference's route 404s client-side, the clone's standalone screen is a superset surface); dual-mutation-proven incl. the L29 placeholder-masking lesson |
 | 028 | The /reset-password parity route (RESET-ROUTE-1 — the reference's fifth auth route, discovered via its own sitemap; both measured states, sha256-indexed single-use tokens with 30-min TTL, session invalidation on reset, the console.info email seam) + the SEO standing gate (SEO-GATE-1 — `tests/e2e/seo.spec.ts` pins the sitemap census 17 URLs + the robots rule block + the JSON-LD nodes) + the structured-data layer (JSON-LD-1 — Organization/WebSite on home, Product/offers/aggregateRating on the PDP, data blocks outside pinned child lists); quad-mutation-proven; L30 (the exit-animation locator race) + L31 (sha256 token indexing) |
 | 029 | The INP standing interaction gate (PERF-GATE-3) — 10 tests = 5 interaction surfaces (PDP ATC · PDP heart · search typing · drawer stepper · carousel next) × 2 viewports in GUEST contexts, trusted-click event-timing collection (L32: synthetic evaluate-clicks generate no interaction entries; L33: the observer's default 16ms durationThreshold hides fast interactions), per-surface INP ≤ 200ms budgets (the good line; measured 16–72ms — the round-21 differential proved the clone's server-action mutations paint as fast as the reference's client-state mutations); dual-mutation-proven (the 400ms busy-wait in the stepper fails only drawer-stepper, the carousel's fails only carousel-next) |
+| 030 | Professional Stripe payment integration, env-gated OFF by default (PAY-STRIPE-1) — the full production machinery behind three env keys: the themed Payment Element island (the one-page Payment & Review — SAQ-A, card data never transits the app), `createPaymentIntentAction` (server-cart amounts + deterministic `cart:total:shippingHash` idempotency keys + the webhook's metadata), verify-then-place in `placeOrderAction` (`Order.stripePaymentIntentId` UNIQUE = the placement idempotency anchor; P2002 → the already-placed order number), the signature-verified dedup-first webhook backstop (`StripeEvent` eventId UNIQUE; orphaned-payment placement from intent metadata; refund-trail logs, never 5xx), the client-safe config mirror (`src/lib/stripe-config.ts` — one truth table, "set-me" placeholders are NOT configuration), and env-gated CSP additions (byte-identical to the session-14 pin when unconfigured); L34 (the /pure loader); 41 unit seams + the 5-test unconfigured-contract E2E gate; triple-mutation-proven (the amount gate, the unique anchor, the sentinel mirror) |
 
 ## Appendix B: The Meticulous Workflow
 

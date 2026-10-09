@@ -42,9 +42,17 @@ export default async function CheckoutSuccessPage({
               Thank you! Your order <span className="font-semibold text-foreground">{order!.number}</span> has been
               placed.
             </p>
-            <p className="text-muted-foreground mb-8">
+            <p className={`text-muted-foreground ${order!.paymentStatus === "paid" ? "mb-1" : "mb-8"}`}>
               A confirmation was sent to <span className="font-medium text-foreground">{order!.email}</span>.
             </p>
+            {/* PAY-STRIPE-1 (session-22): the paid-order confirmation — one
+                muted line, only when a real payment was captured (demo
+                orders render exactly as before). */}
+            {order!.paymentStatus === "paid" && (
+              <p className="text-sm text-muted-foreground mb-8">
+                Payment received — charged by Stripe.
+              </p>
+            )}
             <div className="text-left bg-card border border-border/50 rounded-2xl p-6 mb-8">
               <div className="flex items-center justify-between text-sm mb-4">
                 <span className="font-medium">

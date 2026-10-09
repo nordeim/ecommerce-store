@@ -17,9 +17,11 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { placeOrderAction } from "@/lib/actions/checkout";
+import { isPublishableKeyConfigured } from "@/lib/stripe-config";
 import type { CartDto } from "@/lib/cart";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { StripeCheckout } from "./stripe-pay";
 
 type Defaults = {
   firstName: string;
@@ -29,10 +31,25 @@ type Defaults = {
 
 type Step = 1 | 2 | 3;
 
-export function CheckoutFlow({ cart, defaults }: { cart: CartDto; defaults: Defaults }) {
+export function CheckoutFlow({
+  cart,
+  defaults,
+  stripeEnabled = false,
+  publishableKey = null,
+}: {
+  cart: CartDto;
+  defaults: Defaults;
+  /** PAY-STRIPE-1 (session-22): true only when the server resolved a real
+   *  secret — the reference-parity mock wizard stays the DEFAULT (OFF). */
+  stripeEnabled?: boolean;
+  publishableKey?: string | null;
+}) {
   const router = useRouter();
   const [step, setStep] = React.useState<Step>(1);
   const [state, formAction, pending] = React.useActionState(placeOrderAction, null);
+  // The client mirror of the server config check (L16/R8-1: one truth
+  // table — the two sides can never disagree).
+  const stripeOn = stripeEnabled && isPublishableKeyConfigured(publishableKey);
   const [shipping, setShipping] = React.useState({
     firstName: defaults.firstName,
     lastName: defaults.lastName,
@@ -161,7 +178,23 @@ export function CheckoutFlow({ cart, defaults }: { cart: CartDto; defaults: Defa
           </section>
         )}
 
-        {step === 2 && (
+        {step === 2 && stripeOn && (
+          // PAY-STRIPE-1 (session-22): the one-page embedded checkout — the
+          // PaymentElement must stay mounted on the same page as the
+          // confirm button, so steps 2+3 collapse when the real payment
+          // path is live. The mock 3-step wizard below is the DEFAULT
+          // (unconfigured) state — untouched reference parity.
+          <StripeCheckout
+            cart={cart}
+            shipping={shipping}
+            publishableKey={publishableKey}
+            formAction={formAction}
+            state={state}
+            onBack={() => setStep(1)}
+          />
+        )}
+
+        {step === 2 && !stripeOn && (
           <section>
             <h2 className="text-2xl font-bold mb-6">Payment Method</h2>
             <form

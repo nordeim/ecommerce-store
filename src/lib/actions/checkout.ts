@@ -8,12 +8,25 @@
  * client); the cart is cleared in the same transaction; the order number is
  * `ORD-YYYY-NNNNNN` allocated under a serialized retry loop (SQLite has a
  * single writer, so count-then-increment is race-free within the tx).
+ *
+ * session-22 (PAY-STRIPE-1) — the Stripe path: the form may carry a
+ * `stripePaymentIntentId` (the client island's CONFIRMED intent). The
+ * server retrieves the intent from Stripe and verifies status/amount/
+ * currency OUTSIDE the transaction (an external call must never hold the
+ * SQLite write lock), then places the order with the paid-payment columns.
+ * The `Order.stripePaymentIntentId` UNIQUE constraint is the placement
+ * idempotency anchor: a retried submit after a successful placement maps
+ * to the ALREADY-PLACED order number (never a second order, never a
+ * second charge).
  */
+import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { getCurrentUser } from "../auth";
 import { getCart, getCartId } from "../cart";
 import { checkoutSchema } from "../validation";
 import { clientIp, rateLimit } from "../rate-limit";
+import { getStripe } from "../stripe";
+import { paymentIntentLast4, verifyPaymentIntentForPlacement } from "../stripe-payment";
 import type { ActionResult } from "./auth";
 
 async function nextOrderNumber(): Promise<string> {
@@ -50,6 +63,7 @@ export async function placeOrderAction(
     cardNumber: formData.get("cardNumber") ?? "",
     cardExpiry: formData.get("cardExpiry") ?? "",
     cardCvc: formData.get("cardCvc") ?? "",
+    stripePaymentIntentId: formData.get("stripePaymentIntentId") ?? "",
   });
   if (!parsed.success) {
     return {
@@ -61,7 +75,11 @@ export async function placeOrderAction(
     };
   }
   const input = parsed.data;
-  if (input.paymentMethod === "card") {
+  const stripeIntentId = input.stripePaymentIntentId || null;
+
+  if (input.paymentMethod === "card" && !stripeIntentId) {
+    // The reference-parity demo path: card-shape validation (Stripe's
+    // Payment Element owns card data on the real path — nothing to check).
     const digits = (input.cardNumber ?? "").replace(/\D/g, "");
     if (digits.length < 13 || digits.length > 19) {
       return { ok: false, error: { message: "Enter a valid card number", fieldErrors: { cardNumber: "Invalid card number" } } };
@@ -81,6 +99,30 @@ export async function placeOrderAction(
   const cartId = await getCartId(user?.id ?? null);
   if (!cartId) {
     return { ok: false, error: { message: "Your cart is empty" } };
+  }
+
+  // ---- The Stripe verification (outside the transaction — no external
+  // call may hold the SQLite write lock). The intent id is NEVER trusted:
+  // the server re-retrieves it and gates on status + amount + currency.
+  let stripeLast4: string | null = null;
+  if (stripeIntentId) {
+    const stripe = getStripe();
+    if (!stripe) {
+      return { ok: false, error: { message: "Card payments are unavailable right now. Please try again later." } };
+    }
+    try {
+      const intent = await stripe.paymentIntents.retrieve(stripeIntentId, {
+        expand: ["payment_method", "latest_charge"],
+      });
+      const verification = verifyPaymentIntentForPlacement(intent, cart);
+      if (!verification.ok) {
+        return { ok: false, error: { message: verification.message } };
+      }
+      stripeLast4 = paymentIntentLast4(intent);
+    } catch (e) {
+      console.error("[placeOrderAction] stripe retrieve", e);
+      return { ok: false, error: { message: "We could not verify your payment. Please try again." } };
+    }
   }
 
   const shippingAddress = JSON.stringify({
@@ -122,11 +164,13 @@ export async function placeOrderAction(
           shipping: cart.shipping,
           total: cart.total,
           shippingAddress,
-          paymentMethod: input.paymentMethod,
-          cardLast4:
-            input.paymentMethod === "card"
-              ? (input.cardNumber ?? "").replace(/\D/g, "").slice(-4)
-              : null,
+          paymentMethod: stripeIntentId ? "card" : input.paymentMethod,
+          cardLast4: stripeIntentId ? stripeLast4 : input.paymentMethod === "card" ? (input.cardNumber ?? "").replace(/\D/g, "").slice(-4) : null,
+          // PAY-STRIPE-1: the paid-payment columns. The UNIQUE intent id is
+          // the idempotency anchor (a retried submit of the same confirmed
+          // intent resolves to the already-placed order below).
+          stripePaymentIntentId: stripeIntentId,
+          paymentStatus: stripeIntentId ? "paid" : null,
           items: {
             create: cart.items.map((i) => ({
               productId: i.productId,
@@ -136,7 +180,12 @@ export async function placeOrderAction(
               quantity: i.quantity,
             })),
           },
-          events: { create: { type: "placed", note: `Placed via ${input.paymentMethod}` } },
+          events: {
+            create: {
+              type: "placed",
+              note: stripeIntentId ? "Placed via card (Stripe)" : `Placed via ${input.paymentMethod}`,
+            },
+          },
         },
       });
       // Decrement inventory atomically with the order write (STOCK-1) —
@@ -152,6 +201,18 @@ export async function placeOrderAction(
     });
     return { ok: true, data: { orderNumber } };
   } catch (e) {
+    // The placement idempotency anchor: a retried submit whose intent
+    // already placed an order resolves to that order (the customer sees
+    // their confirmation, not an error, on a double-click/race).
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && stripeIntentId) {
+      const existing = await db.order.findUnique({
+        where: { stripePaymentIntentId: stripeIntentId },
+        select: { number: true },
+      });
+      if (existing) {
+        return { ok: true, data: { orderNumber: existing.number } };
+      }
+    }
     if (e instanceof StockRejectedError) {
       return { ok: false, error: { message: e.message } };
     }

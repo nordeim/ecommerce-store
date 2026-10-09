@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getCart } from "@/lib/cart";
 import { pageMetadata } from "@/lib/metadata";
+import { resolveStripeConfig } from "@/lib/stripe-payment";
 import { CheckoutFlow } from "@/components/checkout/checkout-flow";
 import { Button } from "@/components/ui/button";
 
@@ -36,6 +37,10 @@ export default async function CheckoutPage() {
     <div className="flex-1">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <h1 className="text-3xl font-bold mb-8">Checkout</h1>
+        {/* PAY-STRIPE-1 (session-22): the server-side config resolution —
+            with no keys (the default) the wizard renders the reference's
+            exact 3-step mock flow; with real keys the combined
+            Payment & Review island takes over (the superset activation). */}
         <CheckoutFlow
           cart={cart}
           defaults={{
@@ -43,6 +48,8 @@ export default async function CheckoutPage() {
             lastName: user?.lastName ?? "",
             email: user?.email ?? "",
           }}
+          stripeEnabled={resolveStripeConfig(process.env).serverConfigured}
+          publishableKey={resolveStripeConfig(process.env).publishableKey}
         />
       </div>
     </div>

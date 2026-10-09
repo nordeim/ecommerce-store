@@ -40,10 +40,19 @@ import { NextRequest, NextResponse } from "next/server";
  * documents) and the extension-bearing files; everything else — HTML
  * routes, RSC fetches, server-action POSTs, /api — passes through (the
  * CSP header on non-document responses is inert).
+ *
+ * PAY-STRIPE-1 (session-22): when (and only when) Stripe is configured,
+ * the directive set gains the Payment Element hosts — js.stripe.com (the
+ * element iframe + stripe.js), hooks.stripe.com (the iframe's inner
+ * frames), api.stripe.com (connect-src — the SDK's API calls). With
+ * Stripe unconfigured (the default) the CSP string is byte-identical to
+ * the session-14 pin — the standing CSP smoke test stays green.
  */
+import { resolveStripeConfig } from "@/lib/stripe-config";
+
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = [
+  const cspParts = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
@@ -54,7 +63,15 @@ export function proxy(request: NextRequest) {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-  ].join("; ");
+  ];
+  if (resolveStripeConfig(process.env).serverConfigured) {
+    // script-src host allowlist: ignored by strict-dynamic-capable
+    // browsers (it remains the fallback for the rest).
+    cspParts[1] = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com`;
+    cspParts[5] = "connect-src 'self' https://api.stripe.com";
+    cspParts.push("frame-src https://js.stripe.com https://hooks.stripe.com");
+  }
+  const csp = cspParts.join("; ");
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

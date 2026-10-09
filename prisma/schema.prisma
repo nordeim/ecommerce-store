@@ -161,6 +161,16 @@ model Order {
   shippingAddress String // JSON snapshot of the checkout address
   paymentMethod   String       @default("card") // card | paypal
   cardLast4       String?
+  // Stripe payment (session-22, PAY-STRIPE-1 — the superset checkout).
+  // stripePaymentIntentId is UNIQUE: the placement idempotency anchor (the
+  //   action path and the webhook backstop can never double-place an order
+  //   for the same PaymentIntent — the unique violation maps to the
+  //   already-placed order number).
+  // paymentStatus: null = the reference-parity demo path (no charge);
+  //   "paid" = a captured Stripe PaymentIntent; "failed" = recorded
+  //   payment_intent.payment_failed. String, not enum (the SQLite contract).
+  stripePaymentIntentId String? @unique
+  paymentStatus          String?
   placedAt        DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   items           OrderItem[]
@@ -183,9 +193,21 @@ model OrderEvent {
   id        String   @id @default(cuid())
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  type      String // "placed" | "status_changed"
+  type      String // "placed" | "status_changed" | "payment_succeeded" | "payment_failed"
   note      String?
   createdAt DateTime @default(now())
+}
+
+// Stripe webhook dedup (session-22, PAY-STRIPE-1 — the C8 lesson from the
+// reference skill: the event row is the idempotency anchor; a Stripe retry
+// of an already-processed event short-circuits to a 200 no-op instead of
+// double-processing). eventId is Stripe's evt_* id, UNIQUE.
+model StripeEvent {
+  id              String   @id @default(cuid())
+  eventId         String   @unique
+  type            String
+  paymentIntentId String?
+  receivedAt      DateTime @default(now())
 }
 
 model NewsletterSubscriber {

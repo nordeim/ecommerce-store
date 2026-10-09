@@ -160,6 +160,17 @@ export const checkoutSchema = z.object({
   cardNumber: z.string().trim().optional().or(z.literal("")),
   cardExpiry: z.string().trim().optional().or(z.literal("")),
   cardCvc: z.string().trim().optional().or(z.literal("")),
+  // Stripe path (session-22, PAY-STRIPE-1): the confirmed PaymentIntent id
+  // from the client island. Empty/absent on the reference-parity demo path.
+  // The server NEVER trusts it — placement re-retrieves the intent and
+  // verifies status + amount + currency before the order is written.
+  stripePaymentIntentId: z
+    .string()
+    .trim()
+    .regex(/^pi_[A-Za-z0-9]*$/, "Invalid payment reference")
+    .max(120)
+    .optional()
+    .or(z.literal("")),
 });
 
 export const newsletterSchema = z.object({

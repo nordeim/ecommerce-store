@@ -100,6 +100,26 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                   {order.cardLast4 ? ` ···· ${order.cardLast4}` : ""}
                 </dd>
               </div>
+              {order.paymentStatus && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Charge</dt>
+                  <dd className="font-medium">
+                    {order.paymentStatus === "paid" ? (
+                      <span className="text-emerald-600">Paid (Stripe)</span>
+                    ) : order.paymentStatus === "failed" ? (
+                      <span className="text-destructive">Payment failed</span>
+                    ) : (
+                      order.paymentStatus
+                    )}
+                    {/* The ops reference — Stripe dashboard lookup by id. */}
+                    {order.stripePaymentIntentId ? (
+                      <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                        {order.stripePaymentIntentId}
+                      </span>
+                    ) : null}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 

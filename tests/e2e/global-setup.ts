@@ -20,10 +20,15 @@ export default function globalSetup(): void {
   const run = (cmd: string) =>
     execSync(cmd, { cwd: repo, env, stdio: "pipe" }).toString();
 
+  // --accept-data-loss: bypasses prisma's interactive prompt on UNIQUE
+  // constraint ADDITIONS (session-22's Order.stripePaymentIntentId). This
+  // is a scratch, re-seeded-every-run database, and the constrained column
+  // is newly added (all-NULL) — the flag is a prompt-suppressor, not a
+  // data-loss acceptor in practice.
   try {
-    run("bunx prisma db push --skip-generate");
+    run("bunx prisma db push --skip-generate --accept-data-loss");
   } catch {
-    run("npx prisma db push --skip-generate");
+    run("npx prisma db push --skip-generate --accept-data-loss");
   }
   try {
     run("bun prisma/seed.ts");
