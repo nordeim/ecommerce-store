@@ -275,6 +275,34 @@ from the injected location) — the repo contract itself is test-pinned in
   surface. Pinned by 18 unit + 5 E2E tests. The a11y admin gate's
   products census pin is UNCHANGED by the island ({color-contrast} × 7
   — re-run green post-change, no recalibration needed).
+- **The dashboard surfaces the refund-needed count as an alert stat
+  (session-28, DASH-ALERT-1, ADR-036 — the observability graduation):**
+  `/admin` (the console's entry point) runs TWO bounded queries — the
+  placed-intent input set (orders holding a Stripe intent,
+  select-only) + `db.stripeEvent.count` — and composes the count with
+  **the SAME seam the payments family filter uses**
+  (`buildAdminPaymentWhere({ family: "refund-needed" },
+  placedIntentIds)` from `src/lib/admin-payments.ts`): the dashboard
+  stat and the payments list can NEVER disagree (a divergent count is
+  structurally impossible, not just untested — the seam is the single
+  source of both). The presentation contract is the pure
+  `refundNeededAlert(count)` (unit-pinned: `{ visible: false }` at 0 —
+  the honest calm state, alert fatigue is the failure mode a
+  permanent zero-row invites; the singular/plural labels "1 payment
+  needs refund attention"/"N payments need…"; the href exactly the
+  family Select's own value). The alert row renders between the stat
+  grid and Recent Orders (an action item, not a KPI — it does not
+  join the 4-card grid) with an ICON-ONLY destructive accent
+  (`border-destructive/30` + the triangle chip — NO
+  destructive-colored TEXT: it measures ~3.9:1 on the card and would
+  grow the admin a11y census's pinned color-contrast count) and a
+  "Review payments" outline Button deep-linking to
+  `/admin/payments?family=refund-needed`. Only this unit layer pins
+  the calm state — the e2e fixture set always counts 1
+  (`evt_demo_fixture_n`, deterministically restored per run). Zero
+  parity risk — admin-only surface. Pinned by 4 unit + 1 E2E test;
+  the a11y admin gate's dashboard census pin UNCHANGED at 8 (re-run
+  green post-change, no recalibration).
 - **The console LIST pages' heading order is valid (session-25,
   A11Y-HEADING-1):** the three console list pages (orders/products/
   payments) each carry an `sr-only` h2 labelling their list region

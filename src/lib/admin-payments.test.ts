@@ -4,6 +4,7 @@ import {
   ADMIN_PAYMENT_FAMILY_OPTIONS,
   buildAdminPaymentWhere,
   parseAdminPaymentFilters,
+  refundNeededAlert,
   resolvePaymentEventOutcome,
 } from "./admin-payments";
 
@@ -289,5 +290,41 @@ describe("ADMIN_PAYMENT_FAMILY_OPTIONS", () => {
       { value: "refund-needed", label: "Refund needed" },
       { value: "other", label: "Other" },
     ]);
+  });
+});
+
+// ---- session-28, DASH-ALERT-1: the dashboard's refund-needed alert ----
+// The presentation contract for /admin's alert row: the count derives
+// from the SAME seam the payments family filter composes
+// (buildAdminPaymentWhere family=refund-needed + the placed-intent set),
+// so the stat and the list can never disagree. The visible=false calm
+// state at count 0 is the seam's OWN contract (the e2e fixture set
+// always counts 1, so only this unit layer can pin the calm state).
+
+describe("refundNeededAlert (session-28, DASH-ALERT-1)", () => {
+  it("is invisible at count 0 (the honest calm state — no alert noise)", () => {
+    expect(refundNeededAlert(0)).toEqual({ visible: false });
+  });
+
+  it("carries the singular label at count 1 with the family deep-link", () => {
+    expect(refundNeededAlert(1)).toEqual({
+      visible: true,
+      label: "1 payment needs refund attention",
+      href: "/admin/payments?family=refund-needed",
+    });
+  });
+
+  it("carries the plural label at count N with the same deep-link", () => {
+    expect(refundNeededAlert(3)).toEqual({
+      visible: true,
+      label: "3 payments need refund attention",
+      href: "/admin/payments?family=refund-needed",
+    });
+  });
+
+  it("the href is exactly the family Select's own value (the canonical param shape)", () => {
+    const alert = refundNeededAlert(2);
+    if (!alert.visible) throw new Error("expected visible at count 2");
+    expect(alert.href).toBe("/admin/payments?family=refund-needed");
   });
 });

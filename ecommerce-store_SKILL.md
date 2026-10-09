@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.27.0
+version: 1.28.0
 last_updated: "2026-10-09"
 tags:
   - e-commerce
@@ -930,6 +930,29 @@ Then:
     cluster x=218 at 390) — M1/M2 mutation-proven (the stale-hash revert
     and the gap-2 revert each fail exactly one pin family).
 
+38. **An out-of-band pixel reading on a cold first-boot battery can be a
+    remote-media paint race — instrument the capture phase before
+    diagnosing drift (L37, session-28 SWEEP-DIAG-1).** The round-28
+    battery's FIRST sweep measured home 59.95% (471,434 px ≈ exactly the
+    hero band) — the identical signature to round-26's REAL drift — but
+    four independent re-measurements all read 0.00% (the active slide
+    IDENTICAL on both sites, the h1 computed styles identical, the CTAs
+    all /shop, the shop inventories identical). Root cause: the first
+    battery ran fresh browser contexts + a freshly-booted server with
+    COLD DNS/TLS to the remote hero CDN (media.base44.com) — `networkidle`
+    + a 1000ms settle guarantees network QUIET, not paint COMPLETION of a
+    cold-fetched remote PNG; one side captured unpainted (or mid-flip).
+    Rules: (a) a single out-of-band reading is a SIGNAL, not a verdict —
+    re-measure before running the drift playbook (round-26 spent a full
+    investigation cycle on real drift; this round's identical-looking
+    reading had no drift at the end of it); (b) the sweep now RECORDS the
+    hero phase at capture time (the active slide's src hash tail + its
+    paint state `naturalWidth > 0` on BOTH sides, every home capture) — a
+    NOT-PAINTED flag or a differing tail beside an out-of-band number =
+    artifact (re-measure); identical painted phases + a persistent diff =
+    drift (run the playbook). Proof shape: the instrumented sweep's output
+    line `home 0% (6 px) [hero ref=…(painted) clone=…(painted)]`.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1239,6 +1262,7 @@ Full records with context/rationale/consequences in
 | 033 | The payment-ops observability refinement + the console heading-order fix (PAY-OPS-2 + A11Y-HEADING-1, session-25) — the refund-needed OUTCOME promoted to a first-class filter family (`buildAdminPaymentWhere(filters, placedIntentIds = [])`: a PURE second parameter the page feeds with ONE bounded placed-intent query; `{ type: succeeded, OR: [notIn placed, null] }`; family+q keeps the type+notIn group intact inside the AND element; the E2E deep-link test is the integration guard — the seam owns the shape), the event AMOUNT persisted + rendered (`StripeEvent.amount Int?` — the webhook writes `data.object.amount` at BOTH write sites; the rows render the magnitude beside the outcome via formatCents), the honest intent column (`stripeEventIntentId` = `payment_intent ?? object.id` — charge-family deliveries record the REAL intent id, integration-pinned), the console LIST pages' heading-order family observation RESOLVED (sr-only h2s on orders/products/payments; the best-practice census pinned EXACTLY EMPTY via the parameterized `runAxeTags`; the storefront keeps the reference's own shape — parity); a FOURTH canonical fixture (`evt_demo_fixture_n` — succeeded, NO order, amount 14900) + amounts on the set; the payments a11y pin recalibrated 8 → 9 (the fourth fixture's destructive line, node-enumerated); +12 Vitest + 4 E2E (416 total); triple-mutation-proven (the placed-intent fetch, the amount persistence, the sr-only h2s) |
 | 034 | The reference-drift remediation + the payments date-range filter (HERO-DRIFT-1 + HEADER-DRIFT-1 + PAY-OPS-3, session-26) — the reference SILENTLY regenerated its slide-3 hero image + re-pointed all three CTAs to plain /shop + tightened its header icon cluster to gap-1 + re-structured its mobile row to three direct children; the 13-round pixel-sweep band held throughout (every standing gate is content-agnostic); fixes: the slide-3 image + plain-/shop CTAs (page.tsx), the unwrapped mobile row + gap-1 cluster (header.tsx), and the NEW standing content pins (the hero-content test — 3 img srcs by hash tail + 3 CTA hrefs via DOM traversal; the header-geometry tests — column-gap 4px + cluster 156 + nav x=270 at 1024, the three-child distribution at 390 located via the banner's logo link — the display:none nav is invisible to role queries); post-fix the sweep reads home 0% (6 px); PAY-OPS-3: the payments date-range filter (`?from=`/`?to=` strict YYYY-MM-DD — shape regex + Date round-trip, bad bounds fall through, from>to drops the pair; ONE receivedAt clause at UTC day boundaries — gte from's midnight, lt the midnight AFTER to; the composable-AND where refactor — each dimension one element, single elements render bare, pre-session-26 shapes byte-identical; two URL-controlled date inputs pushing merged params in canonical order — the props are PRE-navigation state, so a Select change would otherwise append family last); +10 Vitest + 7 E2E (433 total); triple-mutation-proven (M1 the image revert, M2 the gap revert, M3 the clause drop — each reverted byte-exact); L36 |
 | 035 | The console trifecta completion — the products list's URL-deep-linkable filters (ADMIN-PRODUCTS-1, session-27) + the docs-alignment corrections (DOCS-ALIGN-1) — /admin/products takes `?q=` (name OR slug contains), `?category=` (validated against the DB-fetched slug set the PAGE passes the pure seam as input — the placedIntentIds precedent, the seam never hard-codes the catalog), `?visibility=` (active/hidden — the eye-toggle seam's list-level answer); bad deep-links fall through to the unfiltered list (the family contract); the composable-AND where (the category element is Prisma's relation filter `{ category: { slug } }`); the canonical param order (category, q, visibility); the filtered-of-total count line (no take bound, no "100+" form); the guided empty state; the a11y products census pin UNCHANGED by the island (× 7 — no recalibration); DOCS-ALIGN-1: the stale reference-table counts corrected (CLAUDE 198/217 → 226/230, README/PAD 13 → 15 models, 25 → 27 verifications); +18 Vitest + 5 E2E (456 total); triple-mutation-proven (M1 the name-only OR, M2 the dropped category validation, M3 the dropped visibility clause) |
+| 036 | The dashboard refund-needed alert stat (DASH-ALERT-1, session-28) + the sweep's hero-phase self-diagnosis (SWEEP-DIAG-1, L37) — the console's entry point surfaces the payments family's most actionable signal: the count composes with the SAME seam the family filter uses (`buildAdminPaymentWhere({ family: "refund-needed" }, placedIntentIds)` — a divergent count between the dashboard stat and the payments list is structurally impossible); the pure `refundNeededAlert(count)` presentation contract ({visible:false} at 0 — the honest calm state, only the unit layer can pin it (the e2e fixture set deterministically counts 1); singular/plural labels; the href exactly the family Select's own value); the alert row between the stat grid and Recent Orders with an ICON-ONLY destructive accent (destructive TEXT measures ~3.9:1 on the card and would grow the pinned admin a11y census — the pin stays 8) + the "Review payments" deep-link; SWEEP-DIAG-1: the round's first battery read home 59.95% out-of-band — 4 independent re-measurements all 0.00% — a transient cold-boot remote-media paint race; the sweep now RECORDS the hero phase at capture time (hash tail + paint state, BOTH sides) making the drift signal self-diagnosing; +4 Vitest + 1 E2E (461 total); triple-mutation-proven (M1 the visibility-gate inversion, M2 the pluralization drop, M3 the empty placed-intent set — the E2E integration guard); L37 |
 
 ## Appendix B: The Meticulous Workflow
 

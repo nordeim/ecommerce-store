@@ -247,3 +247,32 @@ export function resolvePaymentEventOutcome(
   }
   return { kind: "ignored" };
 }
+
+/**
+ * The dashboard's refund-needed alert (session-28, DASH-ALERT-1) — the
+ * presentation contract for /admin's alert row. The COUNT the caller
+ * passes derives from this module's OWN where composition
+ * (buildAdminPaymentWhere family=refund-needed + the placed-intent set),
+ * so the dashboard stat and the payments family list can never disagree —
+ * the same seam answers both. The href is exactly the family Select's
+ * own value (the canonical param shape).
+ *
+ * count 0 → { visible: false }: the honest calm state. A permanent
+ * zero-row invites alert fatigue — the operator's no-work day should
+ * read as silence, not as a green zero (the console's stat cards own
+ * the KPI-at-a-glance job; the alert row owns the act-now job).
+ */
+export type RefundNeededAlert =
+  | { visible: false }
+  | { visible: true; label: string; href: string };
+
+export function refundNeededAlert(count: number): RefundNeededAlert {
+  if (count <= 0) return { visible: false };
+  const noun = count === 1 ? "payment" : "payments";
+  const verb = count === 1 ? "needs" : "need";
+  return {
+    visible: true,
+    label: `${count} ${noun} ${verb} refund attention`,
+    href: "/admin/payments?family=refund-needed",
+  };
+}

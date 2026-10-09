@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BarChart3, DollarSign, Package, ShoppingBag, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, DollarSign, Package, ShoppingBag, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
+import { buildAdminPaymentWhere, refundNeededAlert } from "@/lib/admin-payments";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,25 @@ export default async function AdminPage() {
     db.order.findMany({ orderBy: { placedAt: "desc" }, take: 5, include: { items: true } }),
   ]);
   const revenue = revenueAgg._sum.total ?? 0;
+
+  // Session-28, DASH-ALERT-1: the refund-needed alert's count — the SAME
+  // seam the payments family filter composes (buildAdminPaymentWhere +
+  // the placed-intent set), so the dashboard stat and the payments list
+  // can never disagree. Two bounded queries: the placed-intent input set
+  // (orders holding a Stripe intent — select-only, small) + the count.
+  const placedOrders = await db.order.findMany({
+    where: { stripePaymentIntentId: { not: null } },
+    select: { stripePaymentIntentId: true },
+  });
+  const refundNeededCount = await db.stripeEvent.count({
+    where: buildAdminPaymentWhere(
+      { family: "refund-needed" },
+      placedOrders
+        .map((o) => o.stripePaymentIntentId)
+        .filter((id): id is string => id !== null),
+    ),
+  });
+  const alert = refundNeededAlert(refundNeededCount);
 
   const stats = [
     { label: "Revenue", value: formatCents(revenue), icon: DollarSign },
@@ -70,6 +90,33 @@ export default async function AdminPage() {
             </div>
           ))}
         </div>
+
+        {/* Session-28, DASH-ALERT-1: the refund-needed alert row — the
+            operator's most actionable payment signal (a succeeded payment
+            with no placed order) surfaces at the console's entry point.
+            The icon-only destructive accent (border + triangle chip — NO
+            destructive-colored text: it measures ~3.9:1 on the card and
+            would grow the admin a11y census's pinned color-contrast
+            count) keeps the console's contrast-safe palette; the count
+            emphasizes via font-semibold text-foreground. An action item,
+            not a KPI — it sits between the stat grid and Recent Orders
+            and renders NOTHING at count 0 (the seam's calm state). */}
+        {alert.visible && (
+          <div className="mb-8 p-4 sm:p-5 bg-card rounded-2xl border border-destructive/30 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="font-semibold">Payment review needed</p>
+                <p className="text-sm text-muted-foreground">{alert.label}</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="rounded-xl shrink-0">
+              <Link href={alert.href}>Review payments</Link>
+            </Button>
+          </div>
+        )}
 
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
           <div className="flex items-center justify-between p-6">

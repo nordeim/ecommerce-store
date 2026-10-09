@@ -60,6 +60,32 @@ test.describe("admin console (admin session)", () => {
     await expect(admin.getByText("ORD-2026-001")).toBeVisible();
   });
 
+  // Session-28, DASH-ALERT-1: the dashboard's refund-needed alert — the
+  // operator's most actionable payment signal (a succeeded payment with no
+  // placed order) surfaces at the console's ENTRY POINT, deep-linking to
+  // the family filter. The count derives from the SAME seam the payments
+  // family composes (buildAdminPaymentWhere + the placed-intent set), so
+  // the stat and the list can never disagree; the e2e-reset restores the
+  // canonical 4-event fixture set every run (evt_demo_fixture_n is the
+  // only unlinked succeeded event — the count is deterministically 1).
+  test("dashboard surfaces the refund-needed alert and deep-links to the family filter (session-28, DASH-ALERT-1)", async () => {
+    await admin.goto("/admin");
+    await expect(admin.getByText("Payment review needed", { exact: true })).toBeVisible();
+    // The seeded fixture set counts exactly 1 (the singular label form).
+    await expect(
+      admin.getByText("1 payment needs refund attention", { exact: true }),
+    ).toBeVisible();
+    // The action deep-links to the family filter — the SAME state the
+    // family Select writes.
+    await admin.getByRole("link", { name: "Review payments" }).click();
+    await expect(admin).toHaveURL(/\/admin\/payments\?family=refund-needed$/);
+    // And the landed list renders the family's own row (the fixture that
+    // makes the count 1).
+    await expect(
+      admin.getByText("No order — refund via Stripe dashboard", { exact: true }),
+    ).toBeVisible();
+  });
+
   test("order detail renders items, shipping, and the event timeline", async () => {
     await admin.goto("/admin/orders");
     // The order number is a link to the detail page (session-7).

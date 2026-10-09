@@ -52,3 +52,6 @@ playwright-report/
 
 # survey scratch (probe screenshots/json — session artifacts, not docs)
 research/
+
+# vitest cache
+.vitest/
