@@ -3,12 +3,18 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { shippingForSubtotal } from "@/lib/money";
 import { getStripe, STRIPE_WEBHOOK_TOLERANCE_SECONDS } from "@/lib/stripe";
-import { classifyStripeEvent, parseStripeWebhookEvent, verifyPaymentIntentForPlacement } from "@/lib/stripe-payment";
+import {
+  classifyStripeEvent,
+  classifyWebhookPlacementError,
+  parseStripeWebhookEvent,
+  verifyPaymentIntentForPlacement,
+} from "@/lib/stripe-payment";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Stripe webhook — POST /api/stripe/webhook (session-22, PAY-STRIPE-1).
+ * Stripe webhook — POST /api/stripe/webhook (session-22, PAY-STRIPE-1;
+ * restructured session-23, PAY-STRIPE-2 / ADR-031).
  *
  * The route-handler whitelist's documented +1: Stripe delivers asynchronous
  * payment events here — the backstop for the one failure the synchronous
@@ -16,22 +22,26 @@ export const dynamic = "force-dynamic";
  * PaymentIntent confirmation and the placement submit: payment captured,
  * no order written).
  *
- * Design (the C8/R10-7 lesson family from the reference skill, adapted to
- * this repo's action-canonical architecture):
+ * Design (the C8/R10-7/H4d lesson family from the reference skill, adapted
+ * to this repo's action-canonical architecture):
  * - **Raw-body signature verification** (300s tolerance) BEFORE anything —
  *   `constructEvent` on the exact bytes; a bad signature is a 400 with
  *   customer-safe copy (never a 500, never internals).
- * - **Dedup-first**: the StripeEvent row (eventId UNIQUE) is inserted
- *   before processing — a Stripe retry of an already-processed event
- *   short-circuits to 200 no-op instead of double-processing.
- * - **payment_intent.succeeded**: if an Order already holds the intent id
- *   (the client path placed it) → 200 no-op. Otherwise attempt the
- *   backstop placement from the intent's own metadata (the shipping
- *   snapshot + cart anchor embedded at intent creation): re-load the cart,
- *   re-price, and verify the intent against the CURRENT server cart. On
- *   amount mismatch or a vanished cart → an ops refund-trail log
- *   (console.error) + 200 (never a throw — a 5xx would make Stripe retry
- *   forever; the operator refunds from the Stripe dashboard).
+ * - **The dedup row commits WITH the side effects (H4d/L9, PAY-STRIPE-2):**
+ *   for `payment_intent.succeeded`, the `StripeEvent` insert happens INSIDE
+ *   the placement transaction. A TRANSIENT placement failure rolls the row
+ *   back and answers 500 — Stripe retries (up to 3 days, exponential
+ *   backoff), and the retry re-attempts the full placement. The
+ *   session-22 shape (the row committed before the tx + a 200 on every
+ *   failure) turned a transient blip into a permanently orphaned captured
+ *   payment: the retry hit the dedup row and no-op'd.
+ * - **The failure policy (the `classifyWebhookPlacementError` seam):**
+ *   duplicate (P2002 on eventId / stripePaymentIntentId — a concurrent
+ *   delivery or the client path won the race) → 200 with the winner's
+ *   order number; permanent (STOCK_SHORT — deterministic, a retry cannot
+ *   succeed) → record + 200 + the ops refund trail; transient (everything
+ *   else, incl. a P2002 on `number` from a concurrent placement race) →
+ *   500, the row rolled back, Stripe retries.
  * - **payment_intent.payment_failed**: recorded + logged only.
  * - Everything else: recorded, 200 ignored.
  *
@@ -51,6 +61,23 @@ const shippingSnapshotSchema = z.object({
 
 function safe400(message: string) {
   return NextResponse.json({ received: false, message }, { status: 400 });
+}
+
+/**
+ * Record the delivery standalone (no side effects to couple): the
+ * record-only classifications, the client-path-precedence no-op, and the
+ * permanent-failure refund trails. Tolerates a concurrent recording of the
+ * same event (P2002 → the delivery is already accounted for).
+ */
+async function recordEvent(evt: { id: string; type: string; data: { object: { id: string } } }) {
+  try {
+    await db.stripeEvent.create({
+      data: { eventId: evt.id, type: evt.type, paymentIntentId: evt.data.object.id },
+    });
+  } catch (e) {
+    const cls = classifyWebhookPlacementError(e);
+    if (cls !== "duplicate") throw e;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -86,39 +113,34 @@ export async function POST(request: NextRequest) {
   const evt = parsed.data;
   const class_ = classifyStripeEvent(evt.type);
 
-  // ---- Dedup-first: a retry of a processed event is a 200 no-op.
-  try {
-    const existing = await db.stripeEvent.findUnique({ where: { eventId: evt.id } });
-    if (existing) {
-      return NextResponse.json({ received: true, duplicate: true });
-    }
-    await db.stripeEvent.create({
-      data: { eventId: evt.id, type: evt.type, paymentIntentId: evt.data.object.id },
-    });
-  } catch (e) {
-    console.error("[stripe-webhook] dedup insert", e);
-    // A dedup failure is not retry-worthy for Stripe (the next event will
-    // carry a fresh id); process on — placement itself is guarded by the
-    // Order.stripePaymentIntentId unique anchor.
-  }
-
   if (class_ === "failed") {
+    await recordEvent(evt);
     console.error("[stripe-webhook] payment failed", evt.data.object.id);
     return NextResponse.json({ received: true });
   }
   if (class_ !== "succeeded") {
+    await recordEvent(evt);
     return NextResponse.json({ received: true, ignored: true });
   }
 
   // ---- payment_intent.succeeded: the backstop.
   const intentView = evt.data.object;
   try {
+    // Fast duplicate short-circuit (the common Stripe retry AFTER a
+    // committed placement — the row exists, nothing to re-attempt).
+    const alreadyRecorded = await db.stripeEvent.findUnique({ where: { eventId: evt.id } });
+    if (alreadyRecorded) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+
+    // The client-path precedence (the normal case): an order already holds
+    // the intent id — record the delivery, answer with the order.
     const placed = await db.order.findUnique({
       where: { stripePaymentIntentId: intentView.id },
       select: { number: true },
     });
     if (placed) {
-      // The client path already placed it (the normal case).
+      await recordEvent(evt);
       return NextResponse.json({ received: true, order: placed.number });
     }
 
@@ -131,7 +153,9 @@ export async function POST(request: NextRequest) {
     const cartId = typeof meta.cartId === "string" ? meta.cartId : null;
     const userId = typeof meta.userId === "string" && meta.userId.length > 0 ? meta.userId : null;
     if (!shippingSnapshot.success || !cartId) {
-      // Not our checkout intent (or metadata drifted) — ops refund trail.
+      // Not our checkout intent (or metadata drifted) — deterministic: record
+      // + the ops refund trail (never a 5xx; a retry could not succeed).
+      await recordEvent(evt);
       console.error(
         "[stripe-webhook] orphaned payment without usable metadata — refund via dashboard",
         intentView.id,
@@ -146,6 +170,9 @@ export async function POST(request: NextRequest) {
       include: { items: { include: { product: true }, orderBy: { createdAt: "asc" } } },
     });
     if (!cartRow || cartRow.items.length === 0) {
+      // A vanished/empty cart is deterministic (the conversion cleared it or
+      // the cart was never ours): record + the refund trail.
+      await recordEvent(evt);
       console.error(
         "[stripe-webhook] orphaned payment with empty/absent cart — refund via dashboard",
         intentView.id,
@@ -174,12 +201,12 @@ export async function POST(request: NextRequest) {
     };
 
     // The SAME verification gate as the action path — the intent must have
-    // paid exactly the server-re-derived total, in USD.
+    // paid exactly the server-re-derived total, in USD. A mismatch is
+    // deterministic: record + the refund trail (the operator refunds from
+    // the Stripe dashboard using the log line).
     const verification = verifyPaymentIntentForPlacement(intentView, cart);
     if (!verification.ok) {
-      // Captured payment ≠ order value — the ops refund trail (never a
-      // throw: Stripe would retry forever; the operator refunds from the
-      // dashboard using this log line).
+      await recordEvent(evt);
       console.error(
         "[stripe-webhook] amount mismatch — refund via dashboard",
         intentView.id,
@@ -190,30 +217,38 @@ export async function POST(request: NextRequest) {
 
     // Placement: the same transactional contract as placeOrderAction
     // (stock re-check inside the tx, decrement, cart clear, events) with
-    // the paid-payment columns. The UNIQUE intent id is the anchor: a race
-    // against the client path resolves to the existing order.
+    // the paid-payment columns. THE H4d/L9 RULE (PAY-STRIPE-2): the
+    // StripeEvent dedup row commits INSIDE this transaction — a transient
+    // failure rolls it back WITH the placement, and the 500 below makes
+    // Stripe retry the whole thing. A concurrent delivery that inserts the
+    // row first surfaces as P2002 → the duplicate classification; a race
+    // against the client path surfaces as P2002 on the intent anchor → the
+    // same duplicate classification (never a double placement).
     const s = shippingSnapshot.data;
-    const year = new Date().getFullYear();
-    const prefix = `ORD-${year}-`;
-    const count = await db.order.count({ where: { number: { startsWith: prefix } } });
-    const number = `${prefix}${String(count + 1).padStart(3, "0")}`;
+    const number = await db.$transaction(async (tx) => {
+      await tx.stripeEvent.create({
+        data: { eventId: evt.id, type: evt.type, paymentIntentId: intentView.id },
+      });
 
-    await db.$transaction(async (tx) => {
+      const year = new Date().getFullYear();
+      const prefix = `ORD-${year}-`;
+      const count = await tx.order.count({ where: { number: { startsWith: prefix } } });
+      const orderNumber = `${prefix}${String(count + 1).padStart(3, "0")}`;
+
       for (const item of items) {
         const row = await tx.product.findUnique({
           where: { id: item.productId },
           select: { name: true, stock: true },
         });
         if (row && row.stock < item.quantity) {
-          // Paid but unfulfillable — ops trail; the refund path is manual
-          // (the intent WAS captured; the customer is not silently left
-          // with a charged card and no order record).
+          // Paid but unfulfillable — deterministic at decision time; the
+          // permanent classification records the event + refund trail.
           throw new Error(`STOCK_SHORT:${row.name}`);
         }
       }
       await tx.order.create({
         data: {
-          number,
+          number: orderNumber,
           userId,
           email: s.email,
           status: "processing",
@@ -251,14 +286,33 @@ export async function POST(request: NextRequest) {
         });
       }
       await tx.cartItem.deleteMany({ where: { cartId } });
+      return orderNumber;
     });
 
     return NextResponse.json({ received: true, order: number });
   } catch (e) {
-    // A stock-short or tx failure on an ALREADY-CAPTURED payment: the ops
-    // refund trail. 200 (never a 5xx — Stripe would retry forever; the
-    // dedup row already exists so a retry would no-op anyway).
-    console.error("[stripe-webhook] backstop placement failed — refund via dashboard", intentView.id, e);
-    return NextResponse.json({ received: true });
+    // The failure policy (the classifyWebhookPlacementError seam):
+    // duplicate / permanent / transient — see the module doc.
+    const cls = classifyWebhookPlacementError(e);
+    if (cls === "duplicate") {
+      const winner = await db.order.findUnique({
+        where: { stripePaymentIntentId: intentView.id },
+        select: { number: true },
+      });
+      return NextResponse.json({ received: true, duplicate: true, order: winner?.number });
+    }
+    if (cls === "permanent") {
+      // A captured payment that cannot be fulfilled (stock-short): the
+      // operator refunds from the dashboard using this trail. The event is
+      // recorded — a Stripe re-delivery of the same event no-ops.
+      await recordEvent(evt);
+      console.error("[stripe-webhook] captured payment unfulfillable (stock) — refund via dashboard", intentView.id, e);
+      return NextResponse.json({ received: true });
+    }
+    // Transient: the transaction rolled back INCLUDING the dedup row.
+    // Answer 500 — Stripe retries with backoff (up to 3 days), and the
+    // retry re-attempts the full placement (the H4d recovery).
+    console.error("[stripe-webhook] transient placement failure — answering 500 so Stripe retries", intentView.id, e);
+    return NextResponse.json({ received: false }, { status: 500 });
   }
 }

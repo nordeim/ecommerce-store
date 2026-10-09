@@ -26,7 +26,7 @@ import { getCart, getCartId } from "../cart";
 import { checkoutSchema } from "../validation";
 import { clientIp, rateLimit } from "../rate-limit";
 import { getStripe } from "../stripe";
-import { paymentIntentLast4, verifyPaymentIntentForPlacement } from "../stripe-payment";
+import { isIntentAnchorP2002, paymentIntentLast4, verifyPaymentIntentForPlacement } from "../stripe-payment";
 import type { ActionResult } from "./auth";
 
 async function nextOrderNumber(): Promise<string> {
@@ -204,7 +204,11 @@ export async function placeOrderAction(
     // The placement idempotency anchor: a retried submit whose intent
     // already placed an order resolves to that order (the customer sees
     // their confirmation, not an error, on a double-click/race).
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && stripeIntentId) {
+    // PAY-STRIPE-2 (session-23): the P2002 TARGET is checked — only the
+    // intent-anchor violation takes this path; a `number`-target race
+    // (two concurrent placements minted the same ORD-YYYY-NNN) falls to
+    // the honest retry copy below, and the retry resolves via the anchor.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && stripeIntentId && isIntentAnchorP2002(e)) {
       const existing = await db.order.findUnique({
         where: { stripePaymentIntentId: stripeIntentId },
         select: { number: true },

@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.22.0
+version: 1.23.0
 last_updated: "2026-10-09"
 tags:
   - e-commerce
@@ -885,6 +885,24 @@ Then:
     false-green — reload under the listener). Pinned by
     `tests/e2e/stripe.spec.ts`.
 
+36. **The idempotency row must commit WITH the side effects (L35, session-23
+    webhook hardening — the H4d/L9 lesson, transplanted from the reference
+    skill).** The session-22 webhook committed its `StripeEvent` dedup row
+    BEFORE the placement transaction and answered 200 on every failure —
+    so a TRANSIENT failure (a tx error, a P2002 number race) permanently
+    orphaned a captured payment: the 200 stopped Stripe's retry, and even
+    a manual re-delivery short-circuited on the pre-committed row. Rule:
+    **an idempotency/dedup row that guards side effects must live in the
+    SAME transaction as those side effects — a pre-committed row swallows
+    the retry the recovery needs.** The failure policy must also be honest
+    about WHICH failures are deterministic (amount mismatch, stock-short →
+    record + 200 + the refund trail — a retry could never succeed) vs
+    transient (everything else → rolled back + 500 → Stripe retries →
+    the retry re-places). Proof shape: a Proxy-wrapped REAL transaction
+    whose `order.create` rejects once — the first POST must 500 with the
+    dedup row ABSENT, and the re-delivery must place the order
+    (`tests/stripe-webhook.integration.test.ts`, the H4d recovery proof).
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1189,6 +1207,7 @@ Full records with context/rationale/consequences in
 | 028 | The /reset-password parity route (RESET-ROUTE-1 — the reference's fifth auth route, discovered via its own sitemap; both measured states, sha256-indexed single-use tokens with 30-min TTL, session invalidation on reset, the console.info email seam) + the SEO standing gate (SEO-GATE-1 — `tests/e2e/seo.spec.ts` pins the sitemap census 17 URLs + the robots rule block + the JSON-LD nodes) + the structured-data layer (JSON-LD-1 — Organization/WebSite on home, Product/offers/aggregateRating on the PDP, data blocks outside pinned child lists); quad-mutation-proven; L30 (the exit-animation locator race) + L31 (sha256 token indexing) |
 | 029 | The INP standing interaction gate (PERF-GATE-3) — 10 tests = 5 interaction surfaces (PDP ATC · PDP heart · search typing · drawer stepper · carousel next) × 2 viewports in GUEST contexts, trusted-click event-timing collection (L32: synthetic evaluate-clicks generate no interaction entries; L33: the observer's default 16ms durationThreshold hides fast interactions), per-surface INP ≤ 200ms budgets (the good line; measured 16–72ms — the round-21 differential proved the clone's server-action mutations paint as fast as the reference's client-state mutations); dual-mutation-proven (the 400ms busy-wait in the stepper fails only drawer-stepper, the carousel's fails only carousel-next) |
 | 030 | Professional Stripe payment integration, env-gated OFF by default (PAY-STRIPE-1) — the full production machinery behind three env keys: the themed Payment Element island (the one-page Payment & Review — SAQ-A, card data never transits the app), `createPaymentIntentAction` (server-cart amounts + deterministic `cart:total:shippingHash` idempotency keys + the webhook's metadata), verify-then-place in `placeOrderAction` (`Order.stripePaymentIntentId` UNIQUE = the placement idempotency anchor; P2002 → the already-placed order number), the signature-verified dedup-first webhook backstop (`StripeEvent` eventId UNIQUE; orphaned-payment placement from intent metadata; refund-trail logs, never 5xx), the client-safe config mirror (`src/lib/stripe-config.ts` — one truth table, "set-me" placeholders are NOT configuration), and env-gated CSP additions (byte-identical to the session-14 pin when unconfigured); L34 (the /pure loader); 41 unit seams + the 5-test unconfigured-contract E2E gate; triple-mutation-proven (the amount gate, the unique anchor, the sentinel mirror) |
+| 031 | The webhook H4d hardening (PAY-STRIPE-2) — the dedup row commits WITH the side effects; the honest 200/500 failure policy (session-23): the StripeEvent insert moved INSIDE the placement transaction (a transient failure rolls it back + answers 500 → Stripe retries → the retry re-places — the recovery the backstop exists for; the session-22 pre-committed-row + always-200 shape permanently orphaned captured payments); the `classifyWebhookPlacementError` seam (duplicate: P2002 on eventId/intent-anchor → 200 with the winner's order | permanent: the STOCK_SHORT marker → record + 200 + refund trail | transient: everything else incl. P2002 on `number` → 500); `isIntentAnchorP2002` (the action path's P2002 TARGET check — a number race no longer masquerades as the anchor); the webhook's order-number generation inside the tx; the island's "Try again" mint-retry affordance; and the repo's FIRST integration-test layer (`tests/stripe-webhook.integration.test.ts` — the REAL route handler + REAL HMAC-signed events + a scratch `db/webhook-test.db`; 11 tests incl. the H4d recovery proof; triple-mutation-proven); L35 |
 
 ## Appendix B: The Meticulous Workflow
 

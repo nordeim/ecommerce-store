@@ -174,6 +174,78 @@ export function classifyStripeEvent(type: string): StripeEventClass {
   return "ignored";
 }
 
+// ---------------------------------------------------------------------------
+// The placement failure policy (session-23, PAY-STRIPE-2 — the H4d/L9 rule)
+// ---------------------------------------------------------------------------
+
+/**
+ * The structural view of a caught error the failure policy reads — the
+ * route casts the real Prisma/unknown error to this shape; the seam stays
+ * Prisma-import-free (unit-pinnable without the client).
+ */
+export type PlacementErrorView = {
+  code?: unknown;
+  message?: unknown;
+  meta?: { target?: unknown } | null;
+};
+
+/** The P2002 unique-constraint target fields, as strings (any shape). */
+function p2002Targets(view: PlacementErrorView): string[] | null {
+  if (typeof view.code !== "string" || view.code !== "P2002") return null;
+  const target = view.meta?.target;
+  const fields = Array.isArray(target)
+    ? target.map((f) => String(f))
+    : typeof target === "string"
+      ? [target]
+      : [];
+  return fields;
+}
+
+export type WebhookFailureClass = "duplicate" | "permanent" | "transient";
+
+/**
+ * The webhook's placement-failure policy (PAY-STRIPE-2, the reference
+ * skill's H4d/L9 lesson transplanted):
+ * - **duplicate** — a P2002 on `StripeEvent.eventId` (a concurrent delivery
+ *   won the dedup race) or on `Order.stripePaymentIntentId` (the client
+ *   path placed between our check and the tx): 200 with the winner's order
+ *   number; never double-place.
+ * - **permanent** — the `STOCK_SHORT:` marker (the route's typed signal —
+ *   the reference's StockRejectedError convention, string form because a
+ *   "use server" module cannot export a class): deterministic at decision
+ *   time, a retry cannot succeed → record the event + 200 + the ops refund
+ *   trail.
+ * - **transient** — everything else (tx errors, a P2002 on `number` from a
+ *   concurrent placement race): the tx rolled back INCLUDING the dedup row
+ *   → answer 500 so Stripe retries and the retry re-attempts the placement
+ *   (the recovery the backstop exists for).
+ */
+export function classifyWebhookPlacementError(error: unknown): WebhookFailureClass {
+  const view = (error ?? {}) as PlacementErrorView;
+  const targets = p2002Targets(view);
+  if (targets && (targets.includes("eventId") || targets.includes("stripePaymentIntentId"))) {
+    return "duplicate";
+  }
+  if (typeof view.message === "string" && view.message.startsWith("STOCK_SHORT:")) {
+    return "permanent";
+  }
+  return "transient";
+}
+
+/**
+ * The action path's already-placed resolution gate: a P2002 on
+ * `stripePaymentIntentId` means a retried submit whose intent already
+ * placed an order (the customer should see their confirmation). A P2002 on
+ * `number` is a concurrent-placement mint race — NOT the anchor — and must
+ * fall through to the honest retry copy (the retry re-verifies the intent
+ * and resolves via the anchor).
+ */
+export function isIntentAnchorP2002(error: unknown): boolean {
+  const view = (error ?? {}) as PlacementErrorView;
+  const targets = p2002Targets(view);
+  return targets !== null && targets.includes("stripePaymentIntentId");
+}
+
 const metadataSchema = z.record(z.string());
 
 /**

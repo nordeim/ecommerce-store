@@ -19,6 +19,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildPaymentIntentParams,
   classifyStripeEvent,
+  classifyWebhookPlacementError,
+  isIntentAnchorP2002,
   isPublishableKeyConfigured,
   parseStripeWebhookEvent,
   paymentIntentLast4,
@@ -410,5 +412,62 @@ describe("paymentIntentLast4", () => {
 
   it("returns null for null/undefined shapes", () => {
     expect(paymentIntentLast4(intent({ payment_method: null, latest_charge: null }))).toBeNull();
+  });
+});
+
+describe("classifyWebhookPlacementError (PAY-STRIPE-2: the failure policy seam)", () => {
+  // The structural error view — the route casts the caught Prisma/unknown
+  // error to this shape; the seam never imports Prisma (unit-pinnable).
+  const view = (e: unknown) => e as { code?: string; message?: string; meta?: { target?: unknown } };
+
+  it("a P2002 on the event id (a concurrent delivery won the dedup race) classifies duplicate", () => {
+    expect(classifyWebhookPlacementError(view({ code: "P2002", meta: { target: ["eventId"] } }))).toBe("duplicate");
+  });
+
+  it("a P2002 on the intent anchor (the client path placed between check and tx) classifies duplicate", () => {
+    expect(
+      classifyWebhookPlacementError(view({ code: "P2002", meta: { target: ["stripePaymentIntentId"] } })),
+    ).toBe("duplicate");
+  });
+
+  it("a P2002 on the order number (a concurrent placement mint race) classifies transient — a retry gets a fresh number", () => {
+    expect(classifyWebhookPlacementError(view({ code: "P2002", meta: { target: ["number"] } }))).toBe("transient");
+  });
+
+  it("the string-form Prisma target is honored", () => {
+    expect(classifyWebhookPlacementError(view({ code: "P2002", meta: { target: "eventId" } }))).toBe("duplicate");
+  });
+
+  it("a STOCK_SHORT marker classifies permanent — deterministic, a retry cannot succeed", () => {
+    expect(classifyWebhookPlacementError(view(new Error("STOCK_SHORT:Aurora Table Lamp")))).toBe("permanent");
+  });
+
+  it("a plain error classifies transient (the retry is the recovery)", () => {
+    expect(classifyWebhookPlacementError(view(new Error("ECONNRESET")))).toBe("transient");
+  });
+
+  it("a non-P2002 Prisma code classifies transient", () => {
+    expect(classifyWebhookPlacementError(view({ code: "P2024", message: "Timed out" }))).toBe("transient");
+  });
+
+  it("a P2002 on an unrelated target classifies transient (never silently duplicate)", () => {
+    expect(classifyWebhookPlacementError(view({ code: "P2002", meta: { target: ["slug"] } }))).toBe("transient");
+  });
+});
+
+describe("isIntentAnchorP2002 (the action path's already-placed resolution gate)", () => {
+  const view = (e: unknown) => e as { code?: string; meta?: { target?: unknown } };
+
+  it("true for the intent-anchor target (the retried submit resolves to the placed order)", () => {
+    expect(isIntentAnchorP2002(view({ code: "P2002", meta: { target: ["stripePaymentIntentId"] } }))).toBe(true);
+  });
+
+  it("false for a number-race P2002 (the honest retry copy — not the already-placed path)", () => {
+    expect(isIntentAnchorP2002(view({ code: "P2002", meta: { target: ["number"] } }))).toBe(false);
+  });
+
+  it("false for non-P2002 errors and string-form foreign targets", () => {
+    expect(isIntentAnchorP2002(view(new Error("nope")))).toBe(false);
+    expect(isIntentAnchorP2002(view({ code: "P2002", meta: { target: "number" } }))).toBe(false);
   });
 });

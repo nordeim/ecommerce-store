@@ -186,6 +186,17 @@ export function StripeCheckout({
           ) : (
             <div className="p-4 rounded-xl bg-secondary/40 text-sm text-muted-foreground" role="status">
               {sessionError ?? "Preparing secure card payment\u2026"}
+              {sessionError && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-3 h-7 rounded-lg text-xs"
+                  onClick={() => setSessionError(null)}
+                >
+                  Try again
+                </Button>
+              )}
             </div>
           )
         ) : (
