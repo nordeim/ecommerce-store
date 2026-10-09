@@ -34,6 +34,12 @@ export default async function AdminProductsPage() {
           <h1 className="text-3xl font-bold">Products</h1>
         </div>
 
+        {/* A11Y-HEADING-1 (session-25): the sr-only h2 labels the list
+            region so the page's heading order is h1 → h2 → the footer's h3
+            columns — the console LIST family's best-practice heading-order
+            observation resolved. */}
+        <h2 className="sr-only">Products list</h2>
+
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
           <div className="p-6 pt-0">
             <div className="flex flex-col gap-3">

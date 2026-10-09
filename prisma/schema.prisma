@@ -207,6 +207,13 @@ model StripeEvent {
   eventId         String   @unique
   type            String
   paymentIntentId String?
+  // session-25, PAY-OPS-2b: the event's money magnitude in integer minor
+  // units (the captured amount for succeeded, the attempted amount for
+  // payment_failed, the refunded amount for charge.refunded) — null for
+  // payload shapes that carry none and for rows recorded before
+  // session-25. The payments surface renders it beside the outcome (the
+  // operator's "how much needs refunding?").
+  amount Int?
   receivedAt      DateTime @default(now())
 }
 

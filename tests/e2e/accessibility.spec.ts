@@ -43,9 +43,12 @@ const AXE_PATH = "node_modules/axe-core/axe.min.js";
 
 type Violation = { id: string; nodes: number };
 
-const runAxe = async (page: import("@playwright/test").Page): Promise<Violation[]> => {
+const runAxe = async (
+  page: import("@playwright/test").Page,
+  tags: string[] = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+): Promise<Violation[]> => {
   await page.addScriptTag({ path: AXE_PATH });
-  return page.evaluate(async () => {
+  return page.evaluate(async (tagValues) => {
     // Scroll-reveal: walk the page bottom-ward so any lazily-revealed
     // content enters the visibility state axe checks.
     await new Promise<void>((resolve) => {
@@ -63,9 +66,9 @@ const runAxe = async (page: import("@playwright/test").Page): Promise<Violation[
     await new Promise((r) => setTimeout(r, 300));
     const axeResult = await (
       window as unknown as { axe: { run: (c: Document, o: object) => Promise<{ violations: { id: string; nodes: unknown[] }[] }> } }
-    ).axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } });
+    ).axe.run(document, { runOnly: { type: "tag", values: tagValues } });
     return axeResult.violations.map((v) => ({ id: v.id, nodes: v.nodes.length }));
-  });
+  }, tags);
 };
 
 // The pinned parity profile: per-route color-contrast node counts,
@@ -207,18 +210,32 @@ test.describe("a11y admin gate (session-16, A11Y-GATE-2)", () => {
   }
 
   // Session-24 (PAY-OPS-1): the payments surface joins the admin gate —
-  // its own E2E-calibrated QUALITY pin (8 color-contrast nodes, the
-  // footer's shared trait). Note: under the full default tag set the
-  // console LIST pages (orders/products/payments) also share a
-  // best-practice heading-order observation (the lone h1 → the footer's
-  // h3 columns) — outside the gate's WCAG runOnly set and identical
-  // family-wide; documented in docs/session_46.md, not a per-page defect.
+  // its own E2E-calibrated QUALITY pin (the footer's shared trait).
+  // Session-25 (PAY-OPS-2): 8 → 9 — the fourth fixture (the
+  // refund-needed family's seeded instance) renders one more destructive
+  // outcome line (`.text-destructive` on the card background — the SAME
+  // app-wide destructive-color contrast class, node-enumerated via the
+  // calibration probe; not a new defect class).
   test("admin payments: the violation census is exactly {color-contrast} with the quality-pinned count", async () => {
     await admin.goto("/admin/payments", { waitUntil: "networkidle" });
     const violations = await runAxe(admin);
     const ids = violations.map((v) => v.id).sort();
     expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
-    expect(violations[0].nodes).toBe(8);
+    expect(violations[0].nodes).toBe(9);
+  });
+
+  // Session-25 (A11Y-HEADING-1): the console LIST pages' heading-order
+  // family observation RESOLVED — each list page carries an sr-only h2
+  // labelling its list region, so the h1 → h2 → footer-h3 order is valid
+  // and the best-practice-tag census on the console surfaces is exactly
+  // EMPTY (the storefront pages keep the reference's own heading shape —
+  // parity, untouched).
+  test("console list pages: the best-practice census is exactly empty (A11Y-HEADING-1, session-25)", async () => {
+    for (const path of ["/admin/orders", "/admin/products", "/admin/payments"]) {
+      await admin.goto(path, { waitUntil: "networkidle" });
+      const violations = await runAxe(admin, ["best-practice"]);
+      expect(violations, `${path}: ${JSON.stringify(violations)}`).toEqual([]);
+    }
   });
 });
 

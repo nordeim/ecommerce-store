@@ -198,7 +198,8 @@ test.describe("admin console (admin session)", () => {
 // their own honest copy. The canonical fixture set (e2e-reset restores it
 // every run): evt_demo_fixture_s → ORD-2026-003 (the Stripe-paid demo
 // order), evt_demo_fixture_f (payment_failed), evt_demo_fixture_r
-// (charge.refunded).
+// (charge.refunded), evt_demo_fixture_n (succeeded, NO order — the
+// refund-needed family's seeded instance, session-25).
 // ---------------------------------------------------------------------------
 test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
   let admin: Page;
@@ -219,9 +220,11 @@ test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
     // surface — the R10-2 customer-copy rule does not apply here).
     await expect(admin.getByText("Stripe is in demo mode", { exact: false })).toBeVisible();
 
-    // Three fixture events, newest first, each with its honest outcome.
-    await expect(admin.getByText("3 payment events", { exact: true })).toBeVisible();
-    await expect(admin.getByText("payment_intent.succeeded", { exact: true })).toBeVisible();
+    // Four fixture events, newest first, each with its honest outcome.
+    // (Two succeeded fixtures since session-25: the placed s fixture + the
+    // refund-needed n fixture — the strict-mode-safe count form.)
+    await expect(admin.getByText("4 payment events", { exact: true })).toBeVisible();
+    await expect(admin.getByText("payment_intent.succeeded", { exact: true })).toHaveCount(2);
     await expect(
       admin.getByRole("link", { name: "ORD-2026-003" })
     ).toBeVisible();
@@ -237,15 +240,21 @@ test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
     await admin.getByRole("combobox", { name: "Filter by family" }).click();
     await admin.getByRole("option", { name: "Succeeded" }).click();
     await expect(admin).toHaveURL(/\/admin\/payments\?family=succeeded$/);
-    await expect(admin.getByText("1 payment event", { exact: true })).toBeVisible();
+    // Two succeeded fixtures since session-25 (the placed s + the
+    // refund-needed n — the family contains both; the refund-needed
+    // filter narrows further).
+    await expect(admin.getByText("2 payment events", { exact: true })).toBeVisible();
     await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toBeVisible();
+    await expect(
+      admin.getByText("No order — refund via Stripe dashboard", { exact: true })
+    ).toBeVisible();
     await expect(admin.getByText("payment_intent.payment_failed", { exact: true })).toHaveCount(0);
 
     // Deep-link lands in the same filtered state; a bad family value
     // falls through to the unfiltered list (never an error).
     await admin.goto("/admin/payments?family=bogus");
     await admin.waitForLoadState("networkidle");
-    await expect(admin.getByText("3 payment events", { exact: true })).toBeVisible();
+    await expect(admin.getByText("4 payment events", { exact: true })).toBeVisible();
   });
 
   test("payments searches by intent id fragment", async () => {
@@ -270,7 +279,57 @@ test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
 
     await admin.getByRole("button", { name: "Clear" }).click();
     await expect(admin).toHaveURL(/\/admin\/payments$/);
-    await expect(admin.getByText("3 payment events", { exact: true })).toBeVisible();
+    await expect(admin.getByText("4 payment events", { exact: true })).toBeVisible();
+  });
+
+  // session-25, PAY-OPS-2a: the refund-needed family — the operator's most
+  // actionable signal as a first-class filter (succeeded events with NO
+  // linked order: exactly the deterministic-failure family the webhook
+  // records + 200s per ADR-031).
+  test("payments filters by the refund-needed family (session-25, PAY-OPS-2a)", async () => {
+    await admin.goto("/admin/payments?family=refund-needed");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/family=refund-needed/);
+    await expect(admin.getByText("1 payment event", { exact: true })).toBeVisible();
+    // The fixture-n row: succeeded, no order, the destructive outcome line.
+    await expect(
+      admin.getByText("No order — refund via Stripe dashboard", { exact: true })
+    ).toBeVisible();
+    await expect(admin.getByText("pi_demo_fixture_006")).toBeVisible();
+    // The placed fixture is NOT in the family (it resolved to an order).
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByText("Payment failed", { exact: true })).toHaveCount(0);
+
+    // The Select offers the family (the operator's filter bar).
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByRole("combobox", { name: "Filter by family" }).click();
+    await admin.getByRole("option", { name: "Refund needed" }).click();
+    await expect(admin).toHaveURL(/family=refund-needed/);
+  });
+
+  test("the refund-needed family ANDs with the search query (the combined-filter shape)", async () => {
+    // family=refund-needed + q=<the PLACED fixture's intent> → empty: the
+    // s fixture is succeeded WITH an order, so it is not in the family —
+    // the AND shape's behavioral pin.
+    await admin.goto("/admin/payments?family=refund-needed&q=pi_demo_fixture_003");
+    await admin.waitForLoadState("networkidle");
+    await expect(
+      admin.getByRole("heading", { name: "No payment events match your filters" })
+    ).toBeVisible();
+  });
+
+  // session-25, PAY-OPS-2b: the event rows render the AMOUNT beside the
+  // outcome — the operator sees the magnitude ("how much needs refunding?").
+  test("payment rows render the event amount beside the outcome (session-25, PAY-OPS-2b)", async () => {
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    // The placed fixture (ORD-2026-003's pinned display total 52497c).
+    await expect(admin.getByText("$524.97", { exact: true })).toBeVisible();
+    // The refund-needed fixture (14900c — the actionable magnitude).
+    await expect(admin.getByText("$149.00", { exact: true })).toBeVisible();
+    // The failed fixture (8999c).
+    await expect(admin.getByText("$89.99", { exact: true })).toBeVisible();
   });
 
   test("the succeeded event deep-links to its order detail", async () => {

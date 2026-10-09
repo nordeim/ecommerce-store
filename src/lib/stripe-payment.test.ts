@@ -26,6 +26,7 @@ import {
   paymentIntentLast4,
   resolveStripeConfig,
   shippingSnapshotHash,
+  stripeEventIntentId,
   stripeIdempotencyKey,
   verifyPaymentIntentForPlacement,
 } from "./stripe-payment";
@@ -376,6 +377,41 @@ describe("parseStripeWebhookEvent", () => {
       data: { object: { id: "pi_1", status: "succeeded", amount: 100, currency: "usd" } },
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("parses a charge-family object carrying payment_intent (session-25, PAY-OPS-2c)", () => {
+    const parsed = parseStripeWebhookEvent({
+      id: "evt_ch_1",
+      type: "charge.refunded",
+      data: { object: { id: "ch_1", payment_intent: "pi_behind", amount: 7999, currency: "usd" } },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.data.object.payment_intent).toBe("pi_behind");
+      expect(parsed.data.data.object.amount).toBe(7999);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stripeEventIntentId (session-25, PAY-OPS-2c) — the honest intent column
+// ---------------------------------------------------------------------------
+
+describe("stripeEventIntentId", () => {
+  it("uses the object's own id for payment_intent events (the object IS the intent)", () => {
+    expect(stripeEventIntentId({ id: "pi_1" })).toBe("pi_1");
+  });
+
+  it("prefers payment_intent for charge-family objects (a charge is not an intent)", () => {
+    expect(stripeEventIntentId({ id: "ch_1", payment_intent: "pi_behind" })).toBe("pi_behind");
+  });
+
+  it("falls back to the object id when no payment_intent is present", () => {
+    expect(stripeEventIntentId({ id: "sub_1" })).toBe("sub_1");
+  });
+
+  it("empty-string payment_intent falls back to the object id (Stripe never sends it, but be honest)", () => {
+    expect(stripeEventIntentId({ id: "ch_1", payment_intent: "" })).toBe("ch_1");
   });
 });
 

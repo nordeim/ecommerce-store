@@ -7,6 +7,7 @@ import {
   classifyStripeEvent,
   classifyWebhookPlacementError,
   parseStripeWebhookEvent,
+  stripeEventIntentId,
   verifyPaymentIntentForPlacement,
 } from "@/lib/stripe-payment";
 
@@ -68,11 +69,26 @@ function safe400(message: string) {
  * record-only classifications, the client-path-precedence no-op, and the
  * permanent-failure refund trails. Tolerates a concurrent recording of the
  * same event (P2002 → the delivery is already accounted for).
+ *
+ * Session-25 (PAY-OPS-2b/2c): the row persists the payload AMOUNT (minor
+ * units — the payments surface renders the magnitude beside the outcome)
+ * and the HONEST intent id (`payment_intent` for charge-family objects,
+ * the object's own id otherwise — the surface's q-search over the intent
+ * column stays truthful for the charge family).
  */
-async function recordEvent(evt: { id: string; type: string; data: { object: { id: string } } }) {
+async function recordEvent(evt: {
+  id: string;
+  type: string;
+  data: { object: { id: string; amount?: number; payment_intent?: string } };
+}) {
   try {
     await db.stripeEvent.create({
-      data: { eventId: evt.id, type: evt.type, paymentIntentId: evt.data.object.id },
+      data: {
+        eventId: evt.id,
+        type: evt.type,
+        paymentIntentId: stripeEventIntentId(evt.data.object),
+        amount: evt.data.object.amount ?? null,
+      },
     });
   } catch (e) {
     const cls = classifyWebhookPlacementError(e);
@@ -227,7 +243,12 @@ export async function POST(request: NextRequest) {
     const s = shippingSnapshot.data;
     const number = await db.$transaction(async (tx) => {
       await tx.stripeEvent.create({
-        data: { eventId: evt.id, type: evt.type, paymentIntentId: intentView.id },
+        data: {
+          eventId: evt.id,
+          type: evt.type,
+          paymentIntentId: intentView.id,
+          amount: intentView.amount ?? null,
+        },
       });
 
       const year = new Date().getFullYear();

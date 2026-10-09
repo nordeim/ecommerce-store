@@ -496,19 +496,36 @@ async function main() {
       eventId: "evt_demo_fixture_s",
       type: "payment_intent.succeeded",
       paymentIntentId: "pi_demo_fixture_003",
+      // ORD-2026-003's pinned display total — the placed row's magnitude.
+      amount: 52497,
       receivedAt: new Date("2026-02-20T18:45:40Z"),
     },
     {
       eventId: "evt_demo_fixture_f",
       type: "payment_intent.payment_failed",
       paymentIntentId: "pi_demo_fixture_004",
+      // The attempted amount (minor units).
+      amount: 8999,
       receivedAt: new Date("2026-02-21T09:12:00Z"),
     },
     {
       eventId: "evt_demo_fixture_r",
       type: "charge.refunded",
       paymentIntentId: "pi_demo_fixture_005",
+      // The refunded amount (minor units).
+      amount: 7999,
       receivedAt: new Date("2026-02-22T14:03:00Z"),
+    },
+    {
+      // Session-25, PAY-OPS-2a: the refund-needed family's seeded instance
+      // — a succeeded event with NO linked order (exactly the
+      // deterministic-failure shape the webhook records + 200s per
+      // ADR-031). The family filter's demonstrability fixture.
+      eventId: "evt_demo_fixture_n",
+      type: "payment_intent.succeeded",
+      paymentIntentId: "pi_demo_fixture_006",
+      amount: 14900,
+      receivedAt: new Date("2026-02-23T11:27:00Z"),
     },
   ];
   for (const e of stripeEvents) {

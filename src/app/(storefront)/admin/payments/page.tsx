@@ -7,6 +7,7 @@ import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { AdminPaymentFilters } from "@/components/account/admin-payment-filters";
 import { Button } from "@/components/ui/button";
 import { resolveStripeConfig } from "@/lib/stripe-config";
+import { formatCents } from "@/lib/money";
 import {
   buildAdminPaymentWhere,
   parseAdminPaymentFilters,
@@ -19,15 +20,19 @@ export const metadata: Metadata = {
   title: "Admin · Payments",
 };
 
-// Admin payment-ops surface (session-24, PAY-OPS-1, ADR-032): the
+// Admin payment-ops surface (session-24, PAY-OPS-1, ADR-032; refined
+// session-25, PAY-OPS-2, ADR-033): the
 // StripeEvent log — the webhook backstop's write path (sessions 22/23)
 // finally has its read surface. Every event's OUTCOME is derived from DB
 // state: a succeeded event resolves to the placed order (deep link) or to
 // the refund-needed family (the deterministic failures the webhook
 // records + 200s — amount mismatch, stock-short, unusable metadata,
 // vanished cart); failed events and ignored types render their own honest
-// copy. The take stays bounded at 100; the count line makes the filtered
-// size visible so truncation can never read as "everything".
+// copy. Session-25: the refund-needed family is a first-class FILTER (the
+// operator's most actionable signal) and every row renders its AMOUNT
+// beside the outcome ("how much needs refunding?"). The take stays
+// bounded at 100; the count line makes the filtered size visible so
+// truncation can never read as "everything".
 const TAKE = 100;
 
 export default async function AdminPaymentsPage({
@@ -41,7 +46,24 @@ export default async function AdminPaymentsPage({
 
   const params = await searchParams;
   const filters = parseAdminPaymentFilters(params);
-  const where = buildAdminPaymentWhere(filters);
+
+  // The refund-needed family (session-25, PAY-OPS-2a): the seam's
+  // "succeeded AND not linked to any placed order" needs the placed-intent
+  // set — ONE bounded query (orders holding a Stripe intent). The E2E
+  // deep-link test fails if this fetch is ever dropped (every succeeded
+  // event would render as refund-needed).
+  let placedIntentIds: string[] | undefined;
+  if (filters.family === "refund-needed") {
+    const placedOrders = await db.order.findMany({
+      where: { stripePaymentIntentId: { not: null } },
+      select: { stripePaymentIntentId: true },
+    });
+    placedIntentIds = placedOrders
+      .map((o) => o.stripePaymentIntentId)
+      .filter((id): id is string => id !== null);
+  }
+
+  const where = buildAdminPaymentWhere(filters, placedIntentIds);
 
   const [events, total] = await Promise.all([
     db.stripeEvent.findMany({
@@ -107,6 +129,12 @@ export default async function AdminPaymentsPage({
 
         <p className="text-sm text-muted-foreground mb-4">{countLabel}</p>
 
+        {/* A11Y-HEADING-1 (session-25): the sr-only h2 labels the list
+            region so the page's heading order is h1 → h2 → (empty-state h3 /
+            the footer's h3 columns) — the console LIST family's
+            best-practice heading-order observation resolved. */}
+        <h2 className="sr-only">Payment event list</h2>
+
         {events.length === 0 ? (
           <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
             <div className="text-center py-12">
@@ -155,7 +183,14 @@ export default async function AdminPaymentsPage({
                           })}
                         </p>
                       </div>
-                      <div className="shrink-0">
+                      <div className="shrink-0 text-right">
+                        {/* PAY-OPS-2b (session-25): the magnitude beside the
+                            outcome — the operator's first question ("how much
+                            needs refunding?"). Null for payload shapes that
+                            carry no amount + pre-session-25 rows. */}
+                        {e.amount != null && (
+                          <p className="text-sm font-semibold mb-0.5">{formatCents(e.amount)}</p>
+                        )}
                         {outcome.kind === "placed" ? (
                           <Link
                             href={`/admin/orders/${outcome.orderId}`}

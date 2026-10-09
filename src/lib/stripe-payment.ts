@@ -251,7 +251,10 @@ const metadataSchema = z.record(z.string());
 /**
  * Structural parse of the webhook envelope — defense in depth AFTER
  * `constructEvent` verified authenticity (a well-formed event still needs
- * a usable id + data.object to be processable).
+ * a usable id + data.object to be processable). `payment_intent` is the
+ * charge-family's reference to its owning PaymentIntent (session-25,
+ * PAY-OPS-2c) — `stripeEventIntentId` reads it to keep the StripeEvent
+ * intent column honest for charge.* deliveries.
  */
 export const stripeWebhookEventSchema = z.object({
   id: z.string().min(1),
@@ -262,6 +265,7 @@ export const stripeWebhookEventSchema = z.object({
       status: z.string().optional(),
       amount: z.number().optional(),
       currency: z.string().optional(),
+      payment_intent: z.string().optional(),
       metadata: metadataSchema.optional(),
     }),
   }),
@@ -272,6 +276,27 @@ export function parseStripeWebhookEvent(raw: unknown) {
 }
 
 export type StripeWebhookEvent = z.infer<typeof stripeWebhookEventSchema>;
+
+// ---------------------------------------------------------------------------
+// stripeEventIntentId (session-25, PAY-OPS-2c) — the honest intent column
+// ---------------------------------------------------------------------------
+
+/**
+ * The intent id a StripeEvent row should record for this object:
+ * `payment_intent` when the object carries one (charge-family events —
+ * a charge is not an intent), else the object's own id (payment_intent.*
+ * events ARE intents; other shapes keep their object id). The empty-string
+ * guard exists only for honesty — Stripe never sends an empty
+ * payment_intent.
+ */
+export function stripeEventIntentId(object: {
+  id: string;
+  payment_intent?: string;
+}): string {
+  return object.payment_intent && object.payment_intent.length > 0
+    ? object.payment_intent
+    : object.id;
+}
 
 // ---------------------------------------------------------------------------
 // last4 extraction — defensive against every SDK shape

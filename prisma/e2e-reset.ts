@@ -10,26 +10,43 @@ import { hashResetToken } from "../src/lib/reset-token";
  */
 const db = new PrismaClient();
 
-const FIXTURE_EVENT_IDS = ["evt_demo_fixture_s", "evt_demo_fixture_f", "evt_demo_fixture_r"];
+const FIXTURE_EVENT_IDS = [
+  "evt_demo_fixture_s",
+  "evt_demo_fixture_f",
+  "evt_demo_fixture_r",
+  "evt_demo_fixture_n",
+];
 
 const FIXTURE_STRIPE_EVENTS = [
   {
     eventId: "evt_demo_fixture_s",
     type: "payment_intent.succeeded",
     paymentIntentId: "pi_demo_fixture_003",
+    amount: 52497,
     receivedAt: new Date("2026-02-20T18:45:40Z"),
   },
   {
     eventId: "evt_demo_fixture_f",
     type: "payment_intent.payment_failed",
     paymentIntentId: "pi_demo_fixture_004",
+    amount: 8999,
     receivedAt: new Date("2026-02-21T09:12:00Z"),
   },
   {
     eventId: "evt_demo_fixture_r",
     type: "charge.refunded",
     paymentIntentId: "pi_demo_fixture_005",
+    amount: 7999,
     receivedAt: new Date("2026-02-22T14:03:00Z"),
+  },
+  {
+    // Session-25, PAY-OPS-2a: the refund-needed family's fixture — a
+    // succeeded event with NO linked order.
+    eventId: "evt_demo_fixture_n",
+    type: "payment_intent.succeeded",
+    paymentIntentId: "pi_demo_fixture_006",
+    amount: 14900,
+    receivedAt: new Date("2026-02-23T11:27:00Z"),
   },
 ];
 
@@ -102,11 +119,13 @@ async function main() {
     },
   });
 
-  // Session-24 (PAY-OPS-1): the payment-ops fixtures — the canonical
-  // StripeEvent set + the Stripe-paid ORD-2026-003 columns. The unconfigured
-  // webhook 400s before any write (the E2E default), so this normally only
-  // restores the seed's own fixtures; the guard keeps the surface's state
-  // canonical even if a future spec ever records events.
+  // Session-24 (PAY-OPS-1) + session-25 (PAY-OPS-2): the payment-ops
+  // fixtures — the canonical four-event StripeEvent set (incl. the
+  // refund-needed family's instance + the persisted amounts) + the
+  // Stripe-paid ORD-2026-003 columns. The unconfigured webhook 400s before
+  // any write (the E2E default), so this normally only restores the seed's
+  // own fixtures; the guard keeps the surface's state canonical even if a
+  // future spec ever records events.
   await db.stripeEvent.deleteMany({ where: { eventId: { notIn: FIXTURE_EVENT_IDS } } });
   for (const e of FIXTURE_STRIPE_EVENTS) {
     await db.stripeEvent.upsert({ where: { eventId: e.eventId }, create: e, update: e });

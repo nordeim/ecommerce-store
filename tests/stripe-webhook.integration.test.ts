@@ -398,4 +398,56 @@ describe("stripe webhook backstop (integration, PAY-STRIPE-2)", () => {
     expect(order).not.toBeNull();
     expect(order!.paymentStatus).toBe("paid");
   });
+
+  // session-25, PAY-OPS-2b: the recorded rows carry the event AMOUNT — the
+  // operator reading the payments surface sees the magnitude beside the
+  // outcome ("how much needs refunding?"), not just the signal.
+  test("the recorded event rows persist the payload amount (PAY-OPS-2b)", async () => {
+    const failedRes = await postEvent({
+      id: "evt_t12",
+      type: "payment_intent.payment_failed",
+      data: { object: { id: "pi_t12", status: "requires_payment_method", amount: 8999, currency: "usd" } },
+    });
+    expect(failedRes.status).toBe(200);
+    const failedRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t12" } });
+    expect(failedRow).not.toBeNull();
+    expect(failedRow!.amount).toBe(8999);
+
+    // The backstop placement path: the in-tx insert records the captured amount.
+    const fx = await seedFixture("t13");
+    const res = await postEvent(
+      succeededEvent({ evtId: "evt_t13", intentId: "pi_t13", amount: fx.total, cartId: fx.cartId }),
+    );
+    expect(res.status).toBe(200);
+    const placedRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t13" } });
+    expect(placedRow).not.toBeNull();
+    expect(placedRow!.amount).toBe(fx.total);
+  });
+
+  // session-25, PAY-OPS-2c: a charge-family event records the REAL intent id
+  // (the payload's payment_intent), not the charge id — the payments surface's
+  // q-search over the intent column stays honest for the charge family.
+  test("a charge-family event records the payload's payment_intent, not the charge id (PAY-OPS-2c)", async () => {
+    const res = await postEvent({
+      id: "evt_t14",
+      type: "charge.refunded",
+      data: { object: { id: "ch_t14", payment_intent: "pi_t14", amount: 7999, currency: "usd" } },
+    });
+    expect(res.status).toBe(200);
+    const row = await db.stripeEvent.findUnique({ where: { eventId: "evt_t14" } });
+    expect(row).not.toBeNull();
+    expect(row!.paymentIntentId).toBe("pi_t14");
+    expect(row!.amount).toBe(7999);
+
+    // The fallback shape (no payment_intent on the object) keeps the object id.
+    const fallback = await postEvent({
+      id: "evt_t15",
+      type: "charge.dispute.created",
+      data: { object: { id: "dp_t15", amount: 1499, currency: "usd" } },
+    });
+    expect(fallback.status).toBe(200);
+    const fallbackRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t15" } });
+    expect(fallbackRow).not.toBeNull();
+    expect(fallbackRow!.paymentIntentId).toBe("dp_t15");
+  });
 });

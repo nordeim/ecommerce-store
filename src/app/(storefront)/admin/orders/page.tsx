@@ -64,6 +64,12 @@ export default async function AdminOrdersPage({
 
         <p className="text-sm text-muted-foreground mb-4">{countLabel}</p>
 
+        {/* A11Y-HEADING-1 (session-25): the sr-only h2 labels the list
+            region so the page's heading order is h1 → h2 → (empty-state h3 /
+            the footer's h3 columns) — the console LIST family's
+            best-practice heading-order observation resolved. */}
+        <h2 className="sr-only">Orders list</h2>
+
         {orders.length === 0 ? (
           <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
             <div className="text-center py-12">

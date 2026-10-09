@@ -25,14 +25,14 @@ describe("parseAdminPaymentFilters", () => {
   });
 
   it("keeps canonical families", () => {
-    for (const f of ["succeeded", "failed", "other"]) {
+    for (const f of ["succeeded", "failed", "other", "refund-needed"]) {
       expect(parseAdminPaymentFilters({ family: f })).toEqual({ family: f });
     }
   });
 
   it("drops non-canonical families (case-sensitive contract)", () => {
     expect(parseAdminPaymentFilters({ family: "Succeeded" })).toEqual({});
-    expect(parseAdminPaymentFilters({ family: "refund-needed" })).toEqual({});
+    expect(parseAdminPaymentFilters({ family: "Refund-Needed" })).toEqual({});
     expect(parseAdminPaymentFilters({ family: "bogus" })).toEqual({});
   });
 
@@ -95,6 +95,54 @@ describe("buildAdminPaymentWhere", () => {
       ],
     });
   });
+
+  // session-25, PAY-OPS-2: the refund-needed family — the operator's most
+  // actionable signal (the deterministic-failure rows the webhook records
+  // + 200s per ADR-031). The where expresses "succeeded AND not linked to
+  // any placed order": notIn over the placed-intent set + the null branch
+  // (a succeeded event with no intent id is refund-needed per the resolver).
+  it("family=refund-needed matches succeeded events not in the placed-intent set", () => {
+    expect(buildAdminPaymentWhere({ family: "refund-needed" }, ["pi_a", "pi_b"])).toEqual({
+      type: "payment_intent.succeeded",
+      OR: [
+        { paymentIntentId: { notIn: ["pi_a", "pi_b"] } },
+        { paymentIntentId: null },
+      ],
+    });
+  });
+
+  it("family=refund-needed with an empty placed-intent set matches every succeeded event", () => {
+    expect(buildAdminPaymentWhere({ family: "refund-needed" }, [])).toEqual({
+      type: "payment_intent.succeeded",
+      OR: [{ paymentIntentId: { notIn: [] } }, { paymentIntentId: null }],
+    });
+  });
+
+  it("family=refund-needed defaults the placed-intent set to empty (fresh-DB honest)", () => {
+    expect(buildAdminPaymentWhere({ family: "refund-needed" })).toEqual({
+      type: "payment_intent.succeeded",
+      OR: [{ paymentIntentId: { notIn: [] } }, { paymentIntentId: null }],
+    });
+  });
+
+  it("family=refund-needed ANDs with q keeping the type+notIn group intact", () => {
+    expect(buildAdminPaymentWhere({ family: "refund-needed", q: "pi_123" }, ["pi_a"])).toEqual({
+      AND: [
+        {
+          type: "payment_intent.succeeded",
+          OR: [{ paymentIntentId: { notIn: ["pi_a"] } }, { paymentIntentId: null }],
+        },
+        { OR: [{ paymentIntentId: { contains: "pi_123" } }, { eventId: { contains: "pi_123" } }] },
+      ],
+    });
+  });
+
+  it("the placed-intent set is ignored for the other families", () => {
+    expect(buildAdminPaymentWhere({ family: "succeeded" }, ["pi_a"])).toEqual({
+      type: "payment_intent.succeeded",
+    });
+    expect(buildAdminPaymentWhere({}, ["pi_a"])).toEqual({});
+  });
 });
 
 describe("resolvePaymentEventOutcome", () => {
@@ -142,10 +190,11 @@ describe("resolvePaymentEventOutcome", () => {
 });
 
 describe("ADMIN_PAYMENT_FAMILY_OPTIONS", () => {
-  it("carries the three canonical families with labels", () => {
+  it("carries the four canonical families with labels (refund-needed promoted, session-25)", () => {
     expect(ADMIN_PAYMENT_FAMILY_OPTIONS).toEqual([
       { value: "succeeded", label: "Succeeded" },
       { value: "failed", label: "Failed" },
+      { value: "refund-needed", label: "Refund needed" },
       { value: "other", label: "Other" },
     ]);
   });
