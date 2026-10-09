@@ -287,5 +287,5 @@ transient, the string-form target, `isIntentAnchorP2002` × 3).
 - [x] Screenshots 126-130 under `docs/screenshots/` + VLM-verified 5/5
 - [x] Docs updated (AGENTS/CLAUDE/README/PAD v1.23/SKILL v1.23.0/
       session_44/worklog); `.env.example` verified current
-- [ ] Committed on `main` + pushed via the SSH wrapper (remote verified,
-      the operator key shredded)
+- [x] Committed on `main` + pushed via the SSH wrapper (remote verified
+      `refs/heads/main @ 5ca95a2 == local HEAD`, the operator key shredded)
