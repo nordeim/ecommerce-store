@@ -279,5 +279,5 @@ after the push.
 - [x] Screenshots 136-140 under `docs/screenshots/` + VLM-verified
 - [x] Docs updated (AGENTS/CLAUDE/README/PAD v1.25/SKILL v1.25.0/
       session_49/worklog); `.env.example` verified current
-- [ ] Committed on `main` + pushed via the SSH wrapper (remote verified
-      `refs/heads/main == local HEAD`, the operator key shredded) — the push sign-off
+- [x] Committed on `main` + pushed via the SSH wrapper (remote verified
+      `refs/heads/main @ 246852a == local HEAD`, the operator key shredded)
