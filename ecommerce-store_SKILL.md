@@ -6,8 +6,8 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.28.0
-last_updated: "2026-10-09"
+version: 1.29.0
+last_updated: "2026-10-10"
 tags:
   - e-commerce
   - nextjs
@@ -953,6 +953,28 @@ Then:
     drift (run the playbook). Proof shape: the instrumented sweep's output
     line `home 0% (6 px) [hero ref=…(painted) clone=…(painted)]`.
 
+39. **A battery login helper that reads the landing pathname after a
+    fixed wait breaks silently when the reference's redirect chain slows
+    — wait for the URL to LEAVE the login page, not for network quiet
+    (L38, session-29).** The round-29 battery's FIRST sweep read `ref
+    login -> /login` and measured every authed route 22-66% out-of-band:
+    the reference's login redirect chain (login -> login xN -> /) had
+    slowed past the helper's networkidle + 1500ms window, so the helper
+    read the PRE-redirect pathname and every subsequent authed reference
+    capture ran in a logged-OUT context — an unauthenticated diff
+    masquerading as catastrophic drift. The login itself SUCCEEDED (the
+    final URL is `/` with the authenticated home DOM); only the READ was
+    early. Rules: (a) after a login click, wait for the URL to LEAVE the
+    login route (page.waitForURL((u) => !u.pathname.startsWith("/login"),
+    { timeout: 25000 })) BEFORE the networkidle + settle reads — a
+    redirecting login chain has no stable "quiet" moment on its own; (b)
+    an out-of-band reading on EVERY authed route at once (login-like
+    diffs) is the signature of an auth failure, not drift — drift is
+    localized; (c) the same helper shape ships in every battery script
+    (sweep, mobile-nav, watches) — patch them all, not just the one that
+    fired. Proof shape: the re-run battery fully green with
+    `ref login -> /`.
+
 ## 13. Pitfalls to Avoid
 
 - **Don't** rewrite class strings to v4 equivalents "for cleanliness" — the
@@ -1263,6 +1285,8 @@ Full records with context/rationale/consequences in
 | 034 | The reference-drift remediation + the payments date-range filter (HERO-DRIFT-1 + HEADER-DRIFT-1 + PAY-OPS-3, session-26) — the reference SILENTLY regenerated its slide-3 hero image + re-pointed all three CTAs to plain /shop + tightened its header icon cluster to gap-1 + re-structured its mobile row to three direct children; the 13-round pixel-sweep band held throughout (every standing gate is content-agnostic); fixes: the slide-3 image + plain-/shop CTAs (page.tsx), the unwrapped mobile row + gap-1 cluster (header.tsx), and the NEW standing content pins (the hero-content test — 3 img srcs by hash tail + 3 CTA hrefs via DOM traversal; the header-geometry tests — column-gap 4px + cluster 156 + nav x=270 at 1024, the three-child distribution at 390 located via the banner's logo link — the display:none nav is invisible to role queries); post-fix the sweep reads home 0% (6 px); PAY-OPS-3: the payments date-range filter (`?from=`/`?to=` strict YYYY-MM-DD — shape regex + Date round-trip, bad bounds fall through, from>to drops the pair; ONE receivedAt clause at UTC day boundaries — gte from's midnight, lt the midnight AFTER to; the composable-AND where refactor — each dimension one element, single elements render bare, pre-session-26 shapes byte-identical; two URL-controlled date inputs pushing merged params in canonical order — the props are PRE-navigation state, so a Select change would otherwise append family last); +10 Vitest + 7 E2E (433 total); triple-mutation-proven (M1 the image revert, M2 the gap revert, M3 the clause drop — each reverted byte-exact); L36 |
 | 035 | The console trifecta completion — the products list's URL-deep-linkable filters (ADMIN-PRODUCTS-1, session-27) + the docs-alignment corrections (DOCS-ALIGN-1) — /admin/products takes `?q=` (name OR slug contains), `?category=` (validated against the DB-fetched slug set the PAGE passes the pure seam as input — the placedIntentIds precedent, the seam never hard-codes the catalog), `?visibility=` (active/hidden — the eye-toggle seam's list-level answer); bad deep-links fall through to the unfiltered list (the family contract); the composable-AND where (the category element is Prisma's relation filter `{ category: { slug } }`); the canonical param order (category, q, visibility); the filtered-of-total count line (no take bound, no "100+" form); the guided empty state; the a11y products census pin UNCHANGED by the island (× 7 — no recalibration); DOCS-ALIGN-1: the stale reference-table counts corrected (CLAUDE 198/217 → 226/230, README/PAD 13 → 15 models, 25 → 27 verifications); +18 Vitest + 5 E2E (456 total); triple-mutation-proven (M1 the name-only OR, M2 the dropped category validation, M3 the dropped visibility clause) |
 | 036 | The dashboard refund-needed alert stat (DASH-ALERT-1, session-28) + the sweep's hero-phase self-diagnosis (SWEEP-DIAG-1, L37) — the console's entry point surfaces the payments family's most actionable signal: the count composes with the SAME seam the family filter uses (`buildAdminPaymentWhere({ family: "refund-needed" }, placedIntentIds)` — a divergent count between the dashboard stat and the payments list is structurally impossible); the pure `refundNeededAlert(count)` presentation contract ({visible:false} at 0 — the honest calm state, only the unit layer can pin it (the e2e fixture set deterministically counts 1); singular/plural labels; the href exactly the family Select's own value); the alert row between the stat grid and Recent Orders with an ICON-ONLY destructive accent (destructive TEXT measures ~3.9:1 on the card and would grow the pinned admin a11y census — the pin stays 8) + the "Review payments" deep-link; SWEEP-DIAG-1: the round's first battery read home 59.95% out-of-band — 4 independent re-measurements all 0.00% — a transient cold-boot remote-media paint race; the sweep now RECORDS the hero phase at capture time (hash tail + paint state, BOTH sides) making the drift signal self-diagnosing; +4 Vitest + 1 E2E (461 total); triple-mutation-proven (M1 the visibility-gate inversion, M2 the pluralization drop, M3 the empty placed-intent set — the E2E integration guard); L37 |
+
+| 037 | The order-detail payment-event trail (REFUND-TRAIL-1, session-29) + the battery login robustness fix (L38) — the order side of the payments deep link: a Stripe-paid order's detail (/admin/orders/[id]) renders the StripeEvent rows for its intent (the capture + any dashboard refunds) as a "Payment events" card between Items and the Timeline, composed through ONE bounded query on the exact linkage the payments outcome resolver uses (paymentIntentId = the order's stripePaymentIntentId) + the pure orderPaymentTrail/paymentEventLabel seams in src/lib/admin-payments.ts (the module boundary follows the data — the session-28 dashboard precedent; the operator vocabulary: succeeded -> "Payment captured", charge.refunded -> "Refunded", payment_failed -> "Payment failed", unknown types pass through raw — the parse family's fall-through philosophy; the calm state {visible:false} on an empty set — a non-Stripe order renders NO card, which is also what keeps the a11y order-detail census pin at 7 — the census page is a non-Stripe order); contrast-safe by construction (foreground + muted only, no destructive accent); L38: the reference's login redirect chain became slow (login -> login xN -> / takes >2.5s) — the battery login helpers read the pre-redirect pathname and captured every authed route logged-OUT (40-66% false out-of-band, an unauthenticated diff masquerading as drift); every reference login helper now waits for the URL to LEAVE /login (waitForURL, 25s) before reading state; +5 Vitest + 1 E2E (467 total); triple-mutation-proven (M1 the label-mapping drop, M2 the visible-gate inversion, M3 the page's wrong-column query — the E2E integration guard); the a11y order-detail pin unchanged; the 29th mobile-nav token-exact verification; watches + census clean |
 
 ## Appendix B: The Meticulous Workflow
 

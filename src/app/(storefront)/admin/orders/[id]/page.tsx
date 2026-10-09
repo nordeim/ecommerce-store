@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { History, Mail, MapPin, Package, ReceiptText } from "lucide-react";
+import { CreditCard, History, Mail, MapPin, Package, ReceiptText } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
+import { orderPaymentTrail } from "@/lib/admin-payments";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,22 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     day: "numeric",
     year: "numeric",
   });
+
+  // Session-29, REFUND-TRAIL-1: the payment-event trail for this order's
+  // Stripe intent — the order side of the payments surface's deep link.
+  // ONE bounded query composed on the exact linkage the payments outcome
+  // resolver uses (paymentIntentId = the order's stripePaymentIntentId):
+  // the capture + any dashboard refunds, chronological. An order with no
+  // Stripe intent (or an intent with no recorded events) queries nothing
+  // and the seam's calm state renders no card.
+  const paymentEvents = order.stripePaymentIntentId
+    ? await db.stripeEvent.findMany({
+        where: { paymentIntentId: order.stripePaymentIntentId },
+        orderBy: { receivedAt: "asc" },
+        select: { type: true, amount: true, receivedAt: true },
+      })
+    : [];
+  const paymentTrail = orderPaymentTrail(paymentEvents);
 
   return (
     <div className="flex-1">
@@ -180,6 +197,49 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             </div>
           </div>
         </div>
+
+        {/* Session-29, REFUND-TRAIL-1: the payment-event trail — the
+            StripeEvent rows for this order's intent (the capture + any
+            dashboard refunds), chronological. Rendered only for Stripe-paid
+            orders (the seam's calm state) and placed with the fulfillment
+            Timeline (the two chronological trails read together). The row
+            anatomy + contrast budget mirror the payments surface:
+            foreground + muted text only — no destructive accent (the
+            a11y order-detail census pin stays put). */}
+        {paymentTrail.visible && (
+          <div className="bg-card rounded-2xl border border-border/50 shadow-sm mb-4">
+            <div className="flex items-center gap-2 p-6 pb-4">
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-semibold">Payment events</h2>
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-3">
+              {paymentTrail.events.map((event) => (
+                <div
+                  key={`${event.label}-${event.receivedAt.toISOString()}`}
+                  className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border/50"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">{event.label}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {event.receivedAt.toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  {event.amount != null && (
+                    <span className="font-semibold shrink-0">
+                      {formatCents(event.amount)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
           <div className="flex items-center gap-2 p-6 pb-4">

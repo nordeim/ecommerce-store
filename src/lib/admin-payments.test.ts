@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_PAYMENT_FAMILY_OPTIONS,
   buildAdminPaymentWhere,
+  orderPaymentTrail,
   parseAdminPaymentFilters,
+  paymentEventLabel,
   refundNeededAlert,
   resolvePaymentEventOutcome,
 } from "./admin-payments";
@@ -326,5 +328,58 @@ describe("refundNeededAlert (session-28, DASH-ALERT-1)", () => {
     const alert = refundNeededAlert(2);
     if (!alert.visible) throw new Error("expected visible at count 2");
     expect(alert.href).toBe("/admin/payments?family=refund-needed");
+  });
+});
+
+// ---- session-29, REFUND-TRAIL-1: the order-detail payment-event trail ----
+// The order side of the payments surface's deep link: /admin/orders/[id]
+// for a Stripe-paid order renders the StripeEvent rows for its intent
+// (the capture + any dashboard refunds). The label seam maps the raw
+// Stripe types to the operator's vocabulary; the trail seam owns the
+// presentation contract (the calm state at an empty set — an order with
+// no Stripe intent renders NO card, which is also what keeps the a11y
+// order-detail census pin at 7: the census page is a non-Stripe order).
+
+describe("paymentEventLabel (session-29, REFUND-TRAIL-1)", () => {
+  it("maps the canonical types to the operator vocabulary", () => {
+    expect(paymentEventLabel("payment_intent.succeeded")).toBe("Payment captured");
+    expect(paymentEventLabel("charge.refunded")).toBe("Refunded");
+    expect(paymentEventLabel("payment_intent.payment_failed")).toBe("Payment failed");
+  });
+
+  it("passes an unknown type through raw (the fall-through philosophy)", () => {
+    expect(paymentEventLabel("charge.dispute.created")).toBe("charge.dispute.created");
+    expect(paymentEventLabel("")).toBe("");
+  });
+});
+
+describe("orderPaymentTrail (session-29, REFUND-TRAIL-1)", () => {
+  it("is invisible for an empty event set (the honest calm state)", () => {
+    expect(orderPaymentTrail([])).toEqual({ visible: false });
+  });
+
+  it("maps rows to labels preserving order and the amount magnitude", () => {
+    const d1 = new Date("2026-02-20T18:45:40Z");
+    const d2 = new Date("2026-03-01T09:00:00Z");
+    const trail = orderPaymentTrail([
+      { type: "payment_intent.succeeded", amount: 52497, receivedAt: d1 },
+      { type: "charge.refunded", amount: 52497, receivedAt: d2 },
+    ]);
+    if (!trail.visible) throw new Error("expected visible for a non-empty set");
+    expect(trail.events).toEqual([
+      { label: "Payment captured", amount: 52497, receivedAt: d1 },
+      { label: "Refunded", amount: 52497, receivedAt: d2 },
+    ]);
+  });
+
+  it("keeps a null amount row (the PAY-OPS-2b contract — no magnitude rendered)", () => {
+    const d = new Date("2026-02-21T09:12:00Z");
+    const trail = orderPaymentTrail([
+      { type: "payment_intent.payment_failed", amount: null, receivedAt: d },
+    ]);
+    if (!trail.visible) throw new Error("expected visible for a non-empty set");
+    expect(trail.events).toEqual([
+      { label: "Payment failed", amount: null, receivedAt: d },
+    ]);
   });
 });

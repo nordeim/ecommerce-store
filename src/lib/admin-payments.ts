@@ -276,3 +276,60 @@ export function refundNeededAlert(count: number): RefundNeededAlert {
     href: "/admin/payments?family=refund-needed",
   };
 }
+
+/**
+ * The order-detail payment-event trail (session-29, REFUND-TRAIL-1) —
+ * the label vocabulary mapping the raw Stripe event types to the
+ * operator's mental model (the same vocabulary the family Select
+ * expresses). Unknown types pass through RAW (the parse family's
+ * fall-through philosophy — an unanticipated event type renders its
+ * honest name, never an error).
+ */
+export function paymentEventLabel(type: string): string {
+  if (type === PAYMENT_INTENT_SUCCEEDED_TYPE) return "Payment captured";
+  if (type === "charge.refunded") return "Refunded";
+  if (type === PAYMENT_INTENT_FAILED_TYPE) return "Payment failed";
+  return type;
+}
+
+/** The structural view of a StripeEvent row the trail consumes. */
+export type PaymentTrailRow = {
+  type: string;
+  amount: number | null;
+  receivedAt: Date;
+};
+
+/** One rendered trail row: the operator label + the magnitude + the date. */
+export type PaymentTrailEvent = {
+  label: string;
+  amount: number | null;
+  receivedAt: Date;
+};
+
+export type PaymentTrail =
+  | { visible: false }
+  | { visible: true; events: PaymentTrailEvent[] };
+
+/**
+ * The presentation contract for /admin/orders/[id]'s payment-event card:
+ * the StripeEvent rows for ONE intent (the page queries them
+ * `receivedAt asc`), mapped to label rows in input order.
+ *
+ * An EMPTY set → `{ visible: false }` — the honest calm state: an order
+ * with no Stripe intent, or an intent with no recorded events, renders
+ * NO card (the DASH-ALERT-1 alert-fatigue rule applied to the order
+ * surface; also what keeps the a11y order-detail census pin stable —
+ * the census page is a non-Stripe order). Pure + total: no Prisma
+ * import, no formatting (the page formats the amount/date).
+ */
+export function orderPaymentTrail(rows: PaymentTrailRow[]): PaymentTrail {
+  if (rows.length === 0) return { visible: false };
+  return {
+    visible: true,
+    events: rows.map((row) => ({
+      label: paymentEventLabel(row.type),
+      amount: row.amount,
+      receivedAt: row.receivedAt,
+    })),
+  };
+}

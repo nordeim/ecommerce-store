@@ -101,6 +101,40 @@ test.describe("admin console (admin session)", () => {
     await expect(admin.getByText("Order placed", { exact: true })).toBeVisible();
   });
 
+  // Session-29, REFUND-TRAIL-1: the order side of the payments deep link —
+  // a Stripe-paid order's detail renders the payment-event trail for its
+  // intent (the capture + any dashboard refunds), composed through the
+  // orderPaymentTrail seam. The seeded ORD-2026-003 (paymentStatus "paid",
+  // intent pi_demo_fixture_003) deterministically carries ONE trail row:
+  // evt_demo_fixture_s (succeeded, $524.97, Feb 20 2026). The integration
+  // guard's other side: a non-Stripe demo order (ORD-2026-001) renders NO
+  // trail card (the calm state — also what keeps the a11y order-detail
+  // census pin at 7).
+  test("the Stripe-paid order's detail renders the payment-event trail (session-29, REFUND-TRAIL-1)", async () => {
+    await admin.goto("/admin/orders");
+    await admin.getByRole("link", { name: "ORD-2026-003" }).click();
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/\/admin\/orders\/[a-z0-9]+$/);
+    // The trail card renders between Items and the Timeline.
+    await expect(admin.getByRole("heading", { name: "Payment events" })).toBeVisible();
+    // The capture row: the operator label + the fixture's magnitude. The
+    // row-scoped locator is required — the header total and the items
+    // total row render the same "$524.97" string on this page.
+    const captureRow = admin
+      .locator("div.rounded-xl")
+      .filter({ hasText: "Payment captured" })
+      .filter({ hasText: "$524.97" });
+    await expect(captureRow).toBeVisible();
+    // The fixture's received date renders in the row (the timestamp line).
+    await expect(captureRow.getByText(/Feb 20, 2026/)).toBeVisible();
+
+    // The calm state: a non-Stripe demo order renders NO trail card.
+    await admin.goto("/admin/orders");
+    await admin.getByRole("link", { name: "ORD-2026-001" }).click();
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByRole("heading", { name: "Payment events" })).toHaveCount(0);
+  });
+
   test("status transitions via the combobox land in the timeline", async () => {
     await admin.goto("/admin/orders");
     // Scope to ORD-2026-001's row through the combobox's stable aria-label

@@ -303,6 +303,31 @@ from the injected location) — the repo contract itself is test-pinned in
   parity risk — admin-only surface. Pinned by 4 unit + 1 E2E test;
   the a11y admin gate's dashboard census pin UNCHANGED at 8 (re-run
   green post-change, no recalibration).
+- **The Stripe-paid order's detail renders its payment-event trail
+  (session-29, REFUND-TRAIL-1, ADR-037 — the order side of the payments
+  deep link):** `/admin/orders/[id]` for an order holding a
+  `stripePaymentIntentId` runs ONE bounded query on the exact linkage
+  the payments outcome resolver uses (`db.stripeEvent.findMany({
+  where: { paymentIntentId: order.stripePaymentIntentId } }, receivedAt
+  asc)) and composes the rows through the pure `orderPaymentTrail` seam
+  in `src/lib/admin-payments.ts` (the payments data family — the module
+  boundary follows the data, the session-28 dashboard precedent). The
+  seam maps each row with `paymentEventLabel` (the operator vocabulary:
+  `payment_intent.succeeded` → "Payment captured", `charge.refunded` →
+  "Refunded", `payment_intent.payment_failed` → "Payment failed";
+  unknown types pass through RAW — the parse family's fall-through
+  philosophy) and owns the calm state: an EMPTY set → `{ visible:
+  false }` — an order with no Stripe intent renders NO card (also what
+  keeps the a11y order-detail census pin at 7: the census page is a
+  non-Stripe order). The card sits between Items and the Timeline (the
+  two chronological trails read together) with the console's card
+  anatomy and the payments surface's row shape — foreground + muted
+  text only, NO destructive accent. The seeded ORD-2026-003 ↔
+  `pi_demo_fixture_003` ↔ `evt_demo_fixture_s` ($524.97) is the
+  deterministic E2E target. Zero parity risk — admin-only surface.
+  Pinned by 5 unit + 1 E2E test; the a11y admin gate's order-detail
+  census pin UNCHANGED at 7 (re-run green post-change, no
+  recalibration).
 - **The console LIST pages' heading order is valid (session-25,
   A11Y-HEADING-1):** the three console list pages (orders/products/
   payments) each carry an `sr-only` h2 labelling their list region
