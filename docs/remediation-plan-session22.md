@@ -288,5 +288,6 @@ re-create the intent.
 - [x] Screenshots 121-125 under `docs/screenshots/` + VLM-verified 5/5
 - [x] Docs updated (AGENTS/CLAUDE/README/PAD v1.22/SKILL v1.22.0/session_42/
       worklog); `.env.example` carries the Stripe section
-- [ ] Committed on `main` + pushed via the SSH wrapper (checked off after the
-      push lands)
+- [x] Committed on `main` + pushed via the SSH wrapper (commit `96cddc6`,
+      remote verified `refs/heads/main @ 96cddc6 == local HEAD`, the operator
+      key shredded)
