@@ -135,6 +135,50 @@ test.describe("admin console (admin session)", () => {
     await expect(admin.getByRole("heading", { name: "Payment events" })).toHaveCount(0);
   });
 
+  // Session-32, REFUND-ACTION-1 (ADR-040): the refund action seam. The
+  // order detail's Customer card carries a two-step inline confirm
+  // (the GitHub destructive-action pattern — no dialog dependency) on
+  // eligible orders (Stripe intent + paymentStatus "paid" — the seeded
+  // ORD-2026-003 shape); the demo-mode environment (no Stripe keys —
+  // the honest configuration state) refuses with the operator copy
+  // pointing at the Stripe dashboard. The webhook remains the single
+  // writer of refund state on the order.
+  test("the refund control renders on the eligible order and the demo-mode refusal names the dashboard path (session-32, REFUND-ACTION-1)", async () => {
+    await admin.goto("/admin/orders");
+    await admin.getByRole("link", { name: "ORD-2026-003" }).click();
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/\/admin\/orders\/[a-z0-9]+$/);
+
+    // The resting control: an outline "Refund payment" button in the
+    // Customer card (the icon-only destructive accent — border + glyph,
+    // never destructive text: the ~3.9:1 contrast lesson).
+    const refundButton = admin.getByRole("button", { name: "Refund payment" });
+    await expect(refundButton).toBeVisible();
+
+    // Step 1 → the two-step confirm row (Confirm refund + Cancel).
+    await refundButton.click();
+    await expect(admin.getByRole("button", { name: "Confirm refund" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "Cancel" })).toBeVisible();
+
+    // Step 2 → the demo-mode refusal (operator copy, the R10-2
+    // customer-safe rule is a storefront contract, not a console one).
+    await admin.getByRole("button", { name: "Confirm refund" }).click();
+    await expect(
+      admin.getByText("Stripe is not configured — refund via the Stripe dashboard."),
+    ).toBeVisible();
+
+    // The order's money state is UNCHANGED by the refusal (the action
+    // never writes refund state — the webhook owns that transition).
+    await expect(admin.getByText("Paid (Stripe)")).toBeVisible();
+  });
+
+  test("the refund control's calm state: a non-Stripe demo order renders NO refund button", async () => {
+    await admin.goto("/admin/orders");
+    await admin.getByRole("link", { name: "ORD-2026-001" }).click();
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByRole("button", { name: "Refund payment" })).toHaveCount(0);
+  });
+
   test("status transitions via the combobox land in the timeline", async () => {
     await admin.goto("/admin/orders");
     // Scope to ORD-2026-001's row through the combobox's stable aria-label

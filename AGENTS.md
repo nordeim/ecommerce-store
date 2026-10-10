@@ -525,6 +525,39 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
   resolution — a retried guest submit must still render its confirmation).
   The same discipline applies to ANY future "view by public id" surface:
   sequential ids need a per-row secret or an ownership check.
+- **The refund loop closes in-app (session-32, REFUND-ACTION-1, ADR-040).**
+  Two halves, one contract: (a) `refundOrderAction`
+  (`src/lib/actions/admin.ts`) — the console's first money ACTION: an
+  admin-gated, eligibility-guarded refund of a Stripe-paid order
+  (`stripe.refunds.create` with the intent-scoped idempotency key
+  `refund:<intentId>` — one full refund per intent, replay-safe); demo
+  mode (no keys) refuses with the honest operator copy ("Stripe is not
+  configured — refund via the Stripe dashboard."). The RENDER GATE and
+  the ACTION GUARD compose the SAME pure seam — `refundEligibility` in
+  `src/lib/admin-payments.ts` (intent + `paymentStatus === "paid"`;
+  fulfillment status is orthogonal — a cancelled-but-paid order is
+  exactly the refund case) — the DASH-ALERT-1 shared-seam rule. (b) The
+  webhook's `charge.refunded` branch (`api/stripe/webhook/route.ts`) is
+  the SINGLE WRITER of refund state on the order: after the eventId
+  fast-path dedup, a FULL refund (Stripe's `refunded` boolean) commits
+  the dedup row + `paymentStatus: "refunded"` + a first-class
+  `payment_refunded` OrderEvent in ONE transaction (the H4d/L9 rule
+  applied to the reflection — a row committed before a failed reflection
+  would orphan the delivery); a PARTIAL refund writes the timeline note
+  only; no linked order (or a non-paid order) records standalone —
+  today's behavior. The action NEVER writes refund state (no optimistic
+  local truth — the webhook's delivery is the truth). The order detail's
+  Refund control is a two-step inline confirm (the GitHub
+  destructive-action pattern — no dialog dependency) with the
+  ICON-ONLY destructive accent (`border-destructive/30` + RotateCcw —
+  no destructive TEXT, the ~3.9:1 census lesson); the refunded Charge
+  branch renders "Refunded (Stripe)" in muted (the census page
+  ORD-2026-001 carries `paymentStatus: null` — the row, the button, and
+  the branch never render there; the a11y order-detail census pin stays
+  7 by construction). Pinned by 15 unit (eligibility ×5 + reflection ×5
+  + key ×3 + schema ×2) + 4 integration (full/reflection, re-delivery,
+  orphan, partial — the real handler, HMAC-signed) + 2 E2E (the
+  two-step confirm + demo refusal; the no-intent calm state).
 
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 

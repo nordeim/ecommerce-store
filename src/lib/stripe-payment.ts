@@ -1,3 +1,4 @@
+import { formatCents } from "./money";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -69,6 +70,65 @@ export function shippingSnapshotHash(input: ShippingSnapshotInput): string {
  */
 export function stripeIdempotencyKey(cartId: string, totalCents: number, shippingHash: string): string {
   return sha256(`${cartId}:${totalCents}:${shippingHash}`);
+}
+
+/**
+ * The `refunds.create` idempotency key (session-32, REFUND-ACTION-1):
+ * ONE full refund per payment intent. A double-click, a retry, or a
+ * second operator hours later hits the same key → Stripe replays the
+ * FIRST refund's response — never a second refund of the same charge.
+ * Readable by design: intent ids are already bounded and url-safe, and
+ * the key is the operator's artifact in Stripe's idempotency log (the
+ * sha256 pattern above exists for user-shaped, unbounded inputs).
+ */
+export function stripeRefundIdempotencyKey(paymentIntentId: string): string {
+  return `refund:${paymentIntentId}`;
+}
+
+// ---------------------------------------------------------------------------
+// chargeRefundedReflection (session-32, REFUND-ACTION-1, ADR-040)
+// ---------------------------------------------------------------------------
+
+export type ChargeRefundedReflection = {
+  /** "refunded" ONLY on a full refund of a paid order; null = no order-state change. */
+  paymentStatus: "refunded" | null;
+  /** The OrderEvent note; null = reflect nothing (a non-paid order / shape drift). */
+  eventNote: string | null;
+};
+
+/**
+ * The webhook's charge.refunded branch composes this seam to reflect a
+ * refund on the linked ORDER — the missing half of the refund loop
+ * (the trail showed the StripeEvent row; the order's money state went
+ * silently stale). Pure + SDK-free, the verify/classify family's own
+ * write-side derivation pattern.
+ *
+ * - A non-paid order (failed, demo columns, already refunded, a
+ *   re-delivery shape) reflects NOTHING — the parse family's
+ *   fall-through philosophy.
+ * - `refunded === true` (Stripe's own fully-refunded boolean) →
+ *   paymentStatus "refunded" + the full-refund note. A partial refund
+ *   → the note only: the order keeps its paid capture state (a partial
+ *   refund does not zero the capture — honest).
+ * - Money formats through formatCents at the note boundary (ADR-011:
+ *   integer cents everywhere, display formatting at the edge).
+ */
+export function chargeRefundedReflection(
+  order: { paymentStatus: string | null },
+  charge: { refunded?: boolean; amount?: number; amount_refunded?: number },
+): ChargeRefundedReflection {
+  if (order.paymentStatus !== "paid") return { paymentStatus: null, eventNote: null };
+  const refundedAmount = charge.amount_refunded ?? charge.amount ?? 0;
+  if (charge.refunded === true) {
+    return {
+      paymentStatus: "refunded",
+      eventNote: `Refunded ${formatCents(refundedAmount)} via Stripe`,
+    };
+  }
+  return {
+    paymentStatus: null,
+    eventNote: `Partially refunded ${formatCents(refundedAmount)} of ${formatCents(charge.amount ?? 0)} via Stripe`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +355,11 @@ export const stripeWebhookEventSchema = z.object({
       currency: z.string().optional(),
       payment_intent: z.string().optional(),
       metadata: metadataSchema.optional(),
+      // Session-32, REFUND-ACTION-1: the charge-object refund fields the
+      // reflection seam reads. ADDITIVE optional fields — intent-family
+      // events carry neither; every existing parse outcome is unchanged.
+      refunded: z.boolean().optional(),
+      amount_refunded: z.number().optional(),
     }),
   }),
 });

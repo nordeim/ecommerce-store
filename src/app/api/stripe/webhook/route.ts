@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { shippingForSubtotal } from "@/lib/money";
 import { getStripe, STRIPE_WEBHOOK_TOLERANCE_SECONDS } from "@/lib/stripe";
 import {
+  chargeRefundedReflection,
   classifyStripeEvent,
   classifyWebhookPlacementError,
   parseStripeWebhookEvent,
@@ -145,6 +146,84 @@ export async function POST(request: NextRequest) {
     console.error("[stripe-webhook] payment failed", evt.data.object.id);
     return NextResponse.json({ received: true });
   }
+
+  // ---- charge.refunded: the ORDER-side reflection (session-32,
+  // REFUND-ACTION-1, ADR-040). Previously this event class landed in the
+  // ignored fall-through: the delivery was recorded, but the linked
+  // order's money state went silently stale — a fully refunded order
+  // kept rendering "Paid (Stripe)" forever. Now: record the delivery,
+  // then (if a placed order holds the event's intent) reflect the
+  // refund — a FULL refund (Stripe's own `refunded` boolean)
+  // transitions paymentStatus to "refunded" + a first-class
+  // payment_refunded OrderEvent; a partial refund writes the timeline
+  // note only. The action seam (refundOrderAction) never writes refund
+  // state — this branch is the single writer.
+  //
+  // The H4d/L9 rule (PAY-STRIPE-2), applied to the reflection: when
+  // there ARE side effects to write, the dedup row commits INSIDE the
+  // same transaction — a transient failure rolls BOTH back and the 500
+  // makes Stripe retry the whole thing (a row committed before a failed
+  // reflection would orphan the delivery: the retry would short-circuit
+  // on the row and the order would stay "paid" forever). The
+  // record-only paths (no linked order / a non-paid order) keep the
+  // standalone recordEvent — no side effects to couple.
+  if (evt.type === "charge.refunded") {
+    // Fast duplicate short-circuit (the succeeded branch's own shape):
+    // a Stripe re-delivery of the same event id reflects NOTHING twice.
+    const alreadyRefundRecorded = await db.stripeEvent.findUnique({ where: { eventId: evt.id } });
+    if (alreadyRefundRecorded) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+
+    const intentId = stripeEventIntentId(evt.data.object);
+    const linked = await db.order.findUnique({
+      where: { stripePaymentIntentId: intentId },
+      select: { id: true, paymentStatus: true },
+    });
+
+    if (linked && linked.paymentStatus === "paid") {
+      const reflection = chargeRefundedReflection(linked, evt.data.object);
+      try {
+        await db.$transaction(async (tx) => {
+          await tx.stripeEvent.create({
+            data: {
+              eventId: evt.id,
+              type: evt.type,
+              paymentIntentId: intentId,
+              amount: evt.data.object.amount ?? null,
+            },
+          });
+          if (reflection.paymentStatus) {
+            await tx.order.update({
+              where: { id: linked.id },
+              data: { paymentStatus: reflection.paymentStatus },
+            });
+          }
+          await tx.orderEvent.create({
+            data: { orderId: linked.id, type: "payment_refunded", note: reflection.eventNote },
+          });
+        });
+      } catch (e) {
+        const cls = classifyWebhookPlacementError(e);
+        if (cls === "duplicate") {
+          // A concurrent delivery won the race — its reflection
+          // committed with its row; this one is accounted for.
+          return NextResponse.json({ received: true, duplicate: true });
+        }
+        // Transient: the transaction rolled back INCLUDING the dedup
+        // row. Answer 500 — Stripe retries, and the retry re-attempts
+        // the full reflection.
+        console.error("[stripe-webhook] refund reflection failure — answering 500 so Stripe retries", intentId, e);
+        return NextResponse.json({ received: false }, { status: 500 });
+      }
+    } else {
+      // No linked order (the orphan story — evt_demo_fixture_r's shape)
+      // or a non-paid order (nothing to reflect): record-only.
+      await recordEvent(evt);
+    }
+    return NextResponse.json({ received: true });
+  }
+
   if (class_ !== "succeeded") {
     await recordEvent(evt);
     return NextResponse.json({ received: true, ignored: true });

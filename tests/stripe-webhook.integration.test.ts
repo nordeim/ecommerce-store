@@ -364,9 +364,13 @@ describe("stripe webhook backstop (integration, PAY-STRIPE-2)", () => {
   });
 
   test("an unrelated event type is recorded + 200 ignored", async () => {
+    // Session-32 note: charge.refunded was this test's original example —
+    // it graduated to a first-class handled type (the reflection branch,
+    // REFUND-ACTION-1), so the ignored-class contract keeps a genuinely
+    // unrelated charge event here.
     const res = await postEvent({
       id: "evt_t10",
-      type: "charge.refunded",
+      type: "charge.succeeded",
       data: { object: { id: "ch_t10", status: "succeeded" } },
     });
     expect(res.status).toBe(200);
@@ -507,5 +511,144 @@ describe("stripe webhook backstop (integration, PAY-STRIPE-2)", () => {
     expect(okRow).not.toBeNull();
     expect(okRow!.failureReason).toBeNull();
   });
-});
 
+  // -----------------------------------------------------------------------
+  // Session-32, REFUND-ACTION-1 (ADR-040): the charge.refunded branch —
+  // the ORDER-side reflection. The delivery is recorded (the PAY-OPS-2b/2c
+  // columns), then a linked order's money state reflects the refund: a
+  // FULL refund (Stripe's `refunded` boolean) transitions paymentStatus to
+  // "refunded" + a first-class payment_refunded OrderEvent; a PARTIAL
+  // refund writes the timeline note only; a re-delivery of the same event
+  // id short-circuits on the dedup row BEFORE any reflection write.
+  // -----------------------------------------------------------------------
+
+  /** A paid fixture order holding the given intent (the refund target). */
+  async function seedPaidOrder(suffix: string, total: number, intentId: string) {
+    return db.order.create({
+      data: {
+        number: `ORD-REF-${suffix}`,
+        email: SHIPPING.email,
+        status: "processing",
+        subtotal: total,
+        shipping: 0,
+        total,
+        shippingAddress: "{}",
+        paymentMethod: "card",
+        stripePaymentIntentId: intentId,
+        paymentStatus: "paid",
+        events: { create: { type: "placed", note: "Placed via card (Stripe)" } },
+      },
+    });
+  }
+
+  function refundedEvent(args: {
+    evtId: string;
+    intentId: string;
+    amount: number;
+    amountRefunded: number;
+    refunded: boolean;
+  }) {
+    return {
+      id: args.evtId,
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: `ch_${args.evtId}`,
+          object: "charge",
+          amount: args.amount,
+          payment_intent: args.intentId,
+          refunded: args.refunded,
+          amount_refunded: args.amountRefunded,
+        },
+      },
+    };
+  }
+
+  test("charge.refunded (full) reflects on the linked order: paymentStatus refunded + the timeline event (REFUND-ACTION-1)", async () => {
+    const intentId = "pi_ref_full_1";
+    const order = await seedPaidOrder("RF1", 52497, intentId);
+    const res = await postEvent(
+      refundedEvent({ evtId: "evt_ref_full_1", intentId, amount: 52497, amountRefunded: 52497, refunded: true }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).received).toBe(true);
+
+    const after = await db.order.findUnique({
+      where: { id: order.id },
+      include: { events: { orderBy: { createdAt: "asc" } } },
+    });
+    expect(after!.paymentStatus).toBe("refunded");
+    const refundEvent = after!.events.find((e) => e.type === "payment_refunded");
+    expect(refundEvent).toBeDefined();
+    expect(refundEvent!.note).toBe("Refunded $524.97 via Stripe");
+    // The delivery itself is recorded with the honest intent column (the
+    // charge's payment_intent, not the charge id — PAY-OPS-2c).
+    const row = await db.stripeEvent.findUnique({ where: { eventId: "evt_ref_full_1" } });
+    expect(row).not.toBeNull();
+    expect(row!.paymentIntentId).toBe(intentId);
+    expect(row!.type).toBe("charge.refunded");
+  });
+
+  test("a re-delivery of the same charge.refunded is a 200 duplicate no-op (never a second timeline event)", async () => {
+    const intentId = "pi_ref_dup_1";
+    const order = await seedPaidOrder("RF2", 8999, intentId);
+    const event = refundedEvent({
+      evtId: "evt_ref_dup_1",
+      intentId,
+      amount: 8999,
+      amountRefunded: 8999,
+      refunded: true,
+    });
+    const first = await postEvent(event);
+    expect(first.status).toBe(200);
+    expect((await first.json()).duplicate).toBeUndefined();
+
+    const second = await postEvent(event);
+    expect(second.status).toBe(200);
+    expect((await second.json()).duplicate).toBe(true);
+
+    const after = await db.order.findUnique({
+      where: { id: order.id },
+      include: { events: { where: { type: "payment_refunded" } } },
+    });
+    expect(after!.paymentStatus).toBe("refunded");
+    expect(after!.events).toHaveLength(1);
+  });
+
+  test("charge.refunded with NO linked order records + 200s, nothing reflected (the evt_demo_fixture_r story)", async () => {
+    // Delta-scoped: the file's earlier tests legitimately created
+    // payment_refunded events on THEIR fixture orders.
+    const reflectionsBefore = await db.orderEvent.count({ where: { type: "payment_refunded" } });
+    const res = await postEvent(
+      refundedEvent({
+        evtId: "evt_ref_orphan_1",
+        intentId: "pi_ref_orphan_1",
+        amount: 7999,
+        amountRefunded: 7999,
+        refunded: true,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).received).toBe(true);
+    expect(await db.stripeEvent.findUnique({ where: { eventId: "evt_ref_orphan_1" } })).not.toBeNull();
+    expect(await db.order.findUnique({ where: { stripePaymentIntentId: "pi_ref_orphan_1" } })).toBeNull();
+    expect(await db.orderEvent.count({ where: { type: "payment_refunded" } })).toBe(reflectionsBefore);
+  });
+
+  test("charge.refunded (partial) writes the timeline note only — the capture state stays paid", async () => {
+    const intentId = "pi_ref_part_1";
+    const order = await seedPaidOrder("RF3", 52497, intentId);
+    const res = await postEvent(
+      refundedEvent({ evtId: "evt_ref_part_1", intentId, amount: 52497, amountRefunded: 8999, refunded: false }),
+    );
+    expect(res.status).toBe(200);
+
+    const after = await db.order.findUnique({
+      where: { id: order.id },
+      include: { events: { where: { type: "payment_refunded" } } },
+    });
+    expect(after!.paymentStatus).toBe("paid");
+    expect(after!.events).toHaveLength(1);
+    expect(after!.events[0]!.note).toBe("Partially refunded $89.99 of $524.97 via Stripe");
+  });
+});

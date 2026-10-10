@@ -379,3 +379,38 @@ export function paymentFailureReasonView(reason: string | null): PaymentFailureR
   };
   return { visible: true, label: labels[reason] ?? `Reason: ${reason}` };
 }
+
+// ---------------------------------------------------------------------------
+// refundEligibility (session-32, REFUND-ACTION-1, ADR-040)
+// ---------------------------------------------------------------------------
+
+export type RefundEligibility =
+  | { eligible: true }
+  | { eligible: false; reason: "no-stripe-payment" | "not-paid" | "already-refunded" };
+
+/**
+ * The shared refund gate — composed by BOTH the order detail's render
+ * (the Refund control) and refundOrderAction (the guard). The
+ * DASH-ALERT-1 shared-seam rule: the button and the action can never
+ * disagree because they derive from the same function.
+ *
+ * Eligibility is MONEY-side only: a Stripe payment that was captured
+ * (stripePaymentIntentId set, paymentStatus "paid") and has not been
+ * refunded. Fulfillment status is orthogonal — a cancelled-but-paid
+ * order is exactly the refund case.
+ *
+ * - no intent → `no-stripe-payment` (the reference-parity demo/mock
+ *   path — nothing was ever charged; ORD-2026-001's shape).
+ * - paymentStatus "refunded" → `already-refunded` (the post-reflection
+ *   state — the control unmounts, the action refuses).
+ * - paymentStatus not "paid" (null demo columns, "failed") → `not-paid`.
+ */
+export function refundEligibility(order: {
+  stripePaymentIntentId: string | null;
+  paymentStatus: string | null;
+}): RefundEligibility {
+  if (!order.stripePaymentIntentId) return { eligible: false, reason: "no-stripe-payment" };
+  if (order.paymentStatus === "refunded") return { eligible: false, reason: "already-refunded" };
+  if (order.paymentStatus !== "paid") return { eligible: false, reason: "not-paid" };
+  return { eligible: true };
+}

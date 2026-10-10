@@ -7,6 +7,7 @@ import {
   parseAdminPaymentFilters,
   paymentEventLabel,
   paymentFailureReasonView,
+  refundEligibility,
   refundNeededAlert,
   resolvePaymentEventOutcome,
 } from "./admin-payments";
@@ -434,5 +435,47 @@ describe("paymentFailureReasonView (session-30, REASON-TRAIL-1)", () => {
       visible: true,
       label: "Reason: webhook-quake",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refundEligibility (session-32, REFUND-ACTION-1, ADR-040) — the shared
+// gate between the order detail's Refund control (the render gate) and
+// refundOrderAction (the action guard). The DASH-ALERT-1 shared-seam rule:
+// the two can never disagree because they compose the same function.
+// Eligibility is MONEY-side only: a Stripe payment that was captured and
+// has not been refunded. Fulfillment status (processing/in_transit/
+// delivered/cancelled) is orthogonal — a cancelled-but-paid order is
+// exactly the refund case.
+// ---------------------------------------------------------------------------
+describe("refundEligibility", () => {
+  it("eligible: a Stripe-paid order (intent + paymentStatus paid)", () => {
+    expect(
+      refundEligibility({ stripePaymentIntentId: "pi_123", paymentStatus: "paid" }),
+    ).toEqual({ eligible: true });
+  });
+
+  it("ineligible: no Stripe intent (the reference-parity demo/mock path — nothing was charged)", () => {
+    expect(
+      refundEligibility({ stripePaymentIntentId: null, paymentStatus: null }),
+    ).toEqual({ eligible: false, reason: "no-stripe-payment" });
+  });
+
+  it("ineligible: an intent whose payment was never captured (null status)", () => {
+    expect(
+      refundEligibility({ stripePaymentIntentId: "pi_123", paymentStatus: null }),
+    ).toEqual({ eligible: false, reason: "not-paid" });
+  });
+
+  it("ineligible: a failed payment", () => {
+    expect(
+      refundEligibility({ stripePaymentIntentId: "pi_123", paymentStatus: "failed" }),
+    ).toEqual({ eligible: false, reason: "not-paid" });
+  });
+
+  it("ineligible: already refunded (the post-reflection state — the button unmounts)", () => {
+    expect(
+      refundEligibility({ stripePaymentIntentId: "pi_123", paymentStatus: "refunded" }),
+    ).toEqual({ eligible: false, reason: "already-refunded" });
   });
 });

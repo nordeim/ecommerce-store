@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
  */
 import {
   buildPaymentIntentParams,
+  chargeRefundedReflection,
   classifyStripeEvent,
   classifyWebhookPlacementError,
   isIntentAnchorP2002,
@@ -28,6 +29,7 @@ import {
   shippingSnapshotHash,
   stripeEventIntentId,
   stripeIdempotencyKey,
+  stripeRefundIdempotencyKey,
   verifyPaymentIntentForPlacement,
 } from "./stripe-payment";
 import type { CartDto } from "./cart";
@@ -505,5 +507,141 @@ describe("isIntentAnchorP2002 (the action path's already-placed resolution gate)
   it("false for non-P2002 errors and string-form foreign targets", () => {
     expect(isIntentAnchorP2002(view(new Error("nope")))).toBe(false);
     expect(isIntentAnchorP2002(view({ code: "P2002", meta: { target: "number" } }))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stripeRefundIdempotencyKey (session-32, REFUND-ACTION-1, ADR-040) — the
+// refunds.create idempotency key: ONE full refund per payment intent. A
+// double-click, a retry, or a second operator hours later replays the
+// FIRST refund's response — never a second refund of the same charge.
+// Readable by design: the key is the operator's artifact in Stripe's
+// idempotency log (the sha256 pattern exists for user-shaped inputs;
+// intent ids are already bounded and url-safe).
+// ---------------------------------------------------------------------------
+describe("stripeRefundIdempotencyKey", () => {
+  it("is deterministic for the same intent", () => {
+    expect(stripeRefundIdempotencyKey("pi_demo_fixture_003")).toBe(
+      stripeRefundIdempotencyKey("pi_demo_fixture_003"),
+    );
+  });
+
+  it("is intent-scoped: different intents mint different keys", () => {
+    expect(stripeRefundIdempotencyKey("pi_1")).not.toBe(stripeRefundIdempotencyKey("pi_2"));
+  });
+
+  it("carries the refund: prefix (self-describing in Stripe's idempotency log)", () => {
+    expect(stripeRefundIdempotencyKey("pi_1")).toBe("refund:pi_1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The charge-object schema fields (session-32, REFUND-ACTION-1): the
+// webhook envelope's data.object gains `refunded` + `amount_refunded`
+// (ADDITIVE optional fields — the charge-object shape the reflection
+// seam reads). Intent-family events carry neither; every existing parse
+// outcome is unchanged.
+// ---------------------------------------------------------------------------
+describe("parseStripeWebhookEvent (charge.refunded shape)", () => {
+  it("parses a charge.refunded envelope with the refund fields", () => {
+    const parsed = parseStripeWebhookEvent({
+      id: "evt_re_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_1",
+          amount: 52497,
+          payment_intent: "pi_1",
+          refunded: true,
+          amount_refunded: 52497,
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.type).toBe("charge.refunded");
+      expect(parsed.data.data.object.refunded).toBe(true);
+      expect(parsed.data.data.object.amount_refunded).toBe(52497);
+    }
+  });
+
+  it("an intent-family envelope without the refund fields parses unchanged", () => {
+    const parsed = parseStripeWebhookEvent({
+      id: "evt_s_1",
+      type: "payment_intent.succeeded",
+      data: {
+        object: { id: "pi_1", status: "succeeded", amount: 20899, currency: "usd" },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.data.object.refunded).toBeUndefined();
+      expect(parsed.data.data.object.amount_refunded).toBeUndefined();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chargeRefundedReflection (session-32, REFUND-ACTION-1, ADR-040) — the
+// webhook's charge.refunded branch composes this seam to reflect a refund
+// on the linked ORDER. Full refund (Stripe's own `refunded` boolean) →
+// paymentStatus "refunded" + the timeline note; partial → the note only
+// (the order keeps its paid capture state); a non-paid order (failed,
+// demo, already-refunded, re-delivery shapes) reflects NOTHING — the
+// parse family's fall-through philosophy.
+// ---------------------------------------------------------------------------
+describe("chargeRefundedReflection", () => {
+  it("a full refund of a paid order transitions paymentStatus + writes the timeline note", () => {
+    expect(
+      chargeRefundedReflection(
+        { paymentStatus: "paid" },
+        { refunded: true, amount: 52497, amount_refunded: 52497 },
+      ),
+    ).toEqual({
+      paymentStatus: "refunded",
+      eventNote: "Refunded $524.97 via Stripe",
+    });
+  });
+
+  it("a partial refund writes the note only — the capture state stays paid", () => {
+    expect(
+      chargeRefundedReflection(
+        { paymentStatus: "paid" },
+        { refunded: false, amount: 52497, amount_refunded: 8999 },
+      ),
+    ).toEqual({
+      paymentStatus: null,
+      eventNote: "Partially refunded $89.99 of $524.97 via Stripe",
+    });
+  });
+
+  it("a refund event on a non-paid order reflects nothing (failed/demo/already-refunded)", () => {
+    expect(
+      chargeRefundedReflection({ paymentStatus: "refunded" }, { refunded: true, amount: 100 }),
+    ).toEqual({ paymentStatus: null, eventNote: null });
+    expect(
+      chargeRefundedReflection({ paymentStatus: "failed" }, { refunded: true, amount: 100 }),
+    ).toEqual({ paymentStatus: null, eventNote: null });
+    expect(
+      chargeRefundedReflection({ paymentStatus: null }, { refunded: true, amount: 100 }),
+    ).toEqual({ paymentStatus: null, eventNote: null });
+  });
+
+  it("the amount fallback chain: amount_refunded, then amount, then 0 cents", () => {
+    expect(
+      chargeRefundedReflection({ paymentStatus: "paid" }, { refunded: true, amount: 4999 }),
+    ).toEqual({ paymentStatus: "refunded", eventNote: "Refunded $49.99 via Stripe" });
+    expect(
+      chargeRefundedReflection({ paymentStatus: "paid" }, { refunded: true }),
+    ).toEqual({ paymentStatus: "refunded", eventNote: "Refunded $0.00 via Stripe" });
+  });
+
+  it("a partial refund without magnitudes still notes honestly (shape drift)", () => {
+    expect(
+      chargeRefundedReflection({ paymentStatus: "paid" }, { refunded: false }),
+    ).toEqual({
+      paymentStatus: null,
+      eventNote: "Partially refunded $0.00 of $0.00 via Stripe",
+    });
   });
 });

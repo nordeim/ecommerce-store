@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CreditCard, History, Mail, MapPin, Package, ReceiptText } from "lucide-react";
+import { CreditCard, History, Mail, MapPin, Package, ReceiptText, RotateCcw } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
-import { orderPaymentTrail } from "@/lib/admin-payments";
+import { orderPaymentTrail, refundEligibility } from "@/lib/admin-payments";
+import { RefundOrderButton } from "@/components/account/refund-order-button";
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +122,14 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Charge</dt>
                   <dd className="font-medium">
-                    {order.paymentStatus === "paid" ? (
+                    {/* Session-32, REFUND-ACTION-1: the refunded branch — the
+                        calm terminal money state in the console's muted
+                        vocabulary (contrast-safe; the census page
+                        ORD-2026-001 carries paymentStatus null, so the row
+                        never renders there — the a11y census pin stays 7). */}
+                    {order.paymentStatus === "refunded" ? (
+                      <span className="text-muted-foreground">Refunded (Stripe)</span>
+                    ) : order.paymentStatus === "paid" ? (
                       <span className="text-emerald-600">Paid (Stripe)</span>
                     ) : order.paymentStatus === "failed" ? (
                       <span className="text-destructive">Payment failed</span>
@@ -138,6 +146,16 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                 </div>
               )}
             </dl>
+            {/* Session-32, REFUND-ACTION-1 (ADR-040): the refund control —
+                rendered ONLY on eligible orders (a Stripe intent + a paid,
+                not-yet-refunded capture — the shared refundEligibility seam
+                the action guard composes). The census page (ORD-2026-001)
+                is a demo-path order: paymentStatus null → the Charge row
+                AND this control never render there — the a11y census pin
+                stays 7 by construction. */}
+            {refundEligibility(order).eligible && (
+              <RefundOrderButton orderId={order.id} orderNumber={order.number} />
+            )}
           </div>
 
           <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-6">
@@ -256,13 +274,23 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary">
                       {event.type === "placed" ? (
                         <Package className="h-4 w-4 text-muted-foreground" />
+                      ) : event.type === "payment_refunded" ? (
+                        <RotateCcw className="h-4 w-4 text-muted-foreground" />
                       ) : (
                         <History className="h-4 w-4 text-muted-foreground" />
                       )}
                     </span>
                     <div className="min-w-0">
                       <p className="font-medium">
-                        {event.type === "placed" ? "Order placed" : "Status changed"}
+                        {/* Session-32, REFUND-ACTION-1: the webhook's
+                            charge.refunded reflection writes a first-class
+                            payment_refunded timeline event — the money
+                            story joins the fulfillment story. */}
+                        {event.type === "placed"
+                          ? "Order placed"
+                          : event.type === "payment_refunded"
+                            ? "Payment refunded"
+                            : "Status changed"}
                       </p>
                       {event.note && <p className="text-sm text-muted-foreground">{event.note}</p>}
                       <p className="text-xs text-muted-foreground">
