@@ -333,3 +333,49 @@ export function orderPaymentTrail(rows: PaymentTrailRow[]): PaymentTrail {
     })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// The deterministic-failure reason view (session-30, REASON-TRAIL-1, ADR-038)
+// ---------------------------------------------------------------------------
+
+/** The presentation contract for the refund-needed family's WHY. */
+export type PaymentFailureReasonView =
+  | { visible: false }
+  | { visible: true; label: string };
+
+/**
+ * The deterministic-failure reason's read-side presentation (session-30,
+ * REASON-TRAIL-1): the webhook persists a canonical code on the
+ * StripeEvent row at its four permanent-classification write sites
+ * (the vocabulary in src/lib/stripe-payment.ts's STRIPE_FAILURE_REASON —
+ * the single source both sides share); this seam maps the code to the
+ * operator copy the payments surface renders under the destructive
+ * "No order — refund via Stripe dashboard" line — the second question
+ * after the amount column's "how much?" (PAY-OPS-2b), now answered:
+ * "why?".
+ *
+ * - `null`/`""` → `{ visible: false }` — the honest calm state (the
+ *   refundNeededAlert precedent): pre-session-30 rows, the failed/ignored
+ *   recordings, the client-path-precedence recording, and the successful
+ *   in-tx insert carry NO reason, and no noise line renders for them.
+ * - A canonical code → `{ visible: true, label: "Reason: …" }` — the
+ *   operator copy.
+ * - An unknown code → the RAW passthrough (the parse family's
+ *   fall-through philosophy — paymentEventLabel's precedent: an
+ *   unanticipated code renders its honest name, never an error).
+ *
+ * NEVER a derivation input: the refund-needed family derives from DB
+ * state (type + no linked order); the reason is enrichment. The page
+ * composes BOTH gates (outcome kind + view visible) so a placed row
+ * can structurally never render a reason line.
+ */
+export function paymentFailureReasonView(reason: string | null): PaymentFailureReasonView {
+  if (!reason) return { visible: false };
+  const labels: Record<string, string> = {
+    "amount-mismatch": "Reason: amount mismatch vs cart total",
+    "stock-short": "Reason: insufficient stock at placement",
+    "metadata-unusable": "Reason: payment metadata unusable",
+    "cart-unavailable": "Reason: cart unavailable at placement",
+  };
+  return { visible: true, label: labels[reason] ?? `Reason: ${reason}` };
+}

@@ -214,6 +214,18 @@ model StripeEvent {
   // session-25. The payments surface renders it beside the outcome (the
   // operator's "how much needs refunding?").
   amount Int?
+  // session-30, REASON-TRAIL-1 (ADR-038): the canonical deterministic-
+  // failure code the webhook persists at its four permanent-classification
+  // write sites (metadata-unusable / cart-unavailable / amount-mismatch /
+  // stock-short — the vocabulary exported from src/lib/stripe-payment.ts).
+  // Null = no reason known: pre-session-30 rows, the failed/ignored
+  // recordings, the client-path-precedence recording, and the SUCCESSFUL
+  // in-tx insert (a placed order has no placement failure). The payments
+  // surface renders the mapped operator copy beside the refund-needed
+  // outcome (the operator's "why?"). NEVER a derivation input — the
+  // refund-needed family derives from DB state (type + no linked order),
+  // this column is enrichment.
+  failureReason String?
   receivedAt      DateTime @default(now())
 }
 

@@ -232,6 +232,34 @@ export function classifyWebhookPlacementError(error: unknown): WebhookFailureCla
   return "transient";
 }
 
+// ---------------------------------------------------------------------------
+// The deterministic-failure reason vocabulary (session-30, REASON-TRAIL-1)
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical reason CODES the webhook persists on the StripeEvent row
+ * at its four deterministic-failure write sites (session-30, REASON-TRAIL-1,
+ * ADR-038). The codes join the row as `StripeEvent.failureReason` (nullable
+ * — null = no reason known: pre-session-30 rows, the failed/ignored
+ * recordings, the client-path-precedence recording, and the SUCCESSFUL
+ * in-tx insert, which writes none by construction). The write side and
+ * the read side (src/lib/admin-payments.ts `paymentFailureReasonView`)
+ * share this vocabulary as their single source — no stringly-typed drift.
+ */
+export const STRIPE_FAILURE_REASON = {
+  /** The succeeded intent carried no usable metadata (shipping/cartId). */
+  metadataUnusable: "metadata-unusable",
+  /** The metadata's cartId resolved to no cart / an empty cart. */
+  cartUnavailable: "cart-unavailable",
+  /** The intent's amount did not match the server-re-derived cart total. */
+  amountMismatch: "amount-mismatch",
+  /** The paid cart was unfulfillable at decision time (STOCK_SHORT). */
+  stockShort: "stock-short",
+} as const;
+
+export type StripeFailureReasonCode =
+  (typeof STRIPE_FAILURE_REASON)[keyof typeof STRIPE_FAILURE_REASON];
+
 /**
  * The action path's already-placed resolution gate: a P2002 on
  * `stripePaymentIntentId` means a retried submit whose intent already

@@ -6,6 +6,7 @@ import {
   orderPaymentTrail,
   parseAdminPaymentFilters,
   paymentEventLabel,
+  paymentFailureReasonView,
   refundNeededAlert,
   resolvePaymentEventOutcome,
 } from "./admin-payments";
@@ -381,5 +382,57 @@ describe("orderPaymentTrail (session-29, REFUND-TRAIL-1)", () => {
     expect(trail.events).toEqual([
       { label: "Payment failed", amount: null, receivedAt: d },
     ]);
+  });
+});
+
+// Session-30, REASON-TRAIL-1 (ADR-038): the deterministic-failure reason
+// view — the presentation contract for the refund-needed family's WHY.
+// The webhook persists a canonical code on the StripeEvent row at its
+// four deterministic-failure write sites (metadata-unusable /
+// cart-unavailable / amount-mismatch / stock-short — the vocabulary
+// exported from src/lib/stripe-payment.ts); this seam maps codes to
+// operator copy at read time. Null (pre-session-30 rows, non-failure
+// recordings, the successful in-tx insert) is the CALM STATE — the
+// refundNeededAlert precedent: the honest silence, not a "reason
+// unknown" noise line. Unknown codes pass through RAW — the parse
+// family's fall-through philosophy (paymentEventLabel's precedent).
+describe("paymentFailureReasonView (session-30, REASON-TRAIL-1)", () => {
+  it("is invisible for null — the honest calm state (pre-session-30 rows + every non-failure recording)", () => {
+    expect(paymentFailureReasonView(null)).toEqual({ visible: false });
+  });
+
+  it("maps amount-mismatch to the operator copy", () => {
+    expect(paymentFailureReasonView("amount-mismatch")).toEqual({
+      visible: true,
+      label: "Reason: amount mismatch vs cart total",
+    });
+  });
+
+  it("maps stock-short to the operator copy", () => {
+    expect(paymentFailureReasonView("stock-short")).toEqual({
+      visible: true,
+      label: "Reason: insufficient stock at placement",
+    });
+  });
+
+  it("maps metadata-unusable to the operator copy", () => {
+    expect(paymentFailureReasonView("metadata-unusable")).toEqual({
+      visible: true,
+      label: "Reason: payment metadata unusable",
+    });
+  });
+
+  it("maps cart-unavailable to the operator copy", () => {
+    expect(paymentFailureReasonView("cart-unavailable")).toEqual({
+      visible: true,
+      label: "Reason: cart unavailable at placement",
+    });
+  });
+
+  it("passes an unknown code through raw (the fall-through philosophy — never an error)", () => {
+    expect(paymentFailureReasonView("webhook-quake")).toEqual({
+      visible: true,
+      label: "Reason: webhook-quake",
+    });
   });
 });

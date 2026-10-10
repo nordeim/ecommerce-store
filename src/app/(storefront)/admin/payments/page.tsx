@@ -11,6 +11,7 @@ import { formatCents } from "@/lib/money";
 import {
   buildAdminPaymentWhere,
   parseAdminPaymentFilters,
+  paymentFailureReasonView,
   resolvePaymentEventOutcome,
 } from "@/lib/admin-payments";
 
@@ -168,6 +169,7 @@ export default async function AdminPaymentsPage({
                     { type: e.type, paymentIntentId: e.paymentIntentId },
                     orderByIntent,
                   );
+                  const reasonView = paymentFailureReasonView(e.failureReason);
                   return (
                     <div
                       key={e.id}
@@ -208,9 +210,25 @@ export default async function AdminPaymentsPage({
                             {outcome.orderNumber} placed
                           </Link>
                         ) : outcome.kind === "refund-needed" ? (
-                          <p className="text-sm font-medium text-destructive">
-                            No order — refund via Stripe dashboard
-                          </p>
+                          <>
+                            <p className="text-sm font-medium text-destructive">
+                              No order — refund via Stripe dashboard
+                            </p>
+                            {/* REASON-TRAIL-1 (session-30, ADR-038): the WHY
+                                under the signal — the deterministic-failure
+                                code the webhook persisted, mapped to operator
+                                copy. Both gates compose (refund-needed
+                                outcome + the view's visible) so a placed row
+                                can structurally never render a reason. The
+                                muted pair is the row's own timestamp
+                                vocabulary — contrast-safe (the a11y census
+                                pin's color pairs unchanged). */}
+                            {reasonView.visible && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {reasonView.label}
+                              </p>
+                            )}
+                          </>
                         ) : outcome.kind === "failed" ? (
                           <p className="text-sm font-medium text-muted-foreground">Payment failed</p>
                         ) : (

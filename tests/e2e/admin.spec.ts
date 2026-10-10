@@ -392,6 +392,36 @@ test.describe("admin payment-ops (session-24, PAY-OPS-1)", () => {
     await expect(admin.getByText("$89.99", { exact: true })).toBeVisible();
   });
 
+  // session-30, REASON-TRAIL-1 (ADR-038): the refund-needed family renders
+  // its WHY — the deterministic-failure reason line under the destructive
+  // outcome. The fixture-n row carries the seeded amount-mismatch code (a
+  // $149.00 succeeded intent with NO order — the webhook refused a payment
+  // that did not match the server-derived cart). The placed fixture (the
+  // success path) writes NO reason — the calm state.
+  test("the refund-needed row renders the deterministic-failure reason (session-30, REASON-TRAIL-1)", async () => {
+    await admin.goto("/admin/payments?family=refund-needed");
+    await admin.waitForLoadState("networkidle");
+    // The fixture-n row (scoped to the row holding the fixture's intent id):
+    // the destructive outcome line + the muted reason line beneath it.
+    const fixtureRow = admin.locator("div.rounded-xl", { hasText: "pi_demo_fixture_006" });
+    await expect(
+      fixtureRow.getByText("No order — refund via Stripe dashboard", { exact: true })
+    ).toBeVisible();
+    await expect(
+      fixtureRow.getByText("Reason: amount mismatch vs cart total", { exact: true })
+    ).toBeVisible();
+
+    // The calm state: on the unfiltered list exactly ONE reason line
+    // renders (the refund-needed fixture's) — the placed/failed/refunded
+    // rows carry no placement failure by construction.
+    await admin.goto("/admin/payments");
+    await admin.waitForLoadState("networkidle");
+    const placedRow = admin.locator("div.rounded-xl", { hasText: "pi_demo_fixture_003" });
+    await expect(placedRow.getByRole("link", { name: "ORD-2026-003" })).toBeVisible();
+    await expect(placedRow.getByText(/^Reason:/)).toHaveCount(0);
+    await expect(admin.locator("p", { hasText: /^Reason: / })).toHaveCount(1);
+  });
+
   // session-26, PAY-OPS-3: the date-range filter — an operator triaging
   // refund-needed payments asks "which events arrived in THIS window?".
   // The fixture set is staggered: s=2026-02-20, f=2026-02-21,

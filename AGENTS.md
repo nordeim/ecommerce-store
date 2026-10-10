@@ -328,6 +328,42 @@ from the injected location) — the repo contract itself is test-pinned in
   Pinned by 5 unit + 1 E2E test; the a11y admin gate's order-detail
   census pin UNCHANGED at 7 (re-run green post-change, no
   recalibration).
+- **The webhook persists the deterministic-failure REASON on the
+  StripeEvent row (session-30, REASON-TRAIL-1, ADR-038 — the
+  refund-needed family's WHY):** `StripeEvent.failureReason String?`
+  (nullable canonical code — null = no reason known: pre-session-30
+  rows, the failed/ignored recordings, the client-path-precedence
+  recording, and the SUCCESSFUL in-tx insert, which writes none by
+  construction). The webhook's FOUR permanent-classification write
+  sites pass their code through `recordEvent(evt, reason)` —
+  metadata-unusable / cart-unavailable / amount-mismatch / stock-short
+  — the vocabulary exported as `STRIPE_FAILURE_REASON` from
+  `src/lib/stripe-payment.ts` (the single source the write side and
+  the read side share; no stringly-typed drift). The read side is the
+  pure `paymentFailureReasonView(reason)` seam in
+  `src/lib/admin-payments.ts`: null → `{ visible: false }` (the honest
+  calm state — the refundNeededAlert precedent); the four canonical
+  codes → the operator copy ("Reason: amount mismatch vs cart total" /
+  "…insufficient stock at placement" / "…payment metadata unusable" /
+  "…cart unavailable at placement"); an unknown code → the RAW
+  passthrough (the parse family's fall-through philosophy). The
+  payments page composes BOTH gates (`outcome.kind ===
+  "refund-needed"` AND the view's `visible`) so a placed row can
+  structurally never render a reason; the line renders under the
+  destructive outcome in the row's OWN muted pair (`text-xs
+  text-muted-foreground` — the timestamp vocabulary, zero new color
+  pairs: the a11y payments census pin stays 9). NEVER a derivation
+  input — the refund-needed family still derives from DB state (type +
+  no linked order); the reason column is enrichment, never truth. The
+  seeded `evt_demo_fixture_n` carries `failureReason:
+  "amount-mismatch"` (the coherent story for a $149.00 succeeded
+  intent with NO order), restored idempotently by seed + e2e-reset.
+  Zero parity risk — admin-only surface. Pinned by 6 unit + 1
+  integration test (the write sites drive the REAL handler with
+  HMAC-signed events against the scratch DB) + 1 E2E test (the reason
+  line scoped to the fixture row + the calm state: exactly ONE reason
+  line on the unfiltered list); the a11y admin gate's payments census
+  pin UNCHANGED at 9 (re-run green post-change, no recalibration).
 - **The console LIST pages' heading order is valid (session-25,
   A11Y-HEADING-1):** the three console list pages (orders/products/
   payments) each carry an `sr-only` h2 labelling their list region

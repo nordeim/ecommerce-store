@@ -7,6 +7,7 @@ import {
   classifyStripeEvent,
   classifyWebhookPlacementError,
   parseStripeWebhookEvent,
+  STRIPE_FAILURE_REASON,
   stripeEventIntentId,
   verifyPaymentIntentForPlacement,
 } from "@/lib/stripe-payment";
@@ -75,12 +76,21 @@ function safe400(message: string) {
  * and the HONEST intent id (`payment_intent` for charge-family objects,
  * the object's own id otherwise — the surface's q-search over the intent
  * column stays truthful for the charge family).
+ *
+ * Session-30 (REASON-TRAIL-1, ADR-038): the optional `failureReason`
+ * persists the canonical deterministic-failure code at the
+ * permanent-classification write sites — the refund-needed family's WHY
+ * joins the row (the payments surface maps it to operator copy). Every
+ * non-failure recording passes no reason (null = the calm state).
  */
-async function recordEvent(evt: {
-  id: string;
-  type: string;
-  data: { object: { id: string; amount?: number; payment_intent?: string } };
-}) {
+async function recordEvent(
+  evt: {
+    id: string;
+    type: string;
+    data: { object: { id: string; amount?: number; payment_intent?: string } };
+  },
+  failureReason?: string,
+) {
   try {
     await db.stripeEvent.create({
       data: {
@@ -88,6 +98,7 @@ async function recordEvent(evt: {
         type: evt.type,
         paymentIntentId: stripeEventIntentId(evt.data.object),
         amount: evt.data.object.amount ?? null,
+        failureReason: failureReason ?? null,
       },
     });
   } catch (e) {
@@ -171,7 +182,7 @@ export async function POST(request: NextRequest) {
     if (!shippingSnapshot.success || !cartId) {
       // Not our checkout intent (or metadata drifted) — deterministic: record
       // + the ops refund trail (never a 5xx; a retry could not succeed).
-      await recordEvent(evt);
+      await recordEvent(evt, STRIPE_FAILURE_REASON.metadataUnusable);
       console.error(
         "[stripe-webhook] orphaned payment without usable metadata — refund via dashboard",
         intentView.id,
@@ -188,7 +199,7 @@ export async function POST(request: NextRequest) {
     if (!cartRow || cartRow.items.length === 0) {
       // A vanished/empty cart is deterministic (the conversion cleared it or
       // the cart was never ours): record + the refund trail.
-      await recordEvent(evt);
+      await recordEvent(evt, STRIPE_FAILURE_REASON.cartUnavailable);
       console.error(
         "[stripe-webhook] orphaned payment with empty/absent cart — refund via dashboard",
         intentView.id,
@@ -222,7 +233,7 @@ export async function POST(request: NextRequest) {
     // the Stripe dashboard using the log line).
     const verification = verifyPaymentIntentForPlacement(intentView, cart);
     if (!verification.ok) {
-      await recordEvent(evt);
+      await recordEvent(evt, STRIPE_FAILURE_REASON.amountMismatch);
       console.error(
         "[stripe-webhook] amount mismatch — refund via dashboard",
         intentView.id,
@@ -325,8 +336,9 @@ export async function POST(request: NextRequest) {
     if (cls === "permanent") {
       // A captured payment that cannot be fulfilled (stock-short): the
       // operator refunds from the dashboard using this trail. The event is
-      // recorded — a Stripe re-delivery of the same event no-ops.
-      await recordEvent(evt);
+      // recorded — a Stripe re-delivery of the same event no-ops. The
+      // stock-short reason joins the row (session-30, REASON-TRAIL-1).
+      await recordEvent(evt, STRIPE_FAILURE_REASON.stockShort);
       console.error("[stripe-webhook] captured payment unfulfillable (stock) — refund via dashboard", intentView.id, e);
       return NextResponse.json({ received: true });
     }

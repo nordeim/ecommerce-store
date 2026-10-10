@@ -41,11 +41,14 @@ const FIXTURE_STRIPE_EVENTS = [
   },
   {
     // Session-25, PAY-OPS-2a: the refund-needed family's fixture — a
-    // succeeded event with NO linked order.
+    // succeeded event with NO linked order. Session-30, REASON-TRAIL-1:
+    // the row carries the canonical deterministic-failure code (the
+    // amount-mismatch story — see prisma/seed.ts).
     eventId: "evt_demo_fixture_n",
     type: "payment_intent.succeeded",
     paymentIntentId: "pi_demo_fixture_006",
     amount: 14900,
+    failureReason: "amount-mismatch",
     receivedAt: new Date("2026-02-23T11:27:00Z"),
   },
 ];

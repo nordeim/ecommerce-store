@@ -450,4 +450,62 @@ describe("stripe webhook backstop (integration, PAY-STRIPE-2)", () => {
     expect(fallbackRow).not.toBeNull();
     expect(fallbackRow!.paymentIntentId).toBe("dp_t15");
   });
+  // session-30, REASON-TRAIL-1 (ADR-038): the deterministic-failure write
+  // sites persist the canonical reason code — the payments surface's
+  // refund-needed family renders its WHY (the second question after
+  // "how much?") without the operator SSH-ing into the log stream. The
+  // success path (the in-tx insert) writes NO reason: a placed order has
+  // no placement failure by construction.
+  test("deterministic failures persist their reason code (REASON-TRAIL-1, session-30)", async () => {
+    // 1. metadata-unusable: a succeeded intent carrying NO metadata.
+    const noMeta = await postEvent({
+      id: "evt_t16",
+      type: "payment_intent.succeeded",
+      data: { object: { id: "pi_t16", object: "payment_intent", status: "succeeded", amount: 14900, currency: "usd" } },
+    });
+    expect(noMeta.status).toBe(200);
+    const noMetaRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t16" } });
+    expect(noMetaRow).not.toBeNull();
+    expect(noMetaRow!.failureReason).toBe("metadata-unusable");
+
+    // 2. cart-unavailable: usable metadata, cartId pointing at no cart.
+    const noCart = await postEvent(
+      succeededEvent({ evtId: "evt_t17", intentId: "pi_t17", amount: 6997, cartId: "cart_wh_missing_t17" }),
+    );
+    expect(noCart.status).toBe(200);
+    const noCartRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t17" } });
+    expect(noCartRow).not.toBeNull();
+    expect(noCartRow!.failureReason).toBe("cart-unavailable");
+
+    // 3. amount-mismatch: a real cart, the wrong amount.
+    const fx = await seedFixture("t18");
+    const mismatch = await postEvent(
+      succeededEvent({ evtId: "evt_t18", intentId: "pi_t18", amount: fx.total + 100, cartId: fx.cartId }),
+    );
+    expect(mismatch.status).toBe(200);
+    const mismatchRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t18" } });
+    expect(mismatchRow).not.toBeNull();
+    expect(mismatchRow!.failureReason).toBe("amount-mismatch");
+
+    // 4. stock-short: stock 1 < quantity 2 on product B.
+    const fxShort = await seedFixture("t19", 1);
+    const short = await postEvent(
+      succeededEvent({ evtId: "evt_t19", intentId: "pi_t19", amount: fxShort.total, cartId: fxShort.cartId }),
+    );
+    expect(short.status).toBe(200);
+    const shortRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t19" } });
+    expect(shortRow).not.toBeNull();
+    expect(shortRow!.failureReason).toBe("stock-short");
+
+    // 5. the successful in-tx insert writes NO reason (the success path).
+    const fxOk = await seedFixture("t20");
+    const ok = await postEvent(
+      succeededEvent({ evtId: "evt_t20", intentId: "pi_t20", amount: fxOk.total, cartId: fxOk.cartId }),
+    );
+    expect(ok.status).toBe(200);
+    const okRow = await db.stripeEvent.findUnique({ where: { eventId: "evt_t20" } });
+    expect(okRow).not.toBeNull();
+    expect(okRow!.failureReason).toBeNull();
+  });
 });
+

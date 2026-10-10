@@ -521,10 +521,16 @@ async function main() {
       // — a succeeded event with NO linked order (exactly the
       // deterministic-failure shape the webhook records + 200s per
       // ADR-031). The family filter's demonstrability fixture.
+      // Session-30, REASON-TRAIL-1: the row carries the canonical
+      // deterministic-failure code — the coherent story for a $149.00
+      // succeeded intent with NO order is an amount mismatch (the webhook
+      // refused a payment that did not match the server-derived cart) —
+      // so the payments surface renders the family's WHY.
       eventId: "evt_demo_fixture_n",
       type: "payment_intent.succeeded",
       paymentIntentId: "pi_demo_fixture_006",
       amount: 14900,
+      failureReason: "amount-mismatch",
       receivedAt: new Date("2026-02-23T11:27:00Z"),
     },
   ];
