@@ -50,4 +50,74 @@ test.describe("guest checkout (session-6)", () => {
     await expect(page).toHaveURL(/\/login/);
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   });
+
+  test("a bare order number never leaks guest details to an enumerator (session-31, GUEST-TOKEN-1)", async ({ page, browser }) => {
+    // THE REGRESSION: before GUEST-TOKEN-1 the success page gated on
+    // `!order.userId` — every GUEST order rendered its email, items, and
+    // total to ANYONE walking the sequential ORD-YYYY-NNN space. The fix
+    // gates details on ownership OR an HMAC view token carried by the
+    // placement redirect (?order=X&t=…).
+    //
+    // 1. A guest places an order and captures the tokened success URL.
+    await page.goto("/product/charging-pad");
+    await page.getByRole("button", { name: "Add to Cart" }).first().click();
+    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await page.goto("/checkout");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("main").getByLabel("First Name").fill("Enum");
+    await page.getByRole("main").getByLabel("Last Name").fill("Victim");
+    await page.getByRole("main").getByLabel("Email").fill("enum-victim@example.com");
+    await page.getByRole("main").getByLabel("Address").fill("42 Hidden Way");
+    await page.getByRole("main").getByLabel("City").fill("Austin");
+    await page.getByRole("main").getByLabel("State").fill("TX");
+    await page.getByRole("main").getByLabel("ZIP").fill("73301");
+    await page.getByRole("button", { name: "Continue to Payment" }).click();
+    await page.getByRole("radio", { name: "PayPal" }).check();
+    await page.getByRole("button", { name: "Review Order" }).click();
+    await page.getByRole("button", { name: /Place Order/ }).click();
+    await page.waitForURL(/\/checkout\/success\?order=.+&t=/, { timeout: 15_000 });
+    const successUrl = new URL(page.url());
+    const orderNumber = successUrl.searchParams.get("order") ?? "";
+    const token = successUrl.searchParams.get("t") ?? "";
+    expect(orderNumber).toMatch(/^ORD-\d{4}-\d+$/);
+    expect(token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    // The guest's own tokened URL renders the full confirmation.
+    await expect(page.getByText(/Your order ORD-\d{4}-\d+ has been placed/)).toBeVisible();
+    await expect(page.getByText("enum-victim@example.com")).toBeVisible();
+
+    // 2. THE EXPLOIT: a FRESH anonymous context (no cookies, no session)
+    //    visits the BARE order number — the enumeration scenario.
+    const attacker = await browser.newContext();
+    const ap = await attacker.newPage();
+    await ap.goto(`/checkout/success?order=${encodeURIComponent(orderNumber)}`);
+    // The generic confirmation — NOT the victim's details.
+    await expect(ap.getByText("Your order has been placed.")).toBeVisible();
+    await expect(ap.getByText("enum-victim@example.com")).toHaveCount(0);
+    await expect(ap.getByText("Wireless Charging Pad")).toHaveCount(0);
+    await expect(ap.getByRole("link", { name: "View Orders" })).toBeVisible();
+
+    // 3. A signed-in NON-owner gets the generic block too (the old gate
+    //    leaked guest orders to every authenticated user as well —
+    //    `!order.userId` was true regardless of who was signed in).
+    const ownerCtx = await browser.newContext();
+    const op = await ownerCtx.newPage();
+    await op.goto("/login");
+    await op.waitForLoadState("networkidle");
+    await op.getByLabel("Email").fill("john@example.com");
+    await op.getByLabel("Password").fill("Demo1234!");
+    await op.getByRole("button", { name: "Log in", exact: true }).click();
+    await op.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 15_000 });
+    await op.goto(`/checkout/success?order=${encodeURIComponent(orderNumber)}`);
+    await expect(op.getByText("Your order has been placed.")).toBeVisible();
+    await expect(op.getByText("enum-victim@example.com")).toHaveCount(0);
+    await op.close();
+    await ownerCtx.close();
+
+    // 4. The VALID token still unlocks the details for the anonymous
+    //    holder (the bookmarked-confirmation contract).
+    await ap.goto(`/checkout/success?order=${encodeURIComponent(orderNumber)}&t=${encodeURIComponent(token)}`);
+    await expect(ap.getByText("enum-victim@example.com")).toBeVisible();
+    await ap.close();
+    await attacker.close();
+  });
 });

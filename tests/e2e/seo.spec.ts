@@ -148,4 +148,26 @@ test.describe("seo", () => {
     );
     expect(hasProduct).toBe(false);
   });
+
+  test("the checkout family carries noindex on the page itself (session-31, CHECKOUT-SEO-1)", async ({ page }) => {
+    // robots.txt disallows crawling (pinned above), but a crawl-blocked
+    // URL can still be indexed through inbound links — the belt-and-
+    // suspenders contract: the pages themselves must declare noindex.
+    for (const path of ["/checkout", "/checkout/success"]) {
+      await page.goto(path);
+      const meta = await page.evaluate(
+        () => document.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
+      );
+      expect(meta, `${path} robots meta`).toContain("noindex");
+    }
+    // Every OTHER route stays indexable — the noindex is scoped to the
+    // checkout family (spot-check two public parity surfaces).
+    for (const path of ["/", "/shop"]) {
+      await page.goto(path);
+      const meta = await page.evaluate(
+        () => document.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
+      );
+      expect(meta, `${path} must stay indexable`).toBeNull();
+    }
+  });
 });

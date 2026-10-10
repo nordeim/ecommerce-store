@@ -512,6 +512,20 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
 13. **next/font's repackaged woff2 rasterizes differently than the file it downloaded (session-11, FONT-FILE-1).** next/font subsets/repackages Google's woff2 and STRIPS the `prep` table (the TrueType hinting pre-program): advances, outlines, kerning, gvar all stay byte-identical, but glyph rasterization changes — a halo on every letter (VLM-verified), 1-4.8% text-band pixel diffs on every route, and canvas measureText 1013px vs the reference's 1009px for the same string. Fix: the site font is a self-hosted copy of the reference's EXACT Google-served file (`public/fonts/plus-jakarta-sans.woff2`, md5-pinned, declared as a plain `@font-face { font-family: "Plus Jakarta Sans"; font-weight: 200 800; src: url("/fonts/…") }` in globals.css); the next/font import/variable is GONE (`--font-sans: "Plus Jakarta Sans", sans-serif` — the reference's exact stack, no "Fallback" companion face). Pixel diffs collapsed to 0.23-0.60% (the session-10 baseline). Rule: **font parity is FILE parity — if the reference serves a font file, self-host that exact file; never trust a repackaging pipeline to preserve rasterization.** Pinned by the storefront-parity font spec (faces/stack/canvas-width/byte-length).
 14. **`@stripe/stripe-js`'s DEFAULT entry eagerly injects js.stripe.com on EVERY page that bundles it (session-22, L34, PAY-STRIPE-1).** The default module (`dist/index.mjs`) runs `Promise.resolve().then(() => getStripePromise())` AT MODULE SCOPE — importing `loadStripe` from "@stripe/stripe-js" fires a third-party request to `js.stripe.com/<release-train>/stripe.js` (v10's train = `endive`) on the FIRST page whose client bundle evaluates the module, unconfigured or not (measured live: the script tag in /checkout's DOM pre-hydration-step). The `/pure` entry (`@stripe/stripe-js/pure`) is the LAZY loader — it fetches ONLY when `loadStripe(pk)` is actually called. Rule: **client-bundled SDK loaders must use the /pure entry (or an equivalent lazy form) whenever the feature is env-gated — an eager default entry turns "off" into a lie (network-wise) on every parity surface.** Detection discipline: the request listener must be attached BEFORE the navigation that loads the island chunk (the E2E "zero Stripe traffic" test reloads under the listener — a plain flow from a beforeEach-loaded page reads false-green). Pinned by `tests/e2e/stripe.spec.ts`.
 
+- **Guest order confirmations are token-gated (session-31, GUEST-TOKEN-1,
+  ADR-039).** A sequential, guessable public id (`ORD-YYYY-NNN`) is NEVER a
+  sufficient capability token for reading PII: `/checkout/success` renders
+  details only for the signed-in owner or the holder of the HMAC view token
+  the placement redirect carries (`?order=X&t=…` — `src/lib/order-view-token.ts`,
+  domain-separated, keyed by `AUTH_SECRET`, constant-time compare). The
+  pre-fix gate (`!order.userId`) leaked every guest order's email/items/
+  total to any visitor walking the number space — a live-verified exploit
+  (`scripts/guest-order-enumeration-probe.mjs`). The action returns the
+  token at BOTH success sites (the happy path AND the P2002 already-placed
+  resolution — a retried guest submit must still render its confirmation).
+  The same discipline applies to ANY future "view by public id" surface:
+  sequential ids need a per-row secret or an ownership check.
+
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 
 ## Conventions

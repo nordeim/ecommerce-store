@@ -27,6 +27,7 @@ import { checkoutSchema } from "../validation";
 import { clientIp, rateLimit } from "../rate-limit";
 import { getStripe } from "../stripe";
 import { isIntentAnchorP2002, paymentIntentLast4, verifyPaymentIntentForPlacement } from "../stripe-payment";
+import { signOrderViewToken } from "../order-view-token";
 import type { ActionResult } from "./auth";
 
 async function nextOrderNumber(): Promise<string> {
@@ -42,9 +43,9 @@ async function nextOrderNumber(): Promise<string> {
 class StockRejectedError extends Error {}
 
 export async function placeOrderAction(
-  _prev: ActionResult<{ orderNumber: string }> | null,
+  _prev: ActionResult<{ orderNumber: string; viewToken: string }> | null,
   formData: FormData,
-): Promise<ActionResult<{ orderNumber: string }>> {
+): Promise<ActionResult<{ orderNumber: string; viewToken: string }>> {
   const user = await getCurrentUser();
   const ip = clientIp(new Headers());
   const rl = rateLimit(`checkout:${user?.id ?? ip}`, 10, 10 * 60 * 1000);
@@ -199,7 +200,7 @@ export async function placeOrderAction(
       await tx.cartItem.deleteMany({ where: { cartId } });
       return number;
     });
-    return { ok: true, data: { orderNumber } };
+    return { ok: true, data: { orderNumber, viewToken: signOrderViewToken(orderNumber) } };
   } catch (e) {
     // The placement idempotency anchor: a retried submit whose intent
     // already placed an order resolves to that order (the customer sees
@@ -214,7 +215,10 @@ export async function placeOrderAction(
         select: { number: true },
       });
       if (existing) {
-        return { ok: true, data: { orderNumber: existing.number } };
+        // GUEST-TOKEN-1: the token is minted for the EXISTING order's
+        // number — the retry's redirect must render the confirmation,
+        // not the generic block (a false "lost" order for a guest).
+        return { ok: true, data: { orderNumber: existing.number, viewToken: signOrderViewToken(existing.number) } };
       }
     }
     if (e instanceof StockRejectedError) {

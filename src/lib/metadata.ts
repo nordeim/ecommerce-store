@@ -48,6 +48,9 @@ export type PageMetadataOptions = {
   plain?: boolean;
   /** Emit the BARE title (home: "Lumina", no template suffix). */
   bare?: boolean;
+  /** Emit robots noindex (the checkout family — belt-and-suspenders with
+   *  the robots.txt disallow; session-31, CHECKOUT-SEO-1). */
+  noindex?: boolean;
   /** Canonical origin override (defaults to NEXT_PUBLIC_SITE_URL). */
   siteUrl?: string;
 };
@@ -62,6 +65,7 @@ export function pageMetadata({
   path,
   plain = false,
   bare = false,
+  noindex = false,
   siteUrl,
 }: PageMetadataOptions): Metadata {
   const origin = resolveSiteUrl(siteUrl);
@@ -74,6 +78,7 @@ export function pageMetadata({
   return {
     title: bare ? { absolute: title } : title,
     description,
+    ...(noindex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       title: fullTitle,
       description,

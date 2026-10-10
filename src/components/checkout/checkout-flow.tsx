@@ -64,7 +64,10 @@ export function CheckoutFlow({
   React.useEffect(() => {
     if (state?.ok) {
       router.refresh();
-      router.push(`/checkout/success?order=${encodeURIComponent(state.data.orderNumber)}`);
+      // GUEST-TOKEN-1 (session-31): the confirmation view token rides the
+      // redirect — the success page renders details for the owner OR the
+      // token holder (never the bare sequential number).
+      router.push(`/checkout/success?order=${encodeURIComponent(state.data.orderNumber)}&t=${encodeURIComponent(state.data.viewToken)}`);
     }
   }, [state, router]);
 
@@ -117,6 +120,7 @@ export function CheckoutFlow({
                 <Input
                   id="co-first"
                   required
+                  autoComplete="given-name"
                   value={shipping.firstName}
                   onChange={(e) => setShipping((s) => ({ ...s, firstName: e.target.value }))}
                 />
@@ -126,6 +130,7 @@ export function CheckoutFlow({
                 <Input
                   id="co-last"
                   required
+                  autoComplete="family-name"
                   value={shipping.lastName}
                   onChange={(e) => setShipping((s) => ({ ...s, lastName: e.target.value }))}
                 />
@@ -136,6 +141,7 @@ export function CheckoutFlow({
                   id="co-email"
                   required
                   type="email"
+                  autoComplete="email"
                   value={shipping.email}
                   onChange={(e) => setShipping((s) => ({ ...s, email: e.target.value }))}
                 />
@@ -145,6 +151,7 @@ export function CheckoutFlow({
                 <Input
                   id="co-address"
                   required
+                  autoComplete="street-address"
                   value={shipping.address}
                   onChange={(e) => setShipping((s) => ({ ...s, address: e.target.value }))}
                   placeholder="123 Main St"
@@ -152,18 +159,19 @@ export function CheckoutFlow({
               </div>
               <div>
                 <Label className="mb-2 block" htmlFor="co-city">City</Label>
-                <Input id="co-city" required value={shipping.city} onChange={(e) => setShipping((s) => ({ ...s, city: e.target.value }))} />
+                <Input id="co-city" required autoComplete="address-level2" value={shipping.city} onChange={(e) => setShipping((s) => ({ ...s, city: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-2 block" htmlFor="co-state">State</Label>
-                  <Input id="co-state" required value={shipping.state} onChange={(e) => setShipping((s) => ({ ...s, state: e.target.value }))} />
+                  <Input id="co-state" required autoComplete="address-level1" value={shipping.state} onChange={(e) => setShipping((s) => ({ ...s, state: e.target.value }))} />
                 </div>
                 <div>
                   <Label className="mb-2 block" htmlFor="co-zip">ZIP</Label>
                   <Input
                     id="co-zip"
                     required
+                    autoComplete="postal-code"
                     value={shipping.zip}
                     onChange={(e) => setShipping((s) => ({ ...s, zip: e.target.value }))}
                     placeholder="10001"

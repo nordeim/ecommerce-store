@@ -4,13 +4,19 @@ import { CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { pageMetadata } from "@/lib/metadata";
+import { verifyOrderViewToken } from "@/lib/order-view-token";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
 // Clone-only route (superset): the static-page og pattern for consistency.
-export const metadata: Metadata = pageMetadata({ title: "Order Confirmed", path: "/checkout/success" });
+// GUEST-TOKEN-1 (session-31): noindex — the confirmation is a personal,
+// token-gated page (belt-and-suspenders with the robots.txt disallow).
+export const metadata: Metadata = {
+  ...pageMetadata({ title: "Order Confirmed", path: "/checkout/success" }),
+  robots: { index: false, follow: false },
+};
 
 export default async function CheckoutSuccessPage({
   searchParams,
@@ -19,6 +25,7 @@ export default async function CheckoutSuccessPage({
 }) {
   const params = await searchParams;
   const orderNumber = Array.isArray(params.order) ? params.order[0] : params.order;
+  const viewToken = Array.isArray(params.t) ? params.t[0] : params.t;
   const user = await getCurrentUser();
   const order = orderNumber
     ? await db.order.findUnique({
@@ -26,7 +33,16 @@ export default async function CheckoutSuccessPage({
         include: { items: true },
       })
     : null;
-  const visible = order && (!order.userId || order.userId === user?.id);
+  // GUEST-TOKEN-1 (session-31): the details gate. Before this, ANY visitor
+  // (authenticated or not) could read ANY GUEST order's email/items/total
+  // by walking the sequential ORD-YYYY-NNN space (`!order.userId` was the
+  // only check — verified as a live exploit). Now: the signed-in OWNER or
+  // the holder of the placement redirect's HMAC view token. Everyone else
+  // gets the generic confirmation block below.
+  const ownerView = !!order && !!user && order.userId === user.id;
+  const tokenView =
+    !!order && typeof viewToken === "string" && verifyOrderViewToken(order.number, viewToken);
+  const visible = order && (ownerView || tokenView);
 
   return (
     // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.

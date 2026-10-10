@@ -121,4 +121,35 @@ test.describe("checkout", () => {
     await expect(page.getByText("Wireless Noise-Cancelling Headphones").first()).toBeVisible();
     await expect(page.getByText("$299.99").first()).toBeVisible();
   });
+
+  test("the shipping step carries field-purpose autoComplete tokens (session-31, CHECKOUT-AC-1)", async ({ page }) => {
+    // WCAG 1.3.5 (Identify Input Purpose) + the browser-autofill contract:
+    // every shipping input declares its semantic purpose so saved
+    // addresses fill reliably — the high-end checkout hygiene the card
+    // fields already had (cc-number/cc-exp/cc-csc).
+    const main = page.getByRole("main");
+    const expectAuto = async (label: string, token: string) => {
+      await expect(main.getByLabel(label)).toHaveAttribute("autocomplete", token);
+    };
+    await expectAuto("First Name", "given-name");
+    await expectAuto("Last Name", "family-name");
+    await expectAuto("Email", "email");
+    await expectAuto("Address", "street-address");
+    await expectAuto("City", "address-level2");
+    await expectAuto("State", "address-level1");
+    await expectAuto("ZIP", "postal-code");
+    // The card fields keep their payment-method tokens (session-15).
+    const cont = page.getByRole("button", { name: "Continue to Payment" });
+    await main.getByLabel("First Name").fill("John");
+    await main.getByLabel("Last Name").fill("Doe");
+    await main.getByLabel("Email").fill("john@example.com");
+    await main.getByLabel("Address").fill("123 Main St");
+    await main.getByLabel("City").fill("New York");
+    await main.getByLabel("State").fill("NY");
+    await main.getByLabel("ZIP").fill("10001");
+    await cont.click();
+    await expect(main.getByLabel("Card Number")).toHaveAttribute("autocomplete", "cc-number");
+    await expect(main.getByLabel("Expiry")).toHaveAttribute("autocomplete", "cc-exp");
+    await expect(main.getByLabel("CVC")).toHaveAttribute("autocomplete", "cc-csc");
+  });
 });

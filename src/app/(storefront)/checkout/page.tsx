@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = pageMetadata({ title: "Checkout", path: "/checkout" });
+// CHECKOUT-SEO-1 (session-31): noindex on the page itself — belt-and-suspenders
+// with the robots.txt disallow (a crawl-blocked URL can still be indexed
+// through inbound links).
+export const metadata: Metadata = pageMetadata({ title: "Checkout", path: "/checkout", noindex: true });
 
 export default async function CheckoutPage() {
   const user = await getCurrentUser();

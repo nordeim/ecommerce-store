@@ -89,7 +89,7 @@ export function StripeCheckout({
   shipping: Shipping;
   publishableKey: string | null;
   formAction: (formData: FormData) => void | Promise<void>;
-  state: ActionResult<{ orderNumber: string }> | null;
+  state: ActionResult<{ orderNumber: string; viewToken: string }> | null;
   onBack: () => void;
 }) {
   const [method, setMethod] = React.useState<"card" | "paypal">("card");
@@ -241,7 +241,7 @@ function CardPaymentPanel({
   shipping: Shipping;
   intentId: string;
   formAction: (formData: FormData) => void | Promise<void>;
-  state: ActionResult<{ orderNumber: string }> | null;
+  state: ActionResult<{ orderNumber: string; viewToken: string }> | null;
   onBack: () => void;
 }) {
   const stripe = useStripe();
