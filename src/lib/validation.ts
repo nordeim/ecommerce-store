@@ -182,6 +182,20 @@ export const searchSchema = z.object({
   limit: z.number().int().min(1).max(10).default(6),
 });
 
+// Session-36 (ORDER-TRACKING-1): the operator's tracking write — the
+// carrier is free-form (the canonical four compose a track link through
+// the order-tracking seam; any other carrier renders raw with no link),
+// the number covers every major carrier's shape (UPS 18, USPS 20-22,
+// FedEx 12-15, DHL 10 — so 4-64 with no charset rule).
+export const trackingSchema = z.object({
+  carrier: z.string().trim().min(1, "Carrier is required").max(40),
+  trackingNumber: z
+    .string()
+    .trim()
+    .min(4, "Tracking number must be at least 4 characters")
+    .max(64),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type CheckoutInput = z.infer<typeof checkoutSchema>;

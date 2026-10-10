@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CreditCard, History, Mail, MapPin, Package, ReceiptText, RotateCcw } from "lucide-react";
+import { CreditCard, History, Mail, MapPin, Package, PackageCheck, ReceiptText, RotateCcw } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,13 @@ import { orderPaymentTrail, refundEligibility } from "@/lib/admin-payments";
 // Session-35 (CUSTOMER-TIMELINE-1): the timeline timestamp's single source —
 // the SAME seam the customer timeline composes (the drift-proofing rule).
 import { formatTimelineDate } from "@/lib/order-timeline";
+// Session-36 (ORDER-TRACKING-1, ADR-044): the tracking read row's single
+// source — the SAME seam the customer Shipping card composes (the
+// DASH-ALERT-1 rule: the operator write surface and the customer read
+// surface can never disagree about the vocabulary).
+import { orderTrackingView } from "@/lib/order-tracking";
 import { RefundOrderButton } from "@/components/account/refund-order-button";
+import { AdminTrackingForm } from "@/components/account/admin-tracking-form";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +90,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
       })
     : [];
   const paymentTrail = orderPaymentTrail(paymentEvents);
+  // Session-36 (ORDER-TRACKING-1): the tracking read row — composed through
+  // the seam the customer surface shares (the calm state renders nothing).
+  const tracking = orderTrackingView(order.carrier, order.trackingNumber);
 
   return (
     <div className="flex-1">
@@ -174,6 +183,25 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               </p>
               <p className="text-muted-foreground">{address.country}</p>
             </address>
+            {/* Session-36, ORDER-TRACKING-1 (ADR-044): the tracking read row
+                (the current columns) + the write surface (the compact
+                form island) — both in the Shipping card, the operator's
+                mental model of "how this order ships". The read row composes
+                the SAME seam the customer surface reads (one vocabulary). */}
+            {tracking.visible && (
+              <p className="text-sm mt-4" data-testid="admin-tracking-row">
+                <span className="text-muted-foreground">Current: </span>
+                <span className="font-medium">
+                  {tracking.carrierLabel} · {tracking.trackingCode}
+                </span>
+              </p>
+            )}
+            <AdminTrackingForm
+              orderId={order.id}
+              orderNumber={order.number}
+              carrier={order.carrier}
+              trackingNumber={order.trackingNumber}
+            />
           </div>
         </div>
 
@@ -277,6 +305,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                         <Package className="h-4 w-4 text-muted-foreground" />
                       ) : event.type === "payment_refunded" ? (
                         <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                      ) : event.type === "tracking_added" ? (
+                        <PackageCheck className="h-4 w-4 text-muted-foreground" />
                       ) : (
                         <History className="h-4 w-4 text-muted-foreground" />
                       )}
@@ -291,7 +321,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                           ? "Order placed"
                           : event.type === "payment_refunded"
                             ? "Payment refunded"
-                            : "Status changed"}
+                            : event.type === "tracking_added"
+                              ? "Tracking added"
+                              : "Status changed"}
                       </p>
                       {event.note && <p className="text-sm text-muted-foreground">{event.note}</p>}
                       <p className="text-xs text-muted-foreground">

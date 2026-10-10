@@ -444,6 +444,52 @@ test.describe("account", () => {
     await expect(page.getByText(/by admin@luxestore\.com/)).toHaveCount(0);
   });
 
+  // Session-36, ORDER-TRACKING-1 (ADR-044): the "where's my order" read
+  // surface — the in-transit order's detail carries the tracking line (the
+  // seeded UPS fixture) with the carrier's public track link (external,
+  // safe opener), the timeline gains "Tracking added" in story order, and
+  // the no-leak property holds (the event's note never renders). The calm
+  // state: ORD-2026-001 (no tracking columns) renders NO tracking row.
+  test("the in-transit order carries the tracking line + the timeline row (ORD-2026-002, session-36 ORDER-TRACKING-1)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-002" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-002", exact: true })).toBeVisible();
+
+    // The Tracking row in the Shipping card: the carrier + the number,
+    // the number linked to the carrier's public tracking URL.
+    const trackingLink = page.getByRole("link", { name: "1Z999AA10123456784" });
+    await expect(trackingLink).toBeVisible();
+    await expect(trackingLink).toHaveAttribute(
+      "href",
+      "https://www.ups.com/track?tracknum=1Z999AA10123456784",
+    );
+    await expect(trackingLink).toHaveAttribute("target", "_blank");
+    await expect(page.getByText("UPS · 1Z999AA10123456784")).toBeVisible();
+
+    // The timeline: placed → in transit → Tracking added (the story
+    // order — the tracking event follows the transit transition).
+    const list = page
+      .getByRole("list")
+      .filter({ has: page.getByText("Order placed", { exact: true }) });
+    const labels = list.locator("p.font-medium");
+    await expect(labels).toHaveCount(3);
+    await expect(labels.nth(0)).toHaveText("Order placed");
+    await expect(labels.nth(1)).toHaveText("Status updated to In Transit");
+    await expect(labels.nth(2)).toHaveText("Tracking added");
+
+    // R10-2: the operator attribution NEVER renders (the note carries
+    // "set by admin@luxestore.com" — the timeline row has no note).
+    await expect(page.getByText(/set by admin@luxestore\.com/)).toHaveCount(0);
+
+    // The calm state: ORD-2026-001 (no tracking columns) renders NO
+    // tracking row — the not-set order ships nothing.
+    await page.goto("/account");
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-001" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-001", exact: true })).toBeVisible();
+    await expect(page.getByText("Tracking", { exact: true })).toHaveCount(0);
+  });
+
   test("the owner gate: a non-owner gets the generic not-found block (GUEST-TOKEN-1 discipline)", async ({ browser, page }) => {
     // Grab john's ORD-2026-001 detail URL from the history link first.
     await page.getByRole("tab", { name: "Orders" }).click();

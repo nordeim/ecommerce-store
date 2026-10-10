@@ -179,6 +179,38 @@ test.describe("admin console (admin session)", () => {
     await expect(admin.getByRole("button", { name: "Refund payment" })).toHaveCount(0);
   });
 
+  // Session-36, ORDER-TRACKING-1 (ADR-044): the "where's my order" write
+  // surface — the operator records carrier + tracking number from the
+  // order detail (the Shipping card's compact form island, the stock-form
+  // anatomy); the columns land on the order (the read row renders in the
+  // Shipping card) and the tracking_added event joins the operator
+  // timeline WITH its attribution note (the operator console renders the
+  // note — ADR-015; the customer timeline never does). The customer-side
+  // read (the tracking line + the carrier track link) is pinned in
+  // account.spec.ts on the seeded ORD-2026-002 fixture.
+  test("the operator sets tracking from the order detail (session-36, ORDER-TRACKING-1)", async () => {
+    await admin.goto("/admin/orders");
+    await admin.getByRole("link", { name: "ORD-2026-003" }).click();
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/\/admin\/orders\/[a-z0-9]+$/);
+
+    // The form island: carrier + tracking number + Save (pre-filled with
+    // the current columns — empty on the not-set order).
+    await admin.getByLabel("Carrier for ORD-2026-003").fill("FedEx");
+    await admin.getByLabel("Tracking number for ORD-2026-003").fill("771283940293");
+    await admin.getByRole("button", { name: "Save tracking" }).click();
+
+    // The read row renders in the Shipping card (the pair, exactly as set).
+    await expect(admin.getByText("FedEx · 771283940293")).toBeVisible({ timeout: 10_000 });
+
+    // The event lands in the operator timeline: the label + the
+    // attributed note (the console's vocabulary, never the customer's).
+    await expect(admin.getByText("Tracking added", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText(/FedEx 771283940293 set by admin@luxestore\.com/),
+    ).toBeVisible();
+  });
+
   test("status transitions via the combobox land in the timeline", async () => {
     await admin.goto("/admin/orders");
     // Scope to ORD-2026-001's row through the combobox's stable aria-label

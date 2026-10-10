@@ -696,6 +696,64 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
   the guard holding the inverse). The lint contract restored to 0/0
   (the round-34 capture script's unused expression → a statement).
 
+- **The order tracking affordance — "where's my order?" (session-36,
+  ORDER-TRACKING-1, ADR-044).** The customer order-surfaces arc
+  (ADR-041 money → ADR-042 detail → ADR-043 timeline) rendered the
+  order's money state, resting state, and story — but "Status updated
+  to In Transit" stranded the customer at words with no actionable
+  answer. The schema gains `Order.carrier String?` +
+  `Order.trackingNumber String?` (additive nullable columns — the
+  paymentStatus precedent; null = not set = the calm state): the
+  columns are the order's RESTING tracking state (rendered from the
+  row like `cardLast4`, NEVER derived from events). The pure seam
+  `orderTrackingView(carrier, trackingNumber)` in
+  `src/lib/order-tracking.ts` (a discriminated union — the
+  order-money-state precedent: the calm state carries NO fields)
+  composes the read row: the canonical carrier map (`ups | fedex |
+  usps | dhl` → the label + the public tracking URL with the code
+  `encodeURIComponent`-substituted), a case-insensitive +
+  whitespace-trimmed key match ("UPS"/"ups"/" ups " link identically),
+  an UNKNOWN carrier → the raw label + `href: null` (the raw
+  passthrough — the number still renders, just not linked), null /
+  empty / whitespace in EITHER field → `{ visible: false }`. The write
+  path is `setOrderTrackingAction` (`src/lib/actions/admin.ts`):
+  admin-gated, `trackingSchema`-validated (carrier trim 1–40, number
+  trim 4–64 — every major carrier's shape), the no-op guard (the
+  IDENTICAL pair is ok with NO event write — the status-action
+  precedent), overwrite semantics (a different pair replaces the
+  columns and appends the event — corrections are auditable), and the
+  `tracking_added` OrderEvent whose note carries the operator
+  attribution ("«carrier» «number» set by «actor»" — the console
+  renders it, the customer timeline NEVER does). The timeline seam
+  maps `tracking_added` → "Tracking added" (the note structurally
+  absent from the row type — R10-2); the customer detail's icon map
+  uses `PackageCheck`. The SURFACES: the admin detail's Shipping card
+  gains the "Current: …" read row + the `AdminTrackingForm` island
+  (carrier + tracking-number inputs + "Save tracking" — the stock-form
+  anatomy, pre-filled with the current columns); the customer detail's
+  Shipping card gains the Tracking line ("«carrier» · «number»", the
+  number an external anchor `target="_blank"
+  rel="noopener noreferrer"` in `text-primary` when the href composes,
+  plain text for unknown carriers; the calm state renders NOTHING —
+  the alert-fatigue rule). The fixtures: ORD-2026-002 (in-transit)
+  carries `UPS` + `1Z999AA10123456784` + the `evt-ord2-tracking`
+  event (deterministic id, preserved by the e2e-reset's
+  `SEEDED_ORDER_EVENT_IDS` + `tracking_added` joining the wiped types;
+  the seed's convergence update restores the columns the paid-columns
+  way; ORD-2026-003's per-run admin-E2E write is cleared by the
+  reset). Zero parity risk — every touched surface is superset-only.
+  Pinned by 12 unit (the seam: the four canonical URLs, the encoded
+  substitution, the case-insensitive trim match, the raw passthrough,
+  the pair contract, the calm states; the timeline's tracking_added
+  label) + 2 E2E (the admin write → the read row + the attributed
+  timeline event; the customer tracking line + the UPS href + the
+  3-row story + the no-leak pin + the ORD-2026-001 calm state),
+  triple-mutation-proven (M1 the href composition dropped → unit ×6
+  AND the E2E anchor pin; M2 the consumer's calm-state gate broken →
+  the E2E calm pin while the seam's unit pins stay green — the
+  consumer is the defect; M3 the timeline case dropped → the unit pin
+  AND the E2E label pin).
+
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 
 ## Conventions

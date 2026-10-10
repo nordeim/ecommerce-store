@@ -42,12 +42,25 @@ async function main() {
   // transitions leave status_changed events on the demo orders (the admin
   // order-detail timeline renders every event). Restore the canonical
   // statuses + timelines so post-audit dev state matches the seed.
+  // Session-36 (ORDER-TRACKING-1): tracking_added joins the wiped types
+  // (live-verification tracking writes leave the same residue) and the
+  // tracking columns restore with the statuses (the e2e-reset guard's
+  // dev-DB twin).
   const demoEvents = await db.orderEvent.deleteMany({
-    where: { type: "status_changed", order: { number: { in: [...CANONICAL_ORDERS] } } },
+    where: {
+      type: { in: ["status_changed", "tracking_added"] },
+      order: { number: { in: [...CANONICAL_ORDERS] } },
+    },
   });
   await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
-  await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });
-  await db.order.update({ where: { number: "ORD-2026-003" }, data: { status: "delivered" } });
+  await db.order.update({
+    where: { number: "ORD-2026-002" },
+    data: { status: "in_transit", carrier: "UPS", trackingNumber: "1Z999AA10123456784" },
+  });
+  await db.order.update({
+    where: { number: "ORD-2026-003" },
+    data: { status: "delivered", carrier: null, trackingNumber: null },
+  });
   // Session-33 (CUSTOMER-MONEY-1): the refunded fixture's canonical status +
   // money columns (the e2e-reset guard's dev-DB twin).
   await db.order.update({

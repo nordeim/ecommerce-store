@@ -171,6 +171,15 @@ model Order {
   //   payment_intent.payment_failed. String, not enum (the SQLite contract).
   stripePaymentIntentId String? @unique
   paymentStatus          String?
+  // Session-36 (ORDER-TRACKING-1, ADR-044): the "where's my order"
+  // affordance's resting state — the carrier + tracking number the
+  // operator records (setOrderTrackingAction) and both detail surfaces
+  // read. Nullable = not set = the calm state (the paymentStatus
+  // precedent: additive columns, zero data motion, null renders nothing).
+  // Rendered from the row (like cardLast4), NEVER derived from events;
+  // the tracking_added OrderEvent is the audit trail, not the source.
+  carrier         String?
+  trackingNumber  String?
   placedAt        DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   items           OrderItem[]

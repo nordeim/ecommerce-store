@@ -10,6 +10,7 @@ import { getCurrentUser, isAdmin } from "../auth";
 import { refundEligibility } from "../admin-payments";
 import { getStripe, isStripeServerConfigured } from "../stripe";
 import { stripeRefundIdempotencyKey } from "../stripe-payment";
+import { trackingSchema } from "../validation";
 import type { ActionResult } from "./auth";
 
 const ORDER_STATUSES = ["processing", "in_transit", "delivered", "cancelled"] as const;
@@ -27,6 +28,57 @@ export async function updateOrderStatusAction(orderId: string, status: string): 
   await db.order.update({ where: { id: orderId }, data: { status } });
   await db.orderEvent.create({
     data: { orderId, type: "status_changed", note: `${order.status} → ${status} by ${user?.email}` },
+  });
+  revalidatePath("/admin");
+  revalidatePath("/account");
+  return { ok: true, data: null };
+}
+
+/**
+ * The tracking write action (session-36, ORDER-TRACKING-1, ADR-044) — the
+ * "where's my order" affordance's operator seam. Records the carrier +
+ * tracking number on the order (the RESTING state both detail surfaces
+ * compose through the orderTrackingView seam — the DASH-ALERT-1 rule: the
+ * render and the write can never disagree about the vocabulary) and
+ * writes the tracking_added OrderEvent for the audit trail.
+ *
+ * Design contracts:
+ * - **The no-op guard** (the updateOrderStatusAction precedent): saving
+ *   the IDENTICAL pair is ok with NO event write — a re-save cannot pile
+ *   duplicate events onto the timeline.
+ * - **The note is operator territory** ("«carrier» «number» set by
+ *   «actor»" — the status action's attribution format): the operator
+ *   console renders it (ADR-015); the customer timeline maps the type to
+ *   "Tracking added" with the note structurally absent (R10-2).
+ * - Overwrite semantics: a second save with DIFFERENT values replaces
+ *   the columns and appends the event (the correction is auditable).
+ */
+export async function setOrderTrackingAction(
+  orderId: string,
+  carrier: string,
+  trackingNumber: string,
+): Promise<ActionResult<null>> {
+  const user = await getCurrentUser();
+  if (!isAdmin(user)) return { ok: false, error: { message: "Forbidden" } };
+  const parsed = trackingSchema.safeParse({ carrier, trackingNumber });
+  if (!parsed.success) {
+    return { ok: false, error: { message: parsed.error.issues[0]?.message ?? "Invalid tracking" } };
+  }
+  const order = await db.order.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, error: { message: "Order not found" } };
+  if (order.carrier === parsed.data.carrier && order.trackingNumber === parsed.data.trackingNumber) {
+    return { ok: true, data: null };
+  }
+  await db.order.update({
+    where: { id: orderId },
+    data: { carrier: parsed.data.carrier, trackingNumber: parsed.data.trackingNumber },
+  });
+  await db.orderEvent.create({
+    data: {
+      orderId,
+      type: "tracking_added",
+      note: `${parsed.data.carrier} ${parsed.data.trackingNumber} set by ${user?.email}`,
+    },
   });
   revalidatePath("/admin");
   revalidatePath("/account");

@@ -425,6 +425,12 @@ async function main() {
     // + explicit createdAt — the customer-safe timeline's fixtures need a
     // stable story (ordered instants, preserved across e2e-reset by id).
     extraEvents?: { id: string; type: string; note: string; createdAt: Date }[];
+    // Session-36 (ORDER-TRACKING-1, ADR-044): optional carrier + tracking
+    // number — the order's resting tracking state (ORD-2026-002, the
+    // in-transit order, carries the UPS fixture; the tracking_added event
+    // joins its extraEvents with the admin action's note format).
+    carrier?: string;
+    trackingNumber?: string;
   }[] = [
     {
       number: "ORD-2026-001",
@@ -462,14 +468,30 @@ async function main() {
       placedAt: new Date("2026-03-15T10:22:00Z"),
       items: [{ slug: "leather-watch", qty: 1 }],
       total: null,
+      // Session-36 (ORDER-TRACKING-1, ADR-044): the in-transit order's
+      // tracking state — the UPS fixture (the canonical UPS test number).
+      // The columns are the RESTING state (rendered from the row via the
+      // order-tracking seam); the tracking_added event below is the audit
+      // trail (the admin action's note format — attribution included, by
+      // design: the E2E pins the no-leak property against a REAL note).
+      carrier: "UPS",
+      trackingNumber: "1Z999AA10123456784",
       // Session-35: the in-transit order's single transition — the minimal
-      // two-row timeline (placed + one status change).
+      // two-row timeline (placed + one status change). Session-36 adds the
+      // tracking milestone 30 minutes after the transition: placed →
+      // in transit → Tracking added (the "where's my order" story).
       extraEvents: [
         {
           id: "evt-ord2-transit",
           type: "status_changed",
           note: "processing → in_transit by admin@luxestore.com",
           createdAt: new Date("2026-03-16T08:45:00Z"),
+        },
+        {
+          id: "evt-ord2-tracking",
+          type: "tracking_added",
+          note: "UPS 1Z999AA10123456784 set by admin@luxestore.com",
+          createdAt: new Date("2026-03-16T09:15:00Z"),
         },
       ],
     },
@@ -551,6 +573,12 @@ async function main() {
         paymentMethod: "card",
         cardLast4: "4242",
         placedAt: o.placedAt,
+        // Session-36 (ORDER-TRACKING-1): the tracking columns ride the
+        // create when present (the convergence update restores them on
+        // pre-session-36 DBs — the ORD-2026-003 paid-columns pattern).
+        ...(o.carrier && o.trackingNumber
+          ? { carrier: o.carrier, trackingNumber: o.trackingNumber }
+          : {}),
         items: { create: lineData },
         events: {
           // Session-35 (CUSTOMER-TIMELINE-1): the placed event's createdAt
@@ -586,6 +614,7 @@ async function main() {
     { orderNumber: "ORD-2026-001", id: "evt-ord1-transit", type: "status_changed", note: "processing → in_transit by admin@luxestore.com", createdAt: new Date("2026-03-30T09:00:00Z") },
     { orderNumber: "ORD-2026-001", id: "evt-ord1-delivered", type: "status_changed", note: "in_transit → delivered by admin@luxestore.com", createdAt: new Date("2026-04-02T11:30:00Z") },
     { orderNumber: "ORD-2026-002", id: "evt-ord2-transit", type: "status_changed", note: "processing → in_transit by admin@luxestore.com", createdAt: new Date("2026-03-16T08:45:00Z") },
+    { orderNumber: "ORD-2026-002", id: "evt-ord2-tracking", type: "tracking_added", note: "UPS 1Z999AA10123456784 set by admin@luxestore.com", createdAt: new Date("2026-03-16T09:15:00Z") },
     { orderNumber: "ORD-2026-004", id: "evt-ord4-cancelled", type: "status_changed", note: "processing → cancelled by admin@luxestore.com", createdAt: new Date("2026-02-22T14:03:00Z") },
     { orderNumber: "ORD-2026-004", id: "evt-ord4-refunded", type: "payment_refunded", note: "Refunded $79.99 via Stripe", createdAt: new Date("2026-02-22T14:03:30Z") },
   ];
@@ -614,9 +643,12 @@ async function main() {
   // Legacy duplicates: pre-session-35 rows (cuid ids for the refund event)
   // and any spec-written events on the canonical orders outside the fixture
   // id set — the canonical timeline renders exactly once per milestone.
+  // Session-36 (ORDER-TRACKING-1): tracking_added joins the wiped types —
+  // a pre-session-36 DB's spec-written tracking events must not survive
+  // the canonical story's convergence.
   await db.orderEvent.deleteMany({
     where: {
-      type: { in: ["status_changed", "payment_refunded"] },
+      type: { in: ["status_changed", "payment_refunded", "tracking_added"] },
       order: { number: { in: ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003", "ORD-2026-004"] } },
       id: { notIn: TIMELINE_FIXTURE_IDS },
     },
@@ -633,6 +665,17 @@ async function main() {
     data: {
       stripePaymentIntentId: "pi_demo_fixture_003",
       paymentStatus: "paid",
+    },
+  });
+  // Session-36 (ORDER-TRACKING-1, ADR-044): ORD-2026-002's tracking columns
+  // restored idempotently the paid-columns way (a DB seeded before
+  // session-36 converges on re-run; the admin E2E's per-run FedEx write on
+  // ORD-2026-003 is cleared by the e2e-reset, not the seed).
+  await db.order.update({
+    where: { number: "ORD-2026-002" },
+    data: {
+      carrier: "UPS",
+      trackingNumber: "1Z999AA10123456784",
     },
   });
   // Session-33 (CUSTOMER-MONEY-1): ORD-2026-004 — the refunded demo order's

@@ -85,6 +85,23 @@ describe("customerOrderTimeline — the customer-safe vocabulary", () => {
     expect(rows[0].label).toBe("Payment refunded");
   });
 
+  // Session-36 (ORDER-TRACKING-1): the tracking_added event the admin
+  // action writes when the operator records carrier + number — the
+  // customer vocabulary is "Tracking added"; the note (which carries the
+  // carrier/number + operator attribution) is structurally absent from
+  // the row, exactly like every other type.
+  it("tracking_added renders 'Tracking added' (session-36, ORDER-TRACKING-1)", () => {
+    const rows = customerOrderTimeline([
+      ev(
+        "e1",
+        "tracking_added",
+        "UPS 1Z999AA10123456784 set by admin@luxestore.com",
+        new Date(),
+      ),
+    ]);
+    expect(rows[0].label).toBe("Tracking added");
+  });
+
   it("an unknown event type renders the raw type (the paymentEventLabel raw-passthrough precedent)", () => {
     const rows = customerOrderTimeline([
       ev("e1", "note_added", "an operator's freeform note", new Date()),

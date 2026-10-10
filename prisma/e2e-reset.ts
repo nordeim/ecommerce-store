@@ -92,19 +92,34 @@ async function main() {
     "evt-ord1-transit",
     "evt-ord1-delivered",
     "evt-ord2-transit",
+    "evt-ord2-tracking",
     "evt-ord4-cancelled",
     "evt-ord4-refunded",
   ];
+  // Session-36 (ORDER-TRACKING-1): tracking_added joins the wiped types —
+  // the admin spec's per-run FedEx write on ORD-2026-003 is cleared while
+  // the seeded UPS milestone on ORD-2026-002 survives every reset.
   await db.orderEvent.deleteMany({
     where: {
-      type: { in: ["status_changed", "payment_refunded"] },
+      type: { in: ["status_changed", "payment_refunded", "tracking_added"] },
       order: { number: { in: CANONICAL_ORDERS } },
       id: { notIn: SEEDED_ORDER_EVENT_IDS },
     },
   });
   await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
-  await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });
-  await db.order.update({ where: { number: "ORD-2026-003" }, data: { status: "delivered" } });
+  // Session-36 (ORDER-TRACKING-1): the in-transit fixture's tracking
+  // columns restored (a spec overwriting them converges every run) + the
+  // admin spec's per-run tracking write on ORD-2026-003 CLEARED (the
+  // Stripe-paid fixture carries no tracking — the calm-state E2E reads
+  // it clean next run).
+  await db.order.update({
+    where: { number: "ORD-2026-002" },
+    data: { status: "in_transit", carrier: "UPS", trackingNumber: "1Z999AA10123456784" },
+  });
+  await db.order.update({
+    where: { number: "ORD-2026-003" },
+    data: { status: "delivered", carrier: null, trackingNumber: null },
+  });
   // Session-33 (CUSTOMER-MONEY-1): the refunded fixture's canonical status.
   await db.order.update({ where: { number: "ORD-2026-004" }, data: { status: "cancelled" } });
 

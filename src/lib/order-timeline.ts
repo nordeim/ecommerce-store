@@ -71,6 +71,13 @@ function customerEventLabel(event: TimelineEventInput): string {
       return "Payment failed";
     case "payment_refunded":
       return "Payment refunded";
+    case "tracking_added":
+      // Session-36 (ORDER-TRACKING-1): the admin tracking action's event —
+      // the customer vocabulary; the note ("«carrier» «number» set by
+      // «actor»") is operator territory and structurally absent from the
+      // row type. The tracking LINE (the carrier + number + track link)
+      // renders from the order's columns via the order-tracking seam.
+      return "Tracking added";
     default:
       // The paymentEventLabel raw-passthrough precedent: an unknown type
       // renders itself — never guessed, never swallowed.

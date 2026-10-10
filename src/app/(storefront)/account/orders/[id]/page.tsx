@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CreditCard, History, MapPin, Package, ReceiptText, RotateCcw, Truck } from "lucide-react";
+import { CreditCard, History, MapPin, Package, PackageCheck, ReceiptText, RotateCcw, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { pageMetadata } from "@/lib/metadata";
@@ -21,6 +21,11 @@ import { confirmationMoneyLineView } from "@/lib/order-money-state";
 // vocabulary; this seam maps them to customer-safe labels and a row shape
 // with NO note field (the leak is structurally impossible — R10-2).
 import { customerOrderTimeline, formatTimelineDate } from "@/lib/order-timeline";
+// Session-36 (ORDER-TRACKING-1, ADR-044): the "where's my order" read
+// vocabulary — the calm state when the columns are unset, the canonical
+// carrier map (the public track link), the raw passthrough for unknown
+// carriers. The SAME seam the operator console composes (one vocabulary).
+import { orderTrackingView } from "@/lib/order-tracking";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +61,7 @@ const TIMELINE_ICONS: Record<string, typeof Package> = {
   payment_succeeded: CreditCard,
   payment_failed: CreditCard,
   payment_refunded: RotateCcw,
+  tracking_added: PackageCheck,
 };
 
 export default async function CustomerOrderDetailPage({
@@ -119,6 +125,10 @@ export default async function CustomerOrderDetailPage({
   // Session-35 (CUSTOMER-TIMELINE-1): the customer-safe timeline — the
   // events mapped through the seam (the note NEVER renders; R10-2).
   const timeline = customerOrderTimeline(order.events);
+  // Session-36 (ORDER-TRACKING-1): the tracking line — the order's resting
+  // carrier + number composed through the seam (the calm state renders
+  // nothing; the number links to the carrier's public tracking page).
+  const tracking = orderTrackingView(order.carrier, order.trackingNumber);
 
   return (
     <div className="flex-1">
@@ -185,6 +195,33 @@ export default async function CustomerOrderDetailPage({
               </p>
               <p className="text-muted-foreground">{address.country}</p>
             </address>
+            {/* Session-36, ORDER-TRACKING-1 (ADR-044): the "where's my
+                order" read surface — the carrier + tracking number with
+                the carrier's public track link (external, safe opener).
+                The calm state (no columns set) renders NOTHING — no empty
+                row, no placeholder (the alert-fatigue rule). An unknown
+                carrier renders the pair without a link (the raw
+                passthrough — the number still shows). */}
+            {tracking.visible && (
+              <div className="mt-4 pt-4 border-t border-border/50 text-sm" data-testid="tracking-line">
+                <p className="text-muted-foreground">Tracking</p>
+                <p className="font-medium">
+                  {tracking.carrierLabel} ·{" "}
+                  {tracking.href ? (
+                    <a
+                      href={tracking.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      {tracking.trackingCode}
+                    </a>
+                  ) : (
+                    tracking.trackingCode
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
