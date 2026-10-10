@@ -411,7 +411,18 @@ async function main() {
     if (row) bySlug.set(p.slug, { id: row.id, price: row.price, name: row.name, image: row.image });
   }
 
-  const demoOrders = [
+  const demoOrders: {
+    number: string;
+    status: string;
+    placedAt: Date;
+    items: { slug: string; qty: number }[];
+    total: number | null;
+    // Session-33 (CUSTOMER-MONEY-1): optional per-order timeline events —
+    // ORD-2026-004 carries the reflection's payment_refunded event (the
+    // real flow writes it in the same transaction as paymentStatus
+    // "refunded" — the chargeRefundedReflection note format).
+    extraEvents?: { type: string; note: string }[];
+  }[] = [
     {
       number: "ORD-2026-001",
       status: "delivered",
@@ -441,6 +452,23 @@ async function main() {
       // The reference account page renders $524.97 for this order (its mock
       // data); line items sum to 524.98, so the display total is pinned.
       total: 52497,
+    },
+    {
+      // Session-33 (CUSTOMER-MONEY-1, ADR-041): the REFUNDED demo order —
+      // the customer-side money-state fixture. The coherent full-refund
+      // story: cancelled in the window → fully refunded (the
+      // refundEligibility design's own example, in its post-refund resting
+      // state). 1× Ceramic Planter Set: $79.99, matching
+      // evt_demo_fixture_r's refunded amount exactly; placedAt 18 minutes
+      // before the refund event's receivedAt (the same-day
+      // charge-then-refund story).
+      number: "ORD-2026-004",
+      status: "cancelled",
+      placedAt: new Date("2026-02-22T13:45:00Z"),
+      items: [{ slug: "ceramic-planter", qty: 1 }],
+      // Derived from the line item: 7999 ($79.99).
+      total: null,
+      extraEvents: [{ type: "payment_refunded", note: "Refunded $79.99 via Stripe" }],
     },
   ];
 
@@ -473,7 +501,9 @@ async function main() {
         cardLast4: "4242",
         placedAt: o.placedAt,
         items: { create: lineData },
-        events: { create: { type: "placed", note: "Seeded demo order" } },
+        events: {
+          create: [{ type: "placed", note: "Seeded demo order" }, ...(o.extraEvents ?? [])],
+        },
       },
     });
   }
@@ -489,6 +519,21 @@ async function main() {
     data: {
       stripePaymentIntentId: "pi_demo_fixture_003",
       paymentStatus: "paid",
+    },
+  });
+  // Session-33 (CUSTOMER-MONEY-1): ORD-2026-004 — the refunded demo order's
+  // columns, restored idempotently the ORD-2026-003 way (a DB seeded
+  // before session-33 converges on re-run). The intent links the EXISTING
+  // evt_demo_fixture_r (charge.refunded, amount 7999 — the matching
+  // magnitude): its "no linked order" orphan story graduates to the
+  // linked shape the reflection family produces; the payments surface's
+  // row is unaffected (charge.refunded stays "Ignored", the four-event
+  // set and every count pin unchanged).
+  await db.order.update({
+    where: { number: "ORD-2026-004" },
+    data: {
+      stripePaymentIntentId: "pi_demo_fixture_005",
+      paymentStatus: "refunded",
     },
   });
   const stripeEvents = [

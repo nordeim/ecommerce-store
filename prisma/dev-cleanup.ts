@@ -21,7 +21,7 @@ const db = new PrismaClient({
 });
 
 /** Order numbers owned by prisma/seed.ts (the demo fixtures). */
-const CANONICAL_ORDERS = new Set(["ORD-2026-001", "ORD-2026-002", "ORD-2026-003"]);
+const CANONICAL_ORDERS = new Set(["ORD-2026-001", "ORD-2026-002", "ORD-2026-003", "ORD-2026-004"]);
 /** Throwaway subscribers created by manual testing (the seed's stay). */
 const TEST_SUBSCRIBERS = ["newsletter-test@example.com"];
 
@@ -48,6 +48,12 @@ async function main() {
   await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
   await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });
   await db.order.update({ where: { number: "ORD-2026-003" }, data: { status: "delivered" } });
+  // Session-33 (CUSTOMER-MONEY-1): the refunded fixture's canonical status +
+  // money columns (the e2e-reset guard's dev-DB twin).
+  await db.order.update({
+    where: { number: "ORD-2026-004" },
+    data: { status: "cancelled", stripePaymentIntentId: "pi_demo_fixture_005", paymentStatus: "refunded" },
+  });
 
   await db.newsletterSubscriber.deleteMany({ where: { email: { in: TEST_SUBSCRIBERS } } });
 

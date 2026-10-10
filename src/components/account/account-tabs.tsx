@@ -27,6 +27,9 @@ import { changePasswordAction, saveAddressAction, updateProfileAction } from "@/
 import { logoutAction, type ActionResult } from "@/lib/actions/auth";
 import { useStore } from "@/components/store/store-provider";
 import { formatCents } from "@/lib/money";
+// Session-33 (CUSTOMER-MONEY-1): the customer-side money-state seam — the
+// order-history row's refund line (pure, unit-pinned).
+import { orderRefundLineView } from "@/lib/order-money-state";
 
 export type OrderRow = {
   id: string;
@@ -34,6 +37,8 @@ export type OrderRow = {
   placedAt: string;
   itemCount: number;
   status: string;
+  /** The order's money state (null = the reference-parity demo path). */
+  paymentStatus: string | null;
   total: number;
 };
 
@@ -230,30 +235,41 @@ export function AccountTabs({
               </div>
             ) : (
               <div className="space-y-4">
-                {orders.map((o) => (
-                  <div
-                    key={o.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary/30 rounded-xl gap-3"
-                  >
-                    <div>
-                      <p className="font-semibold">{o.number}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatDate(o.placedAt)} · {o.itemCount} {o.itemCount === 1 ? "item" : "items"}
-                      </p>
+                {orders.map((o) => {
+                  // Session-33 (CUSTOMER-MONEY-1): the money line — composed
+                  // through the pure seam, rendered ONLY when visible (the
+                  // calm state: demo-path and paid rows keep the reference's
+                  // exact anatomy; only the exceptional money state earns
+                  // the line — the alert-fatigue lesson).
+                  const money = orderRefundLineView(o.paymentStatus, o.total);
+                  return (
+                    <div
+                      key={o.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary/30 rounded-xl gap-3"
+                    >
+                      <div>
+                        <p className="font-semibold">{o.number}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDate(o.placedAt)} · {o.itemCount} {o.itemCount === 1 ? "item" : "items"}
+                        </p>
+                        {money.visible && (
+                          <p className="text-sm text-muted-foreground">{money.text}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span
+                          className={`inline-flex items-center border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full ${
+                            STATUS_STYLES[o.status] ??
+                            "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                          }`}
+                        >
+                          {STATUS_LABELS[o.status] ?? o.status}
+                        </span>
+                        <span className="font-bold">{formatCents(o.total)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span
-                        className={`inline-flex items-center border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full ${
-                          STATUS_STYLES[o.status] ??
-                          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                        }`}
-                      >
-                        {STATUS_LABELS[o.status] ?? o.status}
-                      </span>
-                      <span className="font-bold">{formatCents(o.total)}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

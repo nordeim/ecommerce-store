@@ -152,4 +152,34 @@ test.describe("checkout", () => {
     await expect(main.getByLabel("Expiry")).toHaveAttribute("autocomplete", "cc-exp");
     await expect(main.getByLabel("CVC")).toHaveAttribute("autocomplete", "cc-csc");
   });
+
+  // Session-33 (CUSTOMER-MONEY-1, ADR-041): the confirmation half of the
+  // customer-side money-state mirror. The success page's money line handled
+  // "paid" only (session-22) — a refunded order revisiting its confirmation
+  // rendered NOTHING. Now both states compose ONE seam
+  // (confirmationMoneyLineView): the paid wording byte-exact, the refunded
+  // state carrying the customer-safe copy.
+  test("a refunded order's confirmation reflects the refund (session-33, CUSTOMER-MONEY-1)", async ({ page }) => {
+    // The authenticated demo user IS the fixture order's owner (john) —
+    // the owner view renders the details block.
+    await page.goto("/checkout/success?order=ORD-2026-004");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Order Confirmed" })).toBeVisible();
+    await expect(page.getByText("ORD-2026-004")).toBeVisible();
+    // The refunded money line — the customer-safe copy, no operator
+    // vocabulary (the R10-2 rule).
+    await expect(
+      page.getByText("Payment refunded — the amount has been returned to your original payment method.", {
+        exact: true,
+      })
+    ).toBeVisible();
+    // The branch exclusivity: the PAID vocabulary must NOT render on a
+    // refunded order (the pre-fix page rendered the paid line's mb rhythm
+    // for every non-null state it didn't understand).
+    await expect(page.getByText("Payment received", { exact: false })).toHaveCount(0);
+    // The confirmation card still renders the fixture's total.
+    await expect(page.getByText("$79.99").first()).toBeVisible();
+    // The items snapshot renders the planter line (the owner view's details).
+    await expect(page.getByText("Ceramic Planter Set").first()).toBeVisible();
+  });
 });

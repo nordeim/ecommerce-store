@@ -33,6 +33,11 @@ export default async function AccountPage() {
     placedAt: o.placedAt.toISOString(),
     itemCount: o.items.reduce((s, i) => s + i.quantity, 0),
     status: o.status,
+    // Session-33 (CUSTOMER-MONEY-1): the money state rides the row — the
+    // query already fetches the full order (include: { items: true } on
+    // findMany returns every scalar column); the tab composes it through
+    // the pure seam.
+    paymentStatus: o.paymentStatus,
     total: o.total,
   }));
 

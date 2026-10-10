@@ -558,6 +558,42 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
   + key ×3 + schema ×2) + 4 integration (full/reflection, re-delivery,
   orphan, partial — the real handler, HMAC-signed) + 2 E2E (the
   two-step confirm + demo refusal; the no-intent calm state).
+- **The money state is mirrored onto the CUSTOMER surfaces (session-33,
+  CUSTOMER-MONEY-1, ADR-041).** The payments family built every operator
+  surface for the refund state; the customer half composes ONE pure seam
+  module — `src/lib/order-money-state.ts` (Prisma-free;
+  `formatCents` from `./money` is a pure-to-pure import, the
+  admin-payments precedent): (a) the account order-history row renders
+  `orderRefundLineView(paymentStatus, totalCents)` — visible ONLY on
+  `paymentStatus === "refunded"` ("Refunded · $X returned"; a full
+  refund — partials keep `paid`, so the state implies the amount), a
+  muted `text-sm text-muted-foreground` line under the date in the
+  row's left block; history NEVER shows a paid line (every order in
+  history was paid — a permanent paid line is noise, the DASH-ALERT-1
+  alert-fatigue lesson) and non-refunded rows keep the reference's exact
+  anatomy (the calm state — `{ visible: false }` renders no DOM delta);
+  (b) the checkout confirmation composes
+  `confirmationMoneyLineView(paymentStatus)` — the paid wording
+  byte-exact from session-22 ("Payment received — charged by Stripe."),
+  the refunded state carrying the customer-safe copy ("Payment refunded
+  — the amount has been returned to your original payment method." —
+  the R10-2 rule: no operator vocabulary); the confirmation-sent line's
+  mb rhythm keys off the line's visibility. The E2E fixture:
+  `ORD-2026-004` (john's fourth order — 1× Ceramic Planter Set $79.99
+  matching `evt_demo_fixture_r`'s amount exactly, status `cancelled`
+  (the refundEligibility design's own example in its post-refund resting
+  state), `paymentStatus "refunded"` + intent `pi_demo_fixture_005`
+  linking the EXISTING evt_demo_fixture_r — its orphan story graduated
+  to the linked shape; the payments surface's row is unaffected
+  (charge.refunded stays "Ignored", the four-event set and every count
+  pin unchanged), placedAt 18 minutes before the refund event's
+  receivedAt, and a `payment_refunded` OrderEvent (the reflection's
+  note format) — restored idempotently by the seed's paid-columns update
+  pattern + the e2e-reset/dev-cleanup guards. The admin orders count
+  line moved to "4 orders" (the delivered/in_transit filter pins
+  unchanged — 004 is cancelled). Pinned by 9 unit + 2 E2E (the history
+  line + the calm rows; the refunded confirmation + the
+  branch-exclusivity no-paid-vocabulary pin), triple-mutation-proven.
 
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 

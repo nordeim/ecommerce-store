@@ -79,7 +79,7 @@ async function main() {
   // status_changed events onto the demo timelines (the admin order-detail
   // page renders every event). Delete anything outside the seed's canonical
   // set and restore the demo statuses/timelines so each run starts identical.
-  const CANONICAL_ORDERS = ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003"];
+  const CANONICAL_ORDERS = ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003", "ORD-2026-004"];
   await db.order.deleteMany({ where: { number: { notIn: CANONICAL_ORDERS } } });
   await db.orderEvent.deleteMany({
     where: { type: "status_changed", order: { number: { in: CANONICAL_ORDERS } } },
@@ -87,6 +87,8 @@ async function main() {
   await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
   await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });
   await db.order.update({ where: { number: "ORD-2026-003" }, data: { status: "delivered" } });
+  // Session-33 (CUSTOMER-MONEY-1): the refunded fixture's canonical status.
+  await db.order.update({ where: { number: "ORD-2026-004" }, data: { status: "cancelled" } });
 
   // Session-4 (AUTH-VERIFY-1): the verify-email spec CONSUMES the fixture's
   // code (flips emailVerified) — restore its unverified state + the
@@ -136,6 +138,13 @@ async function main() {
   await db.order.update({
     where: { number: "ORD-2026-003" },
     data: { stripePaymentIntentId: "pi_demo_fixture_003", paymentStatus: "paid" },
+  });
+  // Session-33 (CUSTOMER-MONEY-1): the refunded fixture's columns — the
+  // same guard shape (a status flip by a spec must never drift the
+  // money-state fixture).
+  await db.order.update({
+    where: { number: "ORD-2026-004" },
+    data: { stripePaymentIntentId: "pi_demo_fixture_005", paymentStatus: "refunded" },
   });
 
   console.log("[e2e-reset] transient state cleared");

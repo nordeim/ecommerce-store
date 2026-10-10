@@ -236,12 +236,15 @@ test.describe("admin console (admin session)", () => {
   test("orders filter by status with a deep-linkable URL", async () => {
     await admin.goto("/admin/orders");
     await admin.waitForLoadState("networkidle");
-    // Canonical seed: 001 delivered, 002 in_transit, 003 delivered.
-    await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
+    // Canonical seed: 001 delivered, 002 in_transit, 003 delivered,
+    // 004 cancelled (the refunded fixture, session-33).
+    await expect(admin.getByText("4 orders", { exact: true })).toBeVisible();
 
     await admin.getByRole("combobox", { name: "Filter by status" }).click();
     await admin.getByRole("option", { name: "Delivered" }).click();
     await expect(admin).toHaveURL(/\/admin\/orders\?status=delivered$/);
+    // Delivered stays 2 (001 + 003): 004 is cancelled — the refunded
+    // fixture joins the cancelled bucket, not the delivered one.
     await expect(admin.getByText("2 orders", { exact: true })).toBeVisible();
     // Only the delivered rows remain (002 is in_transit).
     await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
@@ -267,12 +270,12 @@ test.describe("admin console (admin session)", () => {
     await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
     await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toHaveCount(0);
 
-    // The email branch of the OR: all three canonical orders are
+    // The email branch of the OR: all four canonical orders are
     // john@example.com.
     await search.fill("john@");
     await search.press("Enter");
     await expect(admin).toHaveURL(/\/admin\/orders\?q=john%40$/);
-    await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
+    await expect(admin.getByText("4 orders", { exact: true })).toBeVisible();
   });
 
   test("orders empty state offers Clear, filters combine", async () => {
@@ -287,7 +290,7 @@ test.describe("admin console (admin session)", () => {
     // then Clear restores the full list.
     await admin.getByRole("button", { name: "Clear" }).click();
     await expect(admin).toHaveURL(/\/admin\/orders$/);
-    await expect(admin.getByText("3 orders", { exact: true })).toBeVisible();
+    await expect(admin.getByText("4 orders", { exact: true })).toBeVisible();
     await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
   });
 });

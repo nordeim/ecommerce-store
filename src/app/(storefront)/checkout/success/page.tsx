@@ -7,6 +7,10 @@ import { pageMetadata } from "@/lib/metadata";
 import { verifyOrderViewToken } from "@/lib/order-view-token";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
+// Session-33 (CUSTOMER-MONEY-1): the confirmation's money line composes the
+// pure seam — the paid wording byte-exact (session-22), the refunded state
+// carried by the customer-safe copy.
+import { confirmationMoneyLineView } from "@/lib/order-money-state";
 
 export const dynamic = "force-dynamic";
 
@@ -58,17 +62,26 @@ export default async function CheckoutSuccessPage({
               Thank you! Your order <span className="font-semibold text-foreground">{order!.number}</span> has been
               placed.
             </p>
-            <p className={`text-muted-foreground ${order!.paymentStatus === "paid" ? "mb-1" : "mb-8"}`}>
-              A confirmation was sent to <span className="font-medium text-foreground">{order!.email}</span>.
-            </p>
-            {/* PAY-STRIPE-1 (session-22): the paid-order confirmation — one
-                muted line, only when a real payment was captured (demo
-                orders render exactly as before). */}
-            {order!.paymentStatus === "paid" && (
-              <p className="text-sm text-muted-foreground mb-8">
-                Payment received — charged by Stripe.
-              </p>
-            )}
+            {/* The confirmation's money line (PAY-STRIPE-1 session-22 +
+                CUSTOMER-MONEY-1 session-33): one muted line when the order
+                carries a money state — paid (session-22's wording, byte-exact)
+                or refunded (the customer-side mirror). Demo orders (null)
+                render exactly as before; the mb rhythm keys off the
+                line's visibility. */}
+            {(() => {
+              const money = confirmationMoneyLineView(order!.paymentStatus);
+              return (
+                <>
+                  <p className={`text-muted-foreground ${money.visible ? "mb-1" : "mb-8"}`}>
+                    A confirmation was sent to{" "}
+                    <span className="font-medium text-foreground">{order!.email}</span>.
+                  </p>
+                  {money.visible && (
+                    <p className="text-sm text-muted-foreground mb-8">{money.text}</p>
+                  )}
+                </>
+              );
+            })()}
             <div className="text-left bg-card border border-border/50 rounded-2xl p-6 mb-8">
               <div className="flex items-center justify-between text-sm mb-4">
                 <span className="font-medium">

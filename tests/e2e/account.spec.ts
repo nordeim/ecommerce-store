@@ -187,6 +187,39 @@ test.describe("account", () => {
     expect(transit).toBe("rgb(242, 240, 237)"); // bg-secondary
   });
 
+  // Session-33 (CUSTOMER-MONEY-1, ADR-041): the customer-side money-state
+  // mirror. The payments family built every OPERATOR surface for the refund
+  // state (the payments log, the trail, the refund action, the webhook's
+  // order-state reflection); this is the CUSTOMER half — the persistent
+  // order-history surface renders the money state. A fully refunded order
+  // (paymentStatus "refunded" — the single-writer reflection, ADR-040) earns
+  // a muted line under the date; every other row keeps the reference's
+  // resting anatomy byte-identically (the calm state).
+  test("refunded orders surface the money state in history (session-33, CUSTOMER-MONEY-1)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    const history = page.getByRole("tabpanel");
+
+    // The refunded fixture: ORD-2026-004 (cancelled + fully refunded, the
+    // planter, $79.99 — matching evt_demo_fixture_r's refunded amount).
+    await expect(history.getByText("ORD-2026-004")).toBeVisible();
+    await expect(history.getByText("Feb 22, 2026 · 1 item")).toBeVisible();
+    // The money line: the seam's full text, rendered under the date line.
+    await expect(history.getByText("Refunded · $79.99 returned", { exact: true })).toBeVisible();
+    // The fulfillment pill keeps its own vocabulary (the two states are
+    // orthogonal — the refundEligibility design's own example, post-refund).
+    await expect(history.getByText("Cancelled", { exact: true }).first()).toBeVisible();
+
+    // The calm state: the demo-path + paid rows carry NO money line —
+    // history never shows a paid line (the alert-fatigue lesson), and the
+    // resting rows keep the reference's exact anatomy.
+    await expect(history.getByText("Refunded ·", { exact: false })).toHaveCount(1);
+    // And the paid fixture (ORD-2026-003) renders no money line either.
+    const paidRow = history.locator("div.justify-between", {
+      hasText: "ORD-2026-003",
+    });
+    await expect(paidRow.getByText(/Refunded|Paid/)).toHaveCount(0);
+  });
+
   test("addresses tab shows the seeded default address", async ({ page }) => {
     await page.getByRole("tab", { name: "Addresses" }).click();
     await expect(page.getByRole("button", { name: "Add New" })).toBeVisible();
