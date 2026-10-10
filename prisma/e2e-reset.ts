@@ -81,8 +81,26 @@ async function main() {
   // set and restore the demo statuses/timelines so each run starts identical.
   const CANONICAL_ORDERS = ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003", "ORD-2026-004"];
   await db.order.deleteMany({ where: { number: { notIn: CANONICAL_ORDERS } } });
+  // Session-35 (CUSTOMER-TIMELINE-1): the delete now PRESERVES the seeded
+  // timeline fixtures by deterministic id (the FIXTURE_EVENT_IDS pattern the
+  // StripeEvent cleanup below uses) — the combobox spec's per-run
+  // status_changed events are wiped while the canonical story (the
+  // session-35 seed's fixture chain) survives every reset. payment_refunded
+  // joins the guard: the pre-session-35 un-timed refund row on ORD-2026-004
+  // is a legacy duplicate of evt-ord4-refunded.
+  const SEEDED_ORDER_EVENT_IDS = [
+    "evt-ord1-transit",
+    "evt-ord1-delivered",
+    "evt-ord2-transit",
+    "evt-ord4-cancelled",
+    "evt-ord4-refunded",
+  ];
   await db.orderEvent.deleteMany({
-    where: { type: "status_changed", order: { number: { in: CANONICAL_ORDERS } } },
+    where: {
+      type: { in: ["status_changed", "payment_refunded"] },
+      order: { number: { in: CANONICAL_ORDERS } },
+      id: { notIn: SEEDED_ORDER_EVENT_IDS },
+    },
   });
   await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
   await db.order.update({ where: { number: "ORD-2026-002" }, data: { status: "in_transit" } });

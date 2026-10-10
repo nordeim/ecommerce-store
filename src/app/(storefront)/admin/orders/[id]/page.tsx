@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
 import { orderPaymentTrail, refundEligibility } from "@/lib/admin-payments";
+// Session-35 (CUSTOMER-TIMELINE-1): the timeline timestamp's single source —
+// the SAME seam the customer timeline composes (the drift-proofing rule).
+import { formatTimelineDate } from "@/lib/order-timeline";
 import { RefundOrderButton } from "@/components/account/refund-order-button";
 
 export const dynamic = "force-dynamic";
@@ -239,13 +242,11 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                   <div className="min-w-0">
                     <p className="font-medium">{event.label}</p>
                     <p className="text-sm text-muted-foreground">
-                      {event.receivedAt.toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                      {/* Session-35 (CUSTOMER-TIMELINE-1): the single-source
+                          extraction — the SAME formatTimelineDate the customer
+                          timeline renders (zero behavior delta; the
+                          drift-proofing rule). */}
+                      {formatTimelineDate(event.receivedAt.toISOString())}
                     </p>
                   </div>
                   {event.amount != null && (
@@ -294,13 +295,10 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                       </p>
                       {event.note && <p className="text-sm text-muted-foreground">{event.note}</p>}
                       <p className="text-xs text-muted-foreground">
-                        {event.createdAt.toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                        {/* Session-35 (CUSTOMER-TIMELINE-1): the single-source
+                            extraction — the SAME formatTimelineDate the
+                            customer timeline renders. */}
+                        {formatTimelineDate(event.createdAt.toISOString())}
                       </p>
                     </div>
                   </li>

@@ -182,4 +182,29 @@ test.describe("checkout", () => {
     // The items snapshot renders the planter line (the owner view's details).
     await expect(page.getByText("Ceramic Planter Set").first()).toBeVisible();
   });
+
+  // Session-35 (CHECKOUT-DEEPLINK-1, ADR-043): the owner's confirmation
+  // deep-links "View Orders" to the placed order's detail page (session-34's
+  // persistent read surface) — the account root defaults to the PROFILE tab,
+  // two clicks away from the order the customer just placed. The href is the
+  // ONLY delta: the button's text/variant/geometry are byte-identical (the
+  // zero-visual-delta superset pattern). The guest token view and the
+  // generic view keep /account (the guest-checkout spec pins those paths).
+  test("the owner's confirmation deep-links View Orders to the placed order's detail (session-35, CHECKOUT-DEEPLINK-1)", async ({ page }) => {
+    // The authenticated demo user IS the fixture order's owner (john) —
+    // the owner view renders the details block + the deep-linked button.
+    await page.goto("/checkout/success?order=ORD-2026-004");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Order Confirmed" })).toBeVisible();
+
+    // The href: the placed order's detail route — the DATABASE id (a
+    // cuid), never the public number.
+    const viewOrders = page.getByRole("link", { name: "View Orders" });
+    await expect(viewOrders).toHaveAttribute("href", /^\/account\/orders\/[a-z0-9]+$/);
+
+    // The click lands on the order's persistent read surface.
+    await viewOrders.click();
+    await expect(page).toHaveURL(/\/account\/orders\/[a-z0-9]+$/);
+    await expect(page.getByRole("heading", { name: "ORD-2026-004", exact: true })).toBeVisible();
+  });
 });

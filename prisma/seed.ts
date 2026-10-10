@@ -421,7 +421,10 @@ async function main() {
     // ORD-2026-004 carries the reflection's payment_refunded event (the
     // real flow writes it in the same transaction as paymentStatus
     // "refunded" — the chargeRefundedReflection note format).
-    extraEvents?: { type: string; note: string }[];
+    // Session-35 (CUSTOMER-TIMELINE-1): the shape gains a deterministic id
+    // + explicit createdAt — the customer-safe timeline's fixtures need a
+    // stable story (ordered instants, preserved across e2e-reset by id).
+    extraEvents?: { id: string; type: string; note: string; createdAt: Date }[];
   }[] = [
     {
       number: "ORD-2026-001",
@@ -432,6 +435,26 @@ async function main() {
         { slug: "organic-cotton-tee", qty: 1 },
       ],
       total: null, // derived from line items
+      // Session-35 (CUSTOMER-TIMELINE-1): the delivered order's fulfillment
+      // chain — two status_changed events with the admin action's EXACT
+      // note format (operator attribution included, by design: the notes
+      // are what the customer-safe mapping must NOT render). The customer
+      // timeline E2E pins the mapped labels AND the no-attribution property
+      // against these rows.
+      extraEvents: [
+        {
+          id: "evt-ord1-transit",
+          type: "status_changed",
+          note: "processing → in_transit by admin@luxestore.com",
+          createdAt: new Date("2026-03-30T09:00:00Z"),
+        },
+        {
+          id: "evt-ord1-delivered",
+          type: "status_changed",
+          note: "in_transit → delivered by admin@luxestore.com",
+          createdAt: new Date("2026-04-02T11:30:00Z"),
+        },
+      ],
     },
     {
       number: "ORD-2026-002",
@@ -439,6 +462,16 @@ async function main() {
       placedAt: new Date("2026-03-15T10:22:00Z"),
       items: [{ slug: "leather-watch", qty: 1 }],
       total: null,
+      // Session-35: the in-transit order's single transition — the minimal
+      // two-row timeline (placed + one status change).
+      extraEvents: [
+        {
+          id: "evt-ord2-transit",
+          type: "status_changed",
+          note: "processing → in_transit by admin@luxestore.com",
+          createdAt: new Date("2026-03-16T08:45:00Z"),
+        },
+      ],
     },
     {
       number: "ORD-2026-003",
@@ -468,7 +501,25 @@ async function main() {
       items: [{ slug: "ceramic-planter", qty: 1 }],
       // Derived from the line item: 7999 ($79.99).
       total: null,
-      extraEvents: [{ type: "payment_refunded", note: "Refunded $79.99 via Stripe" }],
+      // Session-35 (CUSTOMER-TIMELINE-1): the full customer story — placed
+      // 13:45, cancelled 14:03 (the same instant as evt_demo_fixture_r's
+      // receivedAt — the operator cancels, the refund follows), refunded
+      // 14:03:30. The note keeps the reflection's operator format; the
+      // customer timeline renders only the mapped label.
+      extraEvents: [
+        {
+          id: "evt-ord4-cancelled",
+          type: "status_changed",
+          note: "processing → cancelled by admin@luxestore.com",
+          createdAt: new Date("2026-02-22T14:03:00Z"),
+        },
+        {
+          id: "evt-ord4-refunded",
+          type: "payment_refunded",
+          note: "Refunded $79.99 via Stripe",
+          createdAt: new Date("2026-02-22T14:03:30Z"),
+        },
+      ],
     },
   ];
 
@@ -502,11 +553,74 @@ async function main() {
         placedAt: o.placedAt,
         items: { create: lineData },
         events: {
-          create: [{ type: "placed", note: "Seeded demo order" }, ...(o.extraEvents ?? [])],
+          // Session-35 (CUSTOMER-TIMELINE-1): the placed event's createdAt
+          // anchors to placedAt (dbs seeded pre-session-35 carried seed-time
+          // stamps, which sorted the placed row AFTER the transitions —
+          // the convergence block below restores them).
+          create: [
+            { type: "placed", note: "Seeded demo order", createdAt: o.placedAt },
+            ...(o.extraEvents ?? []),
+          ],
         },
       },
     });
   }
+
+  // ---- Session-35 (CUSTOMER-TIMELINE-1): the timeline fixture convergence --
+  // The seed SKIPS existing orders, so a DB seeded before this round never
+  // sees the nested event creates — the convergence block restores the
+  // canonical timeline the same way the session-33 paid/refunded columns
+  // converge: (a) the fixture events upserted by deterministic id, (b) the
+  // placed events' createdAt re-anchored to placedAt, (c) legacy duplicates
+  // (pre-session-35 cuid rows and the pre-session-35 un-timed refund event)
+  // removed so the canonical story renders exactly once. The e2e-reset
+  // preserves the same id set (SEEDED_ORDER_EVENT_IDS) while wiping the
+  // combobox spec's per-run status_changed events.
+  const TIMELINE_FIXTURES: {
+    orderNumber: string;
+    id: string;
+    type: string;
+    note: string;
+    createdAt: Date;
+  }[] = [
+    { orderNumber: "ORD-2026-001", id: "evt-ord1-transit", type: "status_changed", note: "processing → in_transit by admin@luxestore.com", createdAt: new Date("2026-03-30T09:00:00Z") },
+    { orderNumber: "ORD-2026-001", id: "evt-ord1-delivered", type: "status_changed", note: "in_transit → delivered by admin@luxestore.com", createdAt: new Date("2026-04-02T11:30:00Z") },
+    { orderNumber: "ORD-2026-002", id: "evt-ord2-transit", type: "status_changed", note: "processing → in_transit by admin@luxestore.com", createdAt: new Date("2026-03-16T08:45:00Z") },
+    { orderNumber: "ORD-2026-004", id: "evt-ord4-cancelled", type: "status_changed", note: "processing → cancelled by admin@luxestore.com", createdAt: new Date("2026-02-22T14:03:00Z") },
+    { orderNumber: "ORD-2026-004", id: "evt-ord4-refunded", type: "payment_refunded", note: "Refunded $79.99 via Stripe", createdAt: new Date("2026-02-22T14:03:30Z") },
+  ];
+  const TIMELINE_FIXTURE_IDS = TIMELINE_FIXTURES.map((f) => f.id);
+  for (const f of TIMELINE_FIXTURES) {
+    const order = await db.order.findUnique({ where: { number: f.orderNumber }, select: { id: true, placedAt: true } });
+    if (!order) continue;
+    await db.orderEvent.upsert({
+      where: { id: f.id },
+      create: { id: f.id, orderId: order.id, type: f.type, note: f.note, createdAt: f.createdAt },
+      update: { type: f.type, note: f.note, createdAt: f.createdAt },
+    });
+  }
+  // The placed row's instant: seeded orders write placedAt; pre-session-35
+  // rows wrote seed-time — converge EVERY canonical order (003 carries no
+  // fixture events, but its placed row tells the same story and must not
+  // drift a month from its placedAt).
+  for (const number of ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003", "ORD-2026-004"]) {
+    const order = await db.order.findUnique({ where: { number }, select: { id: true, placedAt: true } });
+    if (!order) continue;
+    await db.orderEvent.updateMany({
+      where: { orderId: order.id, type: "placed" },
+      data: { createdAt: order.placedAt },
+    });
+  }
+  // Legacy duplicates: pre-session-35 rows (cuid ids for the refund event)
+  // and any spec-written events on the canonical orders outside the fixture
+  // id set — the canonical timeline renders exactly once per milestone.
+  await db.orderEvent.deleteMany({
+    where: {
+      type: { in: ["status_changed", "payment_refunded"] },
+      order: { number: { in: ["ORD-2026-001", "ORD-2026-002", "ORD-2026-003", "ORD-2026-004"] } },
+      id: { notIn: TIMELINE_FIXTURE_IDS },
+    },
+  });
 
   // ---- Stripe payment-ops demo fixtures (session-24, PAY-OPS-1) --------
   // ORD-2026-003 doubles as the Stripe-paid demo order (the order-detail

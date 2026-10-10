@@ -47,6 +47,18 @@ export default async function CheckoutSuccessPage({
   const tokenView =
     !!order && typeof viewToken === "string" && verifyOrderViewToken(order.number, viewToken);
   const visible = order && (ownerView || tokenView);
+  // Session-35 (CHECKOUT-DEEPLINK-1, ADR-043): the owner's confirmation
+  // deep-links "View Orders" to the placed order's detail page (session-34's
+  // persistent read surface) — the account root defaults to the PROFILE
+  // tab, two clicks away from the order the customer just placed. The
+  // non-owner paths (the guest's token view, the generic view) keep the
+  // generic /account href: a guest order's detail route renders the
+  // not-found block for everyone but the token (the GUEST-TOKEN-1
+  // discipline) — a deep-linked button would land the guest on "Order not
+  // found". The href is the ONLY delta (the zero-visual-delta superset
+  // pattern; the guest-checkout spec pins the non-owner paths).
+  const ordersHref =
+    visible && ownerView && order ? `/account/orders/${order.id}` : "/account";
 
   return (
     // session-12 (A11Y-MAIN-1): <div>, not a nested <main> — the layout owns the single landmark.
@@ -109,7 +121,7 @@ export default async function CheckoutSuccessPage({
             <Link href="/shop">Continue Shopping</Link>
           </Button>
           <Button asChild variant="outline" className="h-10 px-8 rounded-xl">
-            <Link href="/account">View Orders</Link>
+            <Link href={ordersHref}>View Orders</Link>
           </Button>
         </div>
       </div>

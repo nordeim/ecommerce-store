@@ -174,6 +174,7 @@ await login(admin, "admin@luxestore.com", "Admin1234!");
 }
 
 await browser.close();
-server.pid && process.kill(-server.pid, "SIGKILL");
+// Session-35 hygiene: the unused expression -> a statement (lint 0/0 restored).
+if (server.pid) process.kill(-server.pid, "SIGKILL");
 killPort(PORT);
 console.log("done — server killed");

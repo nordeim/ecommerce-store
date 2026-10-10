@@ -387,6 +387,63 @@ test.describe("account", () => {
     ).toBeVisible();
   });
 
+  // Session-35 (CUSTOMER-TIMELINE-1, ADR-043): the customer-safe order
+  // timeline — the OrderEvent story rendered through the
+  // operator→customer vocabulary mapping. The seeded fixtures carry
+  // status_changed events with REALISTIC operator-attribution notes (the
+  // admin action's exact format) so the mapping and the R10-2 no-leak
+  // property are provable on the LIVE surface, not just at the seam.
+  test("the order detail renders the customer-safe timeline (ORD-2026-001, session-35 CUSTOMER-TIMELINE-1)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-001" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-001", exact: true })).toBeVisible();
+
+    // The Timeline card joins the read surface.
+    await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+
+    // The customer-safe vocabulary, in story order: placed → in transit →
+    // delivered (the seeded fixture chain — composed through the
+    // session-34 STATUS_LABELS seam, never the raw slug).
+    const list = page.getByRole("list").filter({ has: page.getByText("Order placed", { exact: true }) });
+    await expect(list).toBeVisible();
+    await expect(list.getByText("Order placed", { exact: true })).toBeVisible();
+    await expect(list.getByText("Status updated to In Transit", { exact: true })).toBeVisible();
+    await expect(list.getByText("Status updated to Delivered", { exact: true })).toBeVisible();
+
+    // The placed row's timestamp begins with the TZ-safe date part (the
+    // formatOrderDate precedent — the full timestamp's clock time is
+    // runner-TZ-dependent; the date part of 15:04Z is stable at UTC±8).
+    await expect(list.getByText(/^Mar 28, 2026/).first()).toBeVisible();
+
+    // R10-2 — the operator attribution NEVER renders: no actor emails, no
+    // raw notes, no operator vocabulary (the admin's "Status changed").
+    await expect(page.getByText(/by admin@luxestore\.com/)).toHaveCount(0);
+    await expect(page.getByText("Seeded demo order")).toHaveCount(0);
+    await expect(page.getByText("Status changed", { exact: true })).toHaveCount(0);
+  });
+
+  test("the refunded order's timeline carries the money story in order (ORD-2026-004, session-35 CUSTOMER-TIMELINE-1)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-004" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-004", exact: true })).toBeVisible();
+
+    // The full customer story: placed → cancelled → refunded (the money
+    // story joins the fulfillment story — the seeded charge-then-refund
+    // chain, Feb 22 13:45 → 14:03 → 14:03:30).
+    const list = page.getByRole("list").filter({ has: page.getByText("Order placed", { exact: true }) });
+    const labels = list.locator("p.font-medium");
+    await expect(labels).toHaveCount(3);
+    await expect(labels.nth(0)).toHaveText("Order placed");
+    await expect(labels.nth(1)).toHaveText("Status updated to Cancelled");
+    await expect(labels.nth(2)).toHaveText("Payment refunded");
+
+    // R10-2 again, on the money story: the refund note's operator
+    // vocabulary ("Refunded $79.99 via Stripe") never renders — the label
+    // is the customer vocabulary.
+    await expect(page.getByText("Refunded $79.99 via Stripe")).toHaveCount(0);
+    await expect(page.getByText(/by admin@luxestore\.com/)).toHaveCount(0);
+  });
+
   test("the owner gate: a non-owner gets the generic not-found block (GUEST-TOKEN-1 discipline)", async ({ browser, page }) => {
     // Grab john's ORD-2026-001 detail URL from the history link first.
     await page.getByRole("tab", { name: "Orders" }).click();

@@ -120,4 +120,61 @@ test.describe("guest checkout (session-6)", () => {
     await ap.close();
     await attacker.close();
   });
+
+  // Session-35 (CHECKOUT-DEEPLINK-1, ADR-043): the deep-link is the
+  // OWNER's affordance ONLY. The guest's two confirmation paths keep the
+  // generic /account href — a guest order's detail route renders the
+  // not-found block for everyone but the token (the GUEST-TOKEN-1
+  // discipline), so a deep-linked button would land the guest on "Order
+  // not found". The pinned behavior holds: the button gates the anonymous
+  // buyer to the login screen (session-6 REDIRECT-1, the first test).
+  test("the non-owner confirmation paths keep the generic View Orders href (session-35, CHECKOUT-DEEPLINK-1)", async ({ page, browser }) => {
+    // 1. A guest places an order — the placement redirect carries the
+    //    tokened success URL (the token view).
+    await page.goto("/product/charging-pad");
+    await page.getByRole("button", { name: "Add to Cart" }).first().click();
+    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await page.goto("/checkout");
+    await page.waitForLoadState("networkidle");
+    // The hydration gate (the first test's documented pattern): the wizard
+    // is a client island — values typed pre-hydration get wiped by React's
+    // adoption of the server DOM (the round-35 RED run caught this race in
+    // this very test: Address/ZIP filled during hydration rendered empty).
+    await expect(page.getByRole("main").getByLabel("First Name")).toHaveValue("");
+    await page.getByRole("main").getByLabel("First Name").fill("Href");
+    await page.getByRole("main").getByLabel("Last Name").fill("Probe");
+    await page.getByRole("main").getByLabel("Email").fill("href-probe@example.com");
+    await page.getByRole("main").getByLabel("Address").fill("12 Generic Ln");
+    await page.getByRole("main").getByLabel("City").fill("Austin");
+    await page.getByRole("main").getByLabel("State").fill("TX");
+    await page.getByRole("main").getByLabel("ZIP").fill("73301");
+    // The fill-stuck verification (cheap insurance against the late-
+    // hydration wipe — a wiped field fails HERE with a clear signal
+    // instead of a 45s radio timeout downstream).
+    await expect(page.getByRole("main").getByLabel("Address")).toHaveValue("12 Generic Ln");
+    await expect(page.getByRole("main").getByLabel("ZIP")).toHaveValue("73301");
+    await page.getByRole("button", { name: "Continue to Payment" }).click();
+    await page.getByRole("radio", { name: "PayPal" }).check();
+    await page.getByRole("button", { name: "Review Order" }).click();
+    await page.getByRole("button", { name: /Place Order/ }).click();
+    await page.waitForURL(/\/checkout\/success\?order=.+&t=/, { timeout: 15_000 });
+    const orderNumber = new URL(page.url()).searchParams.get("order") ?? "";
+    expect(orderNumber).toMatch(/^ORD-\d{4}-\d+$/);
+
+    // 2. The token view (the guest's own placement confirmation — the
+    //    details render, the token unlocks them): "View Orders" stays the
+    //    generic /account link, NOT the deep-linked detail.
+    await expect(page.getByText(/Your order ORD-\d{4}-\d+ has been placed/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "View Orders" })).toHaveAttribute("href", "/account");
+
+    // 3. The generic view (a fresh anonymous context, the bare number):
+    //    the same generic href.
+    const anon = await browser.newContext();
+    const ap = await anon.newPage();
+    await ap.goto(`/checkout/success?order=${encodeURIComponent(orderNumber)}`);
+    await expect(ap.getByText("Your order has been placed.")).toBeVisible();
+    await expect(ap.getByRole("link", { name: "View Orders" })).toHaveAttribute("href", "/account");
+    await ap.close();
+    await anon.close();
+  });
 });

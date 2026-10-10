@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CreditCard, MapPin, ReceiptText } from "lucide-react";
+import { CreditCard, History, MapPin, Package, ReceiptText, RotateCcw, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { pageMetadata } from "@/lib/metadata";
@@ -15,6 +15,12 @@ import { STATUS_LABELS, STATUS_STYLES, formatOrderDate } from "@/lib/order-statu
 // customer-side mirror). The detail page is the PERSISTENT confirmation:
 // the same per-order money state, composed through the same seam.
 import { confirmationMoneyLineView } from "@/lib/order-money-state";
+// Session-35 (CUSTOMER-TIMELINE-1, ADR-043): the customer-safe order
+// timeline — the operator→customer vocabulary mapping. The OrderEvent
+// notes carry operator attribution ("→ … by admin@…") and operator
+// vocabulary; this seam maps them to customer-safe labels and a row shape
+// with NO note field (the leak is structurally impossible — R10-2).
+import { customerOrderTimeline, formatTimelineDate } from "@/lib/order-timeline";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +48,16 @@ type AddressSnapshot = {
   country: string;
 };
 
+/** The timeline row icons — the presentation vocabulary (the labels and
+ *  timestamps come from the seam; the icon map stays with its consumer). */
+const TIMELINE_ICONS: Record<string, typeof Package> = {
+  placed: Package,
+  status_changed: Truck,
+  payment_succeeded: CreditCard,
+  payment_failed: CreditCard,
+  payment_refunded: RotateCcw,
+};
+
 export default async function CustomerOrderDetailPage({
   params,
 }: {
@@ -56,7 +72,13 @@ export default async function CustomerOrderDetailPage({
 
   const order = await db.order.findUnique({
     where: { id },
-    include: { items: true },
+    include: {
+      items: true,
+      // Session-35 (CUSTOMER-TIMELINE-1): the events join the read —
+      // oldest-first (the seam re-sorts defensively; the query's order
+      // is the belt-and-suspenders).
+      events: { orderBy: { createdAt: "asc" } },
+    },
   });
 
   // GUEST-TOKEN-1 discipline (session-31): a sequential public id is
@@ -94,6 +116,9 @@ export default async function CustomerOrderDetailPage({
   // the consumer). Demo-path orders (paymentStatus null) render no line —
   // the calm state.
   const money = confirmationMoneyLineView(order.paymentStatus);
+  // Session-35 (CUSTOMER-TIMELINE-1): the customer-safe timeline — the
+  // events mapped through the seam (the note NEVER renders; R10-2).
+  const timeline = customerOrderTimeline(order.events);
 
   return (
     <div className="flex-1">
@@ -205,6 +230,43 @@ export default async function CustomerOrderDetailPage({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Session-35 (CUSTOMER-TIMELINE-1): the customer-safe timeline —
+            the order's STORY (placed → fulfillment transitions → money
+            events) in the account family's card language. The admin detail
+            renders the same events WITH their operator notes (ADR-015);
+            here the note is structurally absent (the seam's row has no note
+            field) and the labels compose the session-34 STATUS_LABELS seam —
+            the timeline's words are the SAME words the pill and the history
+            rows render. */}
+        <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+          <div className="flex items-center gap-2 p-6 pb-4">
+            <History className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold">Timeline</h2>
+          </div>
+          {timeline.length === 0 ? (
+            <p className="text-muted-foreground px-6 pb-6 text-sm">No events recorded.</p>
+          ) : (
+            <ol className="px-6 pb-6 flex flex-col gap-3">
+              {timeline.map((row) => {
+                const Icon = TIMELINE_ICONS[row.type] ?? History;
+                return (
+                  <li key={row.key} className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium">{row.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTimelineDate(row.at.toISOString())}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
         </div>
       </div>
     </div>
