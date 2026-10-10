@@ -109,6 +109,28 @@ test.describe("a11y standing gate (session-15, A11Y-GATE-1)", () => {
     expect(violations[0].nodes).toBe(3);
     await ctx.close();
   });
+
+  // Session-34 (CUSTOMER-ORDER-DETAIL-1, ADR-042): the customer
+  // order-detail route is a SUPERSET surface (no reference counterpart —
+  // the reference's orders are hardcoded rows that link nowhere), so its
+  // census is a QUALITY pin (the admin-gate / verify-email precedent):
+  // the measured profile must be {color-contrast} ONLY, at the
+  // E2E-calibrated count. The route is reached via the history link (the
+  // e2e.db cuid is not hardcodable across fresh clones — the admin-gate
+  // convention).
+  test("customer order detail (superset): the violation census is exactly {color-contrast} with the quality-pinned count", async ({ page }) => {
+    await page.goto("/account", { waitUntil: "networkidle" });
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-001" }).click();
+    await page.waitForLoadState("networkidle");
+    const violations = await runAxe(page);
+    const ids = violations.map((v) => v.id).sort();
+    expect(ids, JSON.stringify(violations)).toEqual(["color-contrast"]);
+    // The E2E-calibrated quality pin (the session-16 admin-gate pattern):
+    // the detail's muted-foreground rows + the delivered pill measure 8
+    // color-contrast nodes — drift in EITHER direction is flagged.
+    expect(violations[0].nodes).toBe(8);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -298,6 +298,129 @@ test.describe("account", () => {
     await page.getByRole("button", { name: "Update Password" }).click();
     await expect(page.getByRole("main").getByText("Incorrect password")).toBeVisible();
   });
+
+  // -------------------------------------------------------------------------
+  // Session-34 (CUSTOMER-ORDER-DETAIL-1, ADR-042): the customer's per-order
+  // read surface. The history rows' numbers link to /account/orders/[id]
+  // (the DATABASE id — the admin-detail convention; never the public
+  // number), the route renders the customer-safe detail, and the gate is
+  // the GUEST-TOKEN-1 discipline: owner or the generic not-found block.
+  // -------------------------------------------------------------------------
+
+  test("order numbers in history link to the customer order detail (session-34, CUSTOMER-ORDER-DETAIL-1)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    const link = page.getByRole("link", { name: "ORD-2026-001" });
+    await expect(link).toBeVisible();
+    const href = await link.getAttribute("href");
+    // The DATABASE id (a cuid), never the public number.
+    expect(href).toMatch(/^\/account\/orders\/[a-z0-9]+$/);
+    await link.click();
+    // toHaveURL matches the FULL URL string (scheme + host) — anchor the
+    // path pattern at the end.
+    await expect(page).toHaveURL(/\/account\/orders\/[a-z0-9]+$/);
+    await expect(page.getByRole("heading", { name: "ORD-2026-001", exact: true })).toBeVisible();
+  });
+
+  test("the customer order detail renders the full read surface (ORD-2026-001)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-001" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-001", exact: true })).toBeVisible();
+
+    // The back affordance (the admin-detail pattern).
+    await expect(page.getByRole("link", { name: "← Orders" })).toBeVisible();
+
+    // The header: the fulfillment pill from the history vocabulary + the total
+    // (the header total + the totals block both render $349.98 — .first()
+    // scopes to the header's).
+    await expect(page.getByText("Delivered", { exact: true })).toBeVisible();
+    await expect(page.getByText("$349.98", { exact: true }).first()).toBeVisible();
+
+    // The items card: the snapshot rows (name, unit × qty, line total).
+    await expect(page.getByRole("heading", { name: "Items" })).toBeVisible();
+    await expect(page.getByText("Wireless Noise-Cancelling Headphones")).toBeVisible();
+    await expect(page.getByText("$299.99 × 1")).toBeVisible();
+    await expect(page.getByText("Organic Cotton Oversized Tee")).toBeVisible();
+    await expect(page.getByText("$49.99 × 1")).toBeVisible();
+
+    // The totals block (Subtotal / Shipping Free / Total — the operator
+    // detail's rows, the same math).
+    await expect(page.getByText("Subtotal", { exact: true })).toBeVisible();
+    await expect(page.getByText("Shipping", { exact: true })).toBeVisible();
+    await expect(page.getByText("Free", { exact: true })).toBeVisible();
+
+    // The shipping card: the parsed address snapshot (ADR-015 pattern).
+    // Scoped to the MAIN landmark — the footer carries the same contact
+    // address (the account-tab convention).
+    await expect(page.getByRole("heading", { name: "Shipping Address" })).toBeVisible();
+    await expect(page.getByRole("main").getByText("John Doe").first()).toBeVisible();
+    await expect(page.getByRole("main").getByText("123 Main Street")).toBeVisible();
+    await expect(page.getByRole("main").getByText("New York, NY 10001")).toBeVisible();
+    await expect(page.getByRole("main").getByText("United States").first()).toBeVisible();
+
+    // The payment card: the method + card row, the placed date.
+    await expect(page.getByRole("heading", { name: "Payment" })).toBeVisible();
+    await expect(page.getByText("Card ···· 4242")).toBeVisible();
+    await expect(page.getByText("Mar 28, 2026", { exact: true })).toBeVisible();
+
+    // The money line's CALM state: the demo-path order (paymentStatus
+    // null) renders NO money line — the seam returns { visible: false }.
+    await expect(page.getByText(/Payment received|Payment refunded/)).toHaveCount(0);
+  });
+
+  test("the refunded fixture's detail surfaces the money state (ORD-2026-004)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-004" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-004", exact: true })).toBeVisible();
+
+    // The fulfillment pill keeps its own vocabulary (cancelled — the two
+    // states are orthogonal, the refundEligibility design's example).
+    await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
+
+    // The item: 1× Ceramic Planter Set at $79.99.
+    await expect(page.getByText("Ceramic Planter Set")).toBeVisible();
+    await expect(page.getByText("$79.99 × 1")).toBeVisible();
+
+    // The money line: the confirmation's customer-safe copy (the
+    // per-order read vocabulary — R10-2: no operator vocabulary).
+    await expect(
+      page.getByText("Payment refunded — the amount has been returned to your original payment method."),
+    ).toBeVisible();
+  });
+
+  test("the owner gate: a non-owner gets the generic not-found block (GUEST-TOKEN-1 discipline)", async ({ browser, page }) => {
+    // Grab john's ORD-2026-001 detail URL from the history link first.
+    await page.getByRole("tab", { name: "Orders" }).click();
+    const href = await page.getByRole("link", { name: "ORD-2026-001" }).getAttribute("href");
+    expect(href).toMatch(/^\/account\/orders\//);
+
+    // A signed-in NON-owner (the seeded admin — a customer-route non-owner
+    // regardless of role; the second-context login draws from the admin
+    // email's own rate-limit bucket, the stock-spec precedent).
+    const ctx = await browser.newContext();
+    const other = await ctx.newPage();
+    await other.goto("/login");
+    await other.getByLabel("Email").fill("admin@luxestore.com");
+    await other.getByLabel("Password").fill("Admin1234!");
+    await other.getByRole("button", { name: "Log in", exact: true }).click();
+    await other.waitForURL("**/account");
+    await other.goto(href!);
+
+    // The GENERIC block — existence is never confirmed to a non-owner
+    // (unknown id, not-owned id, and guest order all render the same).
+    await expect(other.getByRole("heading", { name: "Order not found" })).toBeVisible();
+    await expect(other.getByText("ORD-2026-001")).toHaveCount(0);
+    await ctx.close();
+  });
+
+  test("anonymous visitors are redirected to login with intent (REDIRECT-1)", async ({ browser }) => {
+    // The redirect fires before the lookup, so ANY id exercises it.
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const page = await ctx.newPage();
+    await page.goto("/account/orders/anything");
+    await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)account(%2F|\/)orders(%2F|\/)anything$/);
+    await ctx.close();
+  });
+
 });
 
 test.describe("account mobile (session-9)", () => {

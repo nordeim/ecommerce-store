@@ -8,6 +8,7 @@
  * form under a "Change Password" heading).
  */
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   LogOut,
@@ -30,6 +31,12 @@ import { formatCents } from "@/lib/money";
 // Session-33 (CUSTOMER-MONEY-1): the customer-side money-state seam — the
 // order-history row's refund line (pure, unit-pinned).
 import { orderRefundLineView } from "@/lib/order-money-state";
+// Session-34 (CUSTOMER-ORDER-DETAIL-1): the status vocabulary seam — the
+// reference-measured badge classes + labels + the account family's short
+// date, extracted from this module so the customer order-detail SERVER
+// page shares the single source (a "use client" module's plain-object
+// exports are client references — not importable from server components).
+import { STATUS_LABELS, STATUS_STYLES, formatOrderDate } from "@/lib/order-status";
 
 export type OrderRow = {
   id: string;
@@ -54,30 +61,12 @@ export type AddressRow = {
   isDefault: boolean;
 };
 
-// Reference badge anatomy (session-9, ACCOUNT-ORDER-ROW-1 — measured live
-// on both sites 2026-10-08): the status chip is a button-classed element —
-// delivered = the primary variant (bg-primary rgb(230,107,26) + white text
-// + shadow), in_transit = the secondary variant (bg-secondary
-// rgb(242,240,237)). Only these two statuses are observable on the
-// reference's seeded orders; unmeasured statuses fall back to secondary.
-const STATUS_STYLES: Record<string, string> = {
-  delivered:
-    "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
-  in_transit:
-    "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-  processing: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-  cancelled: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  delivered: "Delivered",
-  in_transit: "In Transit",
-  processing: "Processing",
-  cancelled: "Cancelled",
-};
+// Reference badge anatomy (session-9, ACCOUNT-ORDER-ROW-1): the badge
+// vocabulary now lives in the seam module (src/lib/order-status.ts,
+// session-34) — STATUS_STYLES + STATUS_LABELS imported above.
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return formatOrderDate(iso);
 }
 
 export function AccountTabs({
@@ -248,7 +237,19 @@ export function AccountTabs({
                       className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary/30 rounded-xl gap-3"
                     >
                       <div>
-                        <p className="font-semibold">{o.number}</p>
+                        {/* Session-34 (CUSTOMER-ORDER-DETAIL-1): the number
+                            is a LINK to the customer order-detail route —
+                            the admin-console precedent ("order numbers
+                            link to it"). The <p> KEEPS font-semibold and
+                            the anchor inherits color/decoration via the
+                            Tailwind preflight (`a { color: inherit;
+                            text-decoration: inherit }`) — the resting
+                            visual is byte-identical (a zero-visual-delta
+                            superset affordance, the footer-deep-link
+                            precedent; registered in the divergence log). */}
+                        <p className="font-semibold">
+                          <Link href={`/account/orders/${o.id}`}>{o.number}</Link>
+                        </p>
                         <p className="text-sm text-muted-foreground">
                           {formatDate(o.placedAt)} · {o.itemCount} {o.itemCount === 1 ? "item" : "items"}
                         </p>
