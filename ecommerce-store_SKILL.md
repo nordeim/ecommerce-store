@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.42.0
+version: 1.43.0
 last_updated: "2026-10-11"
 tags:
   - e-commerce
@@ -1357,4 +1357,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session42.md` | the post-push audits this skill distills (latest: session-42, the CSP-DEV-EVAL round) |
+| `docs/remediation-plan-session1.md` … `session43.md` | the post-push audits this skill distills (latest: session-43, the NEWSLETTER-E2E round — the customer-surfaces pin-density sweep's first installment) |

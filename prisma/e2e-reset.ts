@@ -59,6 +59,11 @@ async function main() {
   await db.wishlistItem.deleteMany();
   await db.wishlist.deleteMany();
 
+  // Session-43 (NEWSLETTER-E2E-1): the newsletter spec's marker rows. The
+  // table has NO seeded fixtures (the seed never writes it) — clear-all is
+  // the correct form; the run-to-run isolation contract's newest member.
+  await db.newsletterSubscriber.deleteMany();
+
   // Spec-generated users (auth specs register throwaway accounts).
   await db.user.deleteMany({
     where: { OR: [{ email: { startsWith: "e2e-" } }, { email: { startsWith: "logout-" } }, { email: { startsWith: "mismatch-" } }] },
