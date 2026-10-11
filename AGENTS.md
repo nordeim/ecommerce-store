@@ -46,7 +46,8 @@ from the injected location) — the repo contract itself is test-pinned in
 - **Route groups own the chrome.** `src/app/layout.tsx` is a minimal shell
   (html/body/font/metadata). `src/app/(storefront)/layout.tsx` carries the
   shopper chrome + `StoreProvider` hydration; `src/app/(auth)/` renders
-  login/register/forgot-password standalone (reference parity: no
+  login/register/forgot-password/verify-email/reset-password standalone
+  (five members; reference parity: no
   header/footer) — each route is a server `page.tsx` (owns `Metadata`:
   "Login"/"Register"/"Forgot Password", built via the shared
   `pageMetadata()` builder — session-9, METADATA-OG-1) delegating to a
@@ -377,7 +378,7 @@ from the injected location) — the repo contract itself is test-pinned in
   (the reference's a11y tree is the parity trait there).
 - **One `<main>` landmark per page (session-7, MAIN-NEST-1; extended session-12):** the admin AND shopper content pages (account, checkout ×2 code paths, checkout/success, wishlist ×2 code paths) wrap their content in `<div className="flex-1">` — NOT `<main>` — because the `(storefront)` layout already renders the `<main>`; a nested pair is invalid HTML, trips axe's landmark rules, and confuses AT landmark navigation. The session-1 originals shipped nested mains on those four routes for eleven rounds — invisible to every computed-style audit because `locator("main")` chains dedupe shared descendants; the axe differential (session-12) exposed them. The inner `flex-1` is layout-inert either way (the parent main is not a flex container).
 - **ARIA labels never land on role-less divs (session-12, A11Y-ARIA-1/2).** `aria-label` on a plain `<div>` (role=generic) is prohibited by ARIA 1.2+ (axe `aria-prohibited-attr`): the toast viewport is a NAMELESS `aria-live="polite"` region (a live region announces its content, not its name; the reference's container carries no aria attributes at all), and the PDP star-rating row is `role="img"` + `aria-label="Rated X out of 5"` (the canonical glyph-row pattern — role=img allows naming). Pinned by the storefront-parity spec.
-- **Security headers ship in `next.config.ts` `headers()` (session-12, SEC-HEADERS-1):** Referrer-Policy `strict-origin-when-cross-origin`, X-Content-Type-Options `nosniff`, Strict-Transport-Security `max-age=31536000` (the reference's live-measured baseline; HSTS over HTTP is a spec no-op per RFC 6797 §7.2), plus X-Frame-Options `DENY` (superset). CSP deferred (needs nonce plumbing). Pinned by the smoke spec.
+- **Security headers ship in `next.config.ts` `headers()` (session-12, SEC-HEADERS-1):** Referrer-Policy `strict-origin-when-cross-origin`, X-Content-Type-Options `nosniff`, Strict-Transport-Security `max-age=31536000` (the reference's live-measured baseline; HSTS over HTTP is a spec no-op per RFC 6797 §7.2), plus X-Frame-Options `DENY` (superset). CSP deferred (needs nonce plumbing) — SUPERSEDED next bullet by the session-14 nonce pipeline (SEC-CSP-1, ADR-022). Pinned by the smoke spec.
 - **Content-Security-Policy ships via the proxy nonce pipeline (session-14, SEC-CSP-1, ADR-022):** `src/proxy.ts` (Next 16's renamed middleware convention — `middleware.ts` is deprecated) mints a per-request nonce, sets the CSP on the REQUEST headers (Next extracts it via `getScriptNonceFromHeader` and nonces every bootstrap/flight script) and the RESPONSE (browser enforcement). Directives are pinned to the codebase's measured footprint: `default-src 'self'`; `script-src 'self' 'nonce-…' 'strict-dynamic'`; `style-src 'self' 'unsafe-inline'` (framework insurance — the app itself ships zero inline styles); `img-src 'self' https://media.base44.com data:` (the sole art/favicon CDN); `font-src 'self'` (the self-hosted woff2); `connect-src 'self'`; `frame-ancestors 'none'`; `object-src/base-uri/form-action 'self'`. **No `upgrade-insecure-requests`** — the app runs on plain-HTTP localhost in dev/E2E and that directive would rewrite same-origin subresources to https. Per-request nonces require per-request rendering: `/register` and `/forgot-password` carry `export const dynamic = "force-dynamic"` (the only static HTML pages; `/_not-found` is unreachable — nothing calls `notFound()`). Pinned by the smoke spec (header + directive census + nonce uniqueness + every SSR script nonced on / and /register).
 - **The a11y parity profile is regression-pinned by a standing E2E gate (session-15, A11Y-GATE-1, ADR-023):** `tests/e2e/accessibility.spec.ts` injects the SELF-HOSTED axe-core build (pinned `4.14.0` devDependency; `page.addScriptTag` — DevTools-protocol injection, exempt from the page CSP) after a scrolled-reveal pass (content at `opacity: 0` until scrolled is SKIPPED by axe — the session-12 whileInView trap) and asserts (a) the violation census is EXACTLY `{color-contrast}` on home/shop/PDP/cart/account/login — any other rule firing (button-name, label, landmarks, aria-prohibited-attr, …) is a REGRESSION against the aria superset / the session-12 fixes; (b) the color-contrast node counts equal the parity pins (28/23/14/8/8/3 — byte-identical to the reference's live-measured counts; the shared parity trait, NOT a defect to fix). Mutation-proven: a re-introduced `aria-label` on the toast viewport fails the gate as `aria-prohibited-attr`.
 - **The a11y gate covers BOTH viewports and the admin console (session-16, A11Y-GATE-2, ADR-024):** the same spec carries an `a11y mobile gate` describe (`test.use({ ...devices["iPhone 14"] })` with its `defaultBrowserType` STRIPPED — `test.use` rejects it inside a describe because it forces a new worker; the project's storageState still applies, so the demo user is authed at 390px) pinning the SAME 28/23/14/8/8/3 (the mobile census is byte-identical to the desktop's, live-measured both sites + E2E-calibrated — that identity IS the contract; a viewport divergence is flagged like a drift), and an `a11y admin gate` describe (`adminLogin(browser)` once in `beforeAll`, the admin.spec pattern — 3 admin logins/run stays inside the 10/15min bucket) pinning the QUALITY census {color-contrast} at 8/7/7/7 on the four console surfaces (dashboard/orders/products/order-detail, the detail reached via the `ORD-2026-001` link — the e2e.db cuid is not hardcodable). The structural-blindness rationale: an element hidden at desktop (`lg:hidden`) is `display:none` → axe SKIPS it at 1280×720 → a mobile-only defect passes the desktop gate forever. Dual-mutation-proven: removing the mobile menu button's aria-label fails ONLY the mobile tests (desktop stays green — the proof); removing the eye buttons' aria-labels fails the admin products test (`button-name(12)`).
@@ -841,6 +842,59 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
   MAX bound mutated 7→5 → unit ×6 AND the E2E ("Mar 18 – 20"), the
   artifact rebuilt; M3 the MIN bound mutated 3→2 → unit ×6 AND the E2E
   ("Mar 17 – 24"), the artifact rebuilt).
+- **The carrier-holiday delivery window (session-39, DELIVERY-WINDOW-3,
+  ADR-047):** the session-38 window counted Mon–Fri but was holiday-blind
+  — on the 2026 calendar itself a Fri 2026-12-18 placement's +7 bound IS
+  Christmas Day, and a Fri 2026-11-20 placement's +7 bound IS
+  Thanksgiving; the independent full-year oracle counts 10 placements of
+  2026 whose window lands a bound on a carrier holiday. The refinement
+  makes the quote the honest carrier-aware form. THE STORE-CONFIG
+  DECISION (the candidate's open question, made and documented in the
+  seam): the store's implicit jurisdiction is the US (USD prices, the
+  $9.99 flat US shipping tier, the State/ZIP address form), so the
+  calendar is the standard US carrier set — the SIX dates New Year's Day
+  (Jan 1), Memorial Day (last Monday of May), Independence Day (Jul 4),
+  Labor Day (first Monday of September), Thanksgiving (4th Thursday of
+  November), Christmas Day (Dec 25) — the UPS/FedEx ground-tier
+  no-delivery set, NOT the USPS retail-closure set (MLK/Presidents'/
+  Columbus/Veterans/Juneteenth are post-office closures the standard
+  carriers deliver). EXACT-DATE POLICY: a fixed-date holiday falling on
+  a weekend is already skipped by the weekday rule — no observed-day
+  shift (Jul 4, 2026 is a Saturday; the standard carriers run normal
+  Friday service — pinned by the Jul-4 policy pin, green through RED and
+  GREEN, which an observed-day model would fail). The implementation is
+  contained to the seam (`src/lib/delivery-window.ts` — the ONLY
+  production change): `carrierHolidaysForYear(year)` (exported — the
+  six-date table as `{ name, iso }[]`, UTC calendar arithmetic, the
+  pinned contract), `isDeliverableDay = isBusinessDay &&
+  !isCarrierHoliday` (the stepper's counting predicate — the honest
+  `addDeliverableDays` rename landed WITH the behavior change), the
+  per-step year resolution (a window crossing Dec 31 picks up the next
+  year's table — pinned by the double-holiday pin: placed Tue
+  2026-12-22 → "Dec 28, 2026 – Jan 4, 2027", crossing BOTH Christmas
+  and New Year's). The unit layer pins: the 2026 + 2027 table oracles
+  (HAND-COMPUTED expected values — never derive the expectations from
+  the seam's own calendar), per-holiday exact windows (Thanksgiving week
+  → "Nov 30 – Dec 4, 2026"; Christmas week → "Dec 24 – 31, 2026";
+  Memorial Day → "May 27 – Jun 2, 2026" — also the cross-month
+  exact-string pin; Labor Day → "Sep 9 – 15, 2026"), the UPDATED
+  cross-year pin (placed Mon 2026-12-28 → "Dec 31, 2026 – Jan 7, 2027"
+  — the +7 bound steps past Fri Jan 1, 2027), and the full-year
+  property sweep (365 placements of 2026 parsed back from the three
+  text formats, both bounds asserted Mon–Fri AND not a carrier holiday
+  — the holiday-blind math fails it on 10 placements). The E2E layer:
+  ZERO pin churn (the seeded fixtures are March-placed, holiday-free —
+  the ORD-2026-002 exact pin "Mar 18 – 24, 2026" HOLDS; the
+  confirmation's SHAPE regex holds) — the round's documented known
+  limitation: the E2E layer has no holiday-exercising pin (re-dating
+  the fixtures would churn every spec's pins for one refinement; live
+  orders place at NOW), so the holiday math is UNIT-layer-proven
+  (triple-mutation: M1 the holiday check dropped → the 6 holiday-encoding
+  pins + the sweep; M2 Thanksgiving 4th→3rd Thursday → both table
+  oracles + the pin + the sweep; M3 Christmas Dec 25→26 → both oracles +
+  the Christmas-week + double-holiday pins + the sweep). Zero parity
+  risk — doubly superset-only (the reference carries no estimate on any
+  surface — the round-38 live verification, unchanged surfaces).
 
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 

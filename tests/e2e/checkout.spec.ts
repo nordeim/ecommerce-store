@@ -112,9 +112,11 @@ test.describe("checkout", () => {
     // placedAt is NOW — the exact window moves with the clock, so the pin
     // is the shape (the moving-date honesty; the exact strings are
     // unit-pinned on fixed instants). The three forms: same-month
-    // "Mar 18 – 24, 2026", cross-month "Mar 31 – Apr 7, 2026", cross-year
-    // "Dec 31, 2026 – Jan 6, 2027" (session-38 DELIVERY-WINDOW-2: the
-    // bounds are BUSINESS days — Mon–Fri, weekend-skipping).
+    // "Mar 18 – 24, 2026", cross-month "May 27 – Jun 2, 2026", cross-year
+    // "Dec 31, 2026 – Jan 7, 2027" (session-39 DELIVERY-WINDOW-3: the
+    // bounds are BUSINESS days — Mon–Fri, weekend-skipping — AND skip the
+    // six standard US carrier non-delivery dates, so the cross-year form
+    // steps past Fri Jan 1, 2027).
     await expect(page.getByTestId("delivery-window")).toHaveText(
       /^Estimated delivery: [A-Z][a-z]{2} \d{1,2}(?:, \d{4})? – (?:[A-Z][a-z]{2} )?\d{1,2}, \d{4}$/,
     );
