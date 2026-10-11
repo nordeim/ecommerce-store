@@ -72,10 +72,37 @@ async function main() {
   // Spec-generated addresses (keep the seeded demo default).
   await db.address.deleteMany({ where: { id: { not: "demo-address-main" } } });
 
+  // Session-45 (ACCOUNT-VALIDATION-1): the validation spec flips the default
+  // badge (the P3 exclusivity pin) and edits the seeded card (the cleanup
+  // path) — restore the canonical fields + isDefault so every run starts
+  // identical (the phone-restore pattern, applied to the address fixture).
+  await db.address.update({
+    where: { id: "demo-address-main" },
+    data: {
+      label: "Home",
+      fullName: "John Doe",
+      street: "123 Main Street",
+      city: "New York",
+      state: "NY",
+      zip: "10001",
+      country: "United States",
+      isDefault: true,
+    },
+  });
+
   // The account spec edits the demo phone; restore the reference value.
+  // Session-45: passwordHash joins the restore — the validation spec's P10
+  // rotates the demo password and restores it in-spec; this is the
+  // run-to-run belt-and-suspenders (the resetuser pattern).
   await db.user.update({
     where: { email: "john@example.com" },
-    data: { phone: "+1 (555) 123-4567", firstName: "John", lastName: "Doe", name: "John Doe" },
+    data: {
+      phone: "+1 (555) 123-4567",
+      firstName: "John",
+      lastName: "Doe",
+      name: "John Doe",
+      passwordHash: scryptHash("Demo1234!"),
+    },
   });
 
   // Session-7 (ADMIN-COV-2): spec-placed orders accumulate across runs (the

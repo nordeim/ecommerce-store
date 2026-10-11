@@ -70,6 +70,25 @@ async function main() {
 
   await db.newsletterSubscriber.deleteMany({ where: { email: { in: TEST_SUBSCRIBERS } } });
 
+  // Session-45 (ACCOUNT-VALIDATION-1): live-audit address residue — the
+  // capture/battery walk adds addresses and flips the default badge; remove
+  // the non-seeded rows and restore the canonical fixture (the e2e-reset
+  // guard's dev-DB twin).
+  await db.address.deleteMany({ where: { id: { not: "demo-address-main" } } });
+  await db.address.update({
+    where: { id: "demo-address-main" },
+    data: {
+      label: "Home",
+      fullName: "John Doe",
+      street: "123 Main Street",
+      city: "New York",
+      state: "NY",
+      zip: "10001",
+      country: "United States",
+      isDefault: true,
+    },
+  });
+
   // Wishlist + cart residue on every user (the seed starts both empty; the
   // reference's wishlist is cosmetic — see AGENTS.md divergence register).
   await db.wishlistItem.deleteMany({});

@@ -83,14 +83,14 @@ const fourEndpointLine = /4-endpoint|stripe\/webhook/.test(treeBlock);
 
 // e2e spec census
 const e2eSpecs = readdirSync(join(ROOT, "tests/e2e")).filter((f) => f.endsWith(".spec.ts"));
-const specCountLine = /21 specs|21 spec/.test(treeBlock);
+const specCountLine = /22 specs|22 spec/.test(treeBlock);
 
 family("PAD §3.2 tree", [
   ["every documented path exists on disk", missingOnDisk.length === 0],
   [`all ${loadBearing.length} load-bearing paths documented (${undocumented.filter((p) => !treeBlock.includes(p)).length} missing)`,
     undocumented.filter((p) => !treeBlock.includes(p)).length === 0],
   [`the 4-endpoint line (real: ${apiRoutes.length} route.ts)`, fourEndpointLine && apiRoutes.length === 4],
-  [`the e2e spec count (real: ${e2eSpecs.length})`, specCountLine && e2eSpecs.length === 21],
+  [`the e2e spec count (real: ${e2eSpecs.length})`, specCountLine && e2eSpecs.length === 22],
 ]);
 
 // ---------------------------------------------------------------------------
