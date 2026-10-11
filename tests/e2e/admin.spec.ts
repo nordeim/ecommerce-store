@@ -325,6 +325,96 @@ test.describe("admin console (admin session)", () => {
     await expect(admin.getByText("4 orders", { exact: true })).toBeVisible();
     await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
   });
+
+  // Session-41, ORDER-WINDOW-1 (ADR-048): the orders surface's date-range
+  // window — the PAY-OPS-3 treatment applied to the console's fulfillment
+  // surface (the only LIST surface without a time dimension; the take-100
+  // ceiling's reach-past tool). The fixture set is staggered: 003 placed
+  // 2026-02-20, 004 placed 2026-02-22, 002 placed 2026-03-15, 001 placed
+  // 2026-03-28 (UTC) — so a March window keeps exactly {002, 001}, a
+  // from=2026-03-01 keeps {002, 001}, and a March window ANDed with
+  // status=delivered narrows to {001} alone.
+  test("orders filters by date range with a deep-linkable URL (session-41, ORDER-WINDOW-1)", async () => {
+    await admin.goto("/admin/orders?from=2026-03-01&to=2026-03-31");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/from=2026-03-01/);
+    await expect(admin.getByText("2 orders", { exact: true })).toBeVisible();
+    // The in-range rows: the 15th's 002 + the 28th's 001.
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+    // The out-of-range rows are gone (the February pair 003/004).
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByRole("link", { name: "ORD-2026-004" })).toHaveCount(0);
+
+    // The date inputs mirror the URL state (adjust-during-render).
+    await expect(admin.getByLabel("From date")).toHaveValue("2026-03-01");
+    await expect(admin.getByLabel("To date")).toHaveValue("2026-03-31");
+
+    // A bad bound falls through to the unfiltered list (the family
+    // pattern — never an error).
+    await admin.goto("/admin/orders?from=03/01/2026");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("4 orders", { exact: true })).toBeVisible();
+  });
+
+  test("orders filters by an open-ended from bound (from-only)", async () => {
+    await admin.goto("/admin/orders?from=2026-03-01");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("2 orders", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+    // The February fixtures are before the bound.
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByRole("link", { name: "ORD-2026-004" })).toHaveCount(0);
+  });
+
+  test("orders filters by an open-ended to bound (to-only)", async () => {
+    await admin.goto("/admin/orders?to=2026-02-28");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("2 orders", { exact: true })).toBeVisible();
+    // The February pair renders; the March orders are after the bound.
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-004" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toHaveCount(0);
+  });
+
+  test("the date range ANDs with the status combobox (the combined shape)", async () => {
+    // delivered + from=2026-03-01: only 001 (delivered Mar 28) — 002 (Mar
+    // 15) is in_transit, 003 (delivered Feb 20) falls OUT of the range.
+    // The discriminating pin: 003 is a delivered-family member excluded
+    // by the date bound (without the date filter it renders).
+    await admin.goto("/admin/orders?status=delivered&from=2026-03-01");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin.getByText("1 order", { exact: true })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-001" })).toBeVisible();
+    await expect(admin.getByRole("link", { name: "ORD-2026-003" })).toHaveCount(0);
+    await expect(admin.getByRole("link", { name: "ORD-2026-002" })).toHaveCount(0);
+  });
+
+  test("the orders date inputs push merged params from the filter bar", async () => {
+    await admin.goto("/admin/orders");
+    await admin.waitForLoadState("networkidle");
+    await admin.getByLabel("From date").fill("2026-03-01");
+    await expect(admin).toHaveURL(/\/admin\/orders\?from=2026-03-01$/);
+    await expect(admin.getByText("2 orders", { exact: true })).toBeVisible();
+    // The status Select composes with the dates (merged params, the
+    // canonical order: status before from).
+    await admin.getByRole("combobox", { name: "Filter by status" }).click();
+    await admin.getByRole("option", { name: "Delivered" }).click();
+    await expect(admin).toHaveURL(/status=delivered&from=2026-03-01/);
+    await expect(admin.getByText("1 order", { exact: true })).toBeVisible();
+  });
+
+  test("an inverted date pair renders the unfiltered list (never an error)", async () => {
+    await admin.goto("/admin/orders?from=2026-03-31&to=2026-03-01");
+    await admin.waitForLoadState("networkidle");
+    await expect(admin).toHaveURL(/from=2026-03-31/);
+    await expect(admin.getByText("4 orders", { exact: true })).toBeVisible();
+    // The date inputs render EMPTY (the pair dropped together) — the
+    // URL carries the raw pair but the filters state is calm.
+    await expect(admin.getByLabel("From date")).toHaveValue("");
+    await expect(admin.getByLabel("To date")).toHaveValue("");
+  });
 });
 
 // ---------------------------------------------------------------------------

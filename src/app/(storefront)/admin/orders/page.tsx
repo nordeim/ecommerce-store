@@ -60,6 +60,8 @@ export default async function AdminOrdersPage({
         <AdminOrderFilters
           activeStatus={filters.status ?? "all"}
           activeQuery={filters.q ?? ""}
+          activeFrom={filters.from ?? ""}
+          activeTo={filters.to ?? ""}
         />
 
         <p className="text-sm text-muted-foreground mb-4">{countLabel}</p>

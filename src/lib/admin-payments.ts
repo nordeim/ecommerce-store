@@ -33,6 +33,8 @@
  * `from`, `lt` the day AFTER `to` (exclusive — `to`'s whole day is in
  * range) — ANDed with the family + q elements (the composable-AND
  * refactor keeps every pre-session-26 single-element shape identical).
+ * (Session-41: the validation + boundary math compose the shared
+ * day-bounds seam — see src/lib/day-bounds.ts.)
  *
  * The outcome resolver is the page's honest derivation, purely from DB
  * state: a succeeded event with no linked order is exactly the
@@ -40,6 +42,13 @@
  * mismatch, stock-short, unusable metadata, vanished cart — see ADR-031)
  * — the refund-needed signal an operator must act on.
  */
+
+// Session-41, ORDER-WINDOW-1 (ADR-048): the day-bound validation moved to
+// the shared seam src/lib/day-bounds.ts (the session-35 formatTimelineDate
+// precedent — the orders surface needed the same pure helper). This seam
+// composes it; the behavior is byte-identical (this file's PAY-OPS-3 unit
+// pins, which pin the boundary `Date` values exactly, are the proof).
+import { parseDayBound, utcDayBounds } from "./day-bounds";
 
 /** The canonical event families the family Select writes. */
 export const ADMIN_PAYMENT_FAMILY_OPTIONS = [
@@ -79,22 +88,6 @@ export type AdminPaymentWhere = {
   >;
 };
 
-/** The strict shape a date bound must carry (no time, no slashes, 4-2-2). */
-const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * Validate one raw bound: the shape regex + the Date round-trip
- * (2026-02-30 parses but normalizes to 2026-03-02 — not the same day;
- * 2026-13-01 parses NaN). Returns the canonical string or undefined.
- */
-function parseDateBound(raw: string | undefined): string | undefined {
-  if (!raw || !ISO_DAY_RE.test(raw)) return undefined;
-  const t = Date.parse(`${raw}T00:00:00.000Z`);
-  if (Number.isNaN(t)) return undefined;
-  if (new Date(t).toISOString().slice(0, 10) !== raw) return undefined;
-  return raw;
-}
-
 /**
  * Parse the raw searchParams record (the `Record<string, string | string[]
  * | undefined>` Next delivers) into the validated filter state. Array
@@ -117,8 +110,8 @@ export function parseAdminPaymentFilters(
   // PAY-OPS-3 (session-26): validate each bound independently, then
   // drop an inverted pair together (lexicographic order IS chronological
   // order for validated YYYY-MM-DD strings — no Date math needed here).
-  let from = parseDateBound(one("from"));
-  let to = parseDateBound(one("to"));
+  let from = parseDayBound(one("from"));
+  let to = parseDayBound(one("to"));
   if (from && to && from > to) {
     from = undefined;
     to = undefined;
@@ -182,15 +175,9 @@ export function buildAdminPaymentWhere(
   }
 
   if (filters.from || filters.to) {
-    const receivedAt: AdminPaymentDateRange = {};
-    if (filters.from) {
-      receivedAt.gte = new Date(`${filters.from}T00:00:00.000Z`);
-    }
-    if (filters.to) {
-      // The day AFTER `to`, exclusive — 86,400,000ms of one UTC day.
-      receivedAt.lt = new Date(Date.parse(`${filters.to}T00:00:00.000Z`) + 86_400_000);
-    }
-    and.push({ receivedAt });
+    // Session-41: the boundary construction composes the shared seam —
+    // byte-identical to the inline form (the pins are the proof).
+    and.push({ receivedAt: utcDayBounds({ from: filters.from, to: filters.to }) });
   }
 
   if (and.length === 0) return {};

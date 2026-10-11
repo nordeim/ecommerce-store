@@ -8,10 +8,23 @@
  * (/admin/orders?status=delivered&q=ORD-2026-001). The input re-syncs from
  * the URL with the adjust-during-render pattern (the repo's convention for
  * URL-driven state — no setState-in-effect).
+ *
+ * ORDER-WINDOW-1 (session-41, ADR-048): two `<Input type="date">` bounds
+ * ("From date" / "To date") join the bar — the PAY-OPS-3 treatment
+ * (session-26) applied to the console's fulfillment surface: an operator
+ * triaging by time (end-of-day reconciliation, "the orders placed this
+ * week") and the take-100 ceiling's reach-past tool. The inputs are
+ * URL-controlled (the server re-renders the value from the parsed
+ * ?from=/?to= on every navigation — the adjust-during-render contract for
+ * free, same as the status Select); a change pushes MERGED params so
+ * status/q/from/to always compose, and Clear resets everything (it pushes
+ * the bare path). A bad bound never reaches the island: the seam's parser
+ * already dropped it (the deep-link renders the unfiltered list, never an
+ * error).
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { CalendarRange, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/admin-orders";
@@ -19,9 +32,12 @@ import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/admin-orders";
 type Props = {
   activeStatus: string;
   activeQuery: string;
+  /** The URL's validated `?from=`/`?to=` bounds ("" when inactive). */
+  activeFrom: string;
+  activeTo: string;
 };
 
-export function AdminOrderFilters({ activeStatus, activeQuery }: Props) {
+export function AdminOrderFilters({ activeStatus, activeQuery, activeFrom, activeTo }: Props) {
   const router = useRouter();
   const [q, setQ] = React.useState(activeQuery);
 
@@ -33,14 +49,27 @@ export function AdminOrderFilters({ activeStatus, activeQuery }: Props) {
     setQ(activeQuery);
   }
 
-  const hasFilters = activeStatus !== "all" || !!activeQuery;
+  const hasFilters = activeStatus !== "all" || !!activeQuery || !!activeFrom || !!activeTo;
 
   const push = (mutate: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams();
     if (activeStatus !== "all") params.set("status", activeStatus);
     if (q.trim()) params.set("q", q.trim());
+    if (activeFrom) params.set("from", activeFrom);
+    if (activeTo) params.set("to", activeTo);
     mutate(params);
-    const qs = params.toString();
+    // Canonical param order (status, q, from, to) no matter which control
+    // fired: the props are the PRE-navigation state, so a Select change
+    // on a date-filtered URL appends status AFTER the stale from/to —
+    // an unstable deep-link order (?from=…&status=…). Re-emitting in the
+    // fixed order keeps every pushed URL deterministic (the session-26
+    // canonical re-emission, the AdminPaymentFilters precedent).
+    const ordered = new URLSearchParams();
+    for (const key of ["status", "q", "from", "to"]) {
+      const value = params.get(key);
+      if (value) ordered.set(key, value);
+    }
+    const qs = ordered.toString();
     router.push(qs ? `/admin/orders?${qs}` : "/admin/orders");
   };
 
@@ -84,6 +113,44 @@ export function AdminOrderFilters({ activeStatus, activeQuery }: Props) {
           ))}
         </SelectContent>
       </Select>
+
+      {/* ORDER-WINDOW-1 (session-41): the date-range bounds — URL-controlled
+          (value = the parsed ?from=/?to=, re-rendered by the server on
+          every push), so they compose with status/q with no local state
+          to desync. Empty string is the controlled-input "no bound"
+          value; the browser's date picker only emits valid YYYY-MM-DD. */}
+      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <CalendarRange className="h-4 w-4 shrink-0" aria-hidden />
+        <Input
+          type="date"
+          value={activeFrom}
+          aria-label="From date"
+          className="w-[150px]"
+          onChange={(e) => {
+            const v = e.target.value;
+            push((params) => {
+              if (v) params.set("from", v);
+              else params.delete("from");
+            });
+          }}
+        />
+        <span aria-hidden className="select-none">
+          –
+        </span>
+        <Input
+          type="date"
+          value={activeTo}
+          aria-label="To date"
+          className="w-[150px]"
+          onChange={(e) => {
+            const v = e.target.value;
+            push((params) => {
+              if (v) params.set("to", v);
+              else params.delete("to");
+            });
+          }}
+        />
+      </div>
 
       {hasFilters && (
         <button

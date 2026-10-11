@@ -164,21 +164,33 @@ from the injected location) — the repo contract itself is test-pinned in
   in-admin "Order not found" block. Read-only — status changes stay on the
   list row's Select (one mutation seam). Pinned by `tests/e2e/admin.spec.ts`.
 - **The admin orders list is URL-deep-linkable filterable (session-13,
-  ADMIN-SEARCH-1):** `/admin/orders` takes `?status=` (validated against
-  the four canonical combobox statuses — anything else falls through to
-  the unfiltered list, never an error) and `?q=` (SQLite `contains` on
-  order number OR customer email — the two identifiers a customer
-  relays). The pure seam is `src/lib/admin-orders.ts`
-  (`parseAdminOrderFilters` + `buildAdminOrderWhere`, unit-pinned; the
-  shop's parser stayed page-local for reference-parity reasons, the
-  admin surface is a superset so it gets the lib seam). The filter
-  island (`admin-order-filters.tsx`) mirrors `ShopFilters` (merged
-  params via `router.push`, the adjust-during-render input sync). The
-  count line ("N orders" / "100+ of N orders") makes the `take: 100`
-  bound visible; the empty state offers "Clear all filters". Zero
-  parity risk — no storefront surface is touched. Pinned by
-  `tests/e2e/admin.spec.ts` (3 tests: status deep-link, number/email
-  search, empty state + Clear).
+  ADMIN-SEARCH-1 + session-41, ORDER-WINDOW-1):** `/admin/orders` takes
+  `?status=` (validated against the four canonical combobox statuses —
+  anything else falls through to the unfiltered list, never an error),
+  `?q=` (SQLite `contains` on order number OR customer email — the two
+  identifiers a customer relays), and `?from=`/`?to=` (session-41: the
+  strict YYYY-MM-DD date-range window on `placedAt` at UTC day
+  boundaries — the PAY-OPS-3 treatment applied to the orders surface,
+  the only LIST surface without a time dimension and the take-100
+  ceiling's reach-past tool; an inverted pair drops together, bad
+  bounds fall through, never an error). The pure seam is
+  `src/lib/admin-orders.ts` (`parseAdminOrderFilters` +
+  `buildAdminOrderWhere`, unit-pinned — 24 tests at session-41; the
+  day-bound validation + boundary math compose the SHARED seam
+  `src/lib/day-bounds.ts` (parseDayBound + utcDayBounds), extracted
+  from admin-payments' private helpers — the session-35
+  formatTimelineDate precedent; the payments seam composes the same
+  module with zero behavior change, its 54 pins the proof). The filter
+  island (`admin-order-filters.tsx`) mirrors `ShopFilters` + the
+  payments bar's date group (merged params via `router.push`, the
+  adjust-during-render input sync, the canonical re-emission order
+  status/q/from/to). The count line ("N orders" / "100+ of N orders")
+  makes the `take: 100` bound visible; the empty state offers "Clear
+  all filters". Zero parity risk — no storefront surface is touched.
+  Pinned by `tests/e2e/admin.spec.ts` (session-13's 3 + the session-41
+  date family: the deep-linkable range, from-only/to-only, the status
+  composition, the merged-params push, the inverted/bad-bound
+  fall-throughs).
 - **The admin payment-ops surface (session-24, PAY-OPS-1, ADR-032;
   refined session-25, PAY-OPS-2, ADR-033):**
   `/admin/payments` renders the `StripeEvent` log — the webhook

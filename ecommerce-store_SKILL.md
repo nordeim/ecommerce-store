@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.39.0
+version: 1.41.0
 last_updated: "2026-10-11"
 tags:
   - e-commerce
@@ -250,7 +250,7 @@ app (routes) → components (ui/store/account/checkout) → lib (domains+actions
 - **Layer 0 Data:** `src/lib/db.ts` — the ONLY Prisma instantiation
   (globalThis HMR-safe singleton); sets `process.env.DATABASE_URL` via
   `src/lib/db-path.ts` at import time. Never import from a client file.
-- **Layer 1 Domains:** `src/lib/{auth,password,cart,wishlist,money,validation,rate-limit}.ts` + the accreted seams — `order-status`, `order-money-state`, `order-timeline`, `order-tracking`, `order-view-token`, `delivery-window`, `admin-orders`, `admin-payments`, `admin-products`, `stripe`, `stripe-config`, `stripe-payment`, `metadata`, `reset-token`, `cart-quantity`, `format`, `verification`, `utils` (27 non-test modules)
+- **Layer 1 Domains:** `src/lib/{auth,password,cart,wishlist,money,validation,rate-limit}.ts` + the accreted seams — `order-status`, `order-money-state`, `order-timeline`, `order-tracking`, `order-view-token`, `delivery-window`, `day-bounds`, `admin-orders`, `admin-payments`, `admin-products`, `stripe`, `stripe-config`, `stripe-payment`, `metadata`, `reset-token`, `cart-quantity`, `format`, `verification`, `utils` (28 non-test modules — day-bounds joins at session-41: the shared UTC day-bound seam behind both console filter surfaces' date ranges, ADR-048)
   — server modules, no React imports.
 - **Layer 2 Mutations:** `src/lib/actions/*.ts` — the ONLY write seam
   (`"use server"` + Zod + `ActionResult<T>`).
@@ -279,7 +279,7 @@ survives client navigation inside `(storefront)` — logout MUST call
 |---|---|
 | `src/components/ui/` | shadcn-style primitives with the reference's exact class strings: button, badge, input, label, separator, select, sheet, tabs, radio-group, skeleton |
 | `src/components/store/` | announcement-bar, header (nav + cart badge + account icon), search-bar (typeahead combobox), mobile-nav (left Sheet w-72), cart-drawer (right Sheet, delta steppers), product-card (toast on add), buy-panel (toast on add), hero-carousel, category-card (feature bar as bordered cards), footer, star-rating, logo, newsletter-form, platform-404 (the shared v3-slate 404), shop-filters, store-provider (cart/wishlist/user + toast queue), toast-viewport — 17 members |
-| `src/components/account/` | account-tabs (4 tabs, useActionState forms; reference anatomy: User-icon avatar, highlighted default address card, Change Password/Notifications sections + Session superset) + the admin console family: admin-order-row, admin-order-filters, admin-product-row, admin-product-filters, admin-payment-filters, admin-tracking-form (session-36), refund-order-button (session-32) |
+| `src/components/account/` | account-tabs (4 tabs, useActionState forms; reference anatomy: User-icon avatar, highlighted default address card, Change Password/Notifications sections + Session superset) + the admin console family: admin-order-row, admin-order-filters (search + status Select + the two date bounds — the orders date-range window, session-41), admin-product-row, admin-product-filters, admin-payment-filters, admin-tracking-form (session-36), refund-order-button (session-32) |
 | `src/components/checkout/` | checkout-flow (3-step wizard client island) + stripe-pay (the Payment Element island, ADR-030 — env-gated) |
 
 ### 5.4 Server/client decision tree
@@ -1348,4 +1348,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session40.md` | the post-push audits this skill distills (latest: session-40, the DOCS-ALIGN round) |
+| `docs/remediation-plan-session1.md` … `session41.md` | the post-push audits this skill distills (latest: session-41, the ORDER-WINDOW round) |
