@@ -60,6 +60,25 @@ test.describe("smoke", () => {
     expect(nonce1).not.toBe(nonce2);
   });
 
+  test("production CSP never carries 'unsafe-eval' (session-42, CSP-DEV-EVAL-1)", async ({ request }) => {
+    // ADR-049's boundary guard: React's dev builds require eval() and the
+    // dev server's CSP gains the 'unsafe-eval' token (src/lib/csp.ts composes
+    // it when NODE_ENV !== "production") — but production stays strict.
+    // React never evals in production (the production RSC client ships no
+    // checkEvalAvailabilityOnceDev probe), and the token would re-open the
+    // eval-based XSS vector the session-14 policy closed. This pin is the
+    // guard against the carve-out leaking across the NODE_ENV boundary —
+    // the E2E webServer boots the standalone server with
+    // NODE_ENV=production (playwright.config.ts), so a leak fires here.
+    const res = await request.get("/");
+    const csp = res.headers()["content-security-policy"];
+    expect(csp).toBeTruthy();
+    expect(csp).not.toContain("'unsafe-eval'");
+    // Both gates exercised: the Stripe-configured production form stays
+    // strict too (the unit layer pins its byte-exact shape).
+    expect(csp).toContain("'strict-dynamic'");
+  });
+
   test("every script the SSR document emits carries the page nonce (session-14, SEC-CSP-1)", async ({ request }) => {
     // Next.js applies the middleware nonce to every bootstrap/flight
     // script it renders. A single un-nonced script would be blocked by

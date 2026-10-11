@@ -21,6 +21,13 @@ import { NextRequest, NextResponse } from "next/server";
  * - script-src 'self' 'nonce-…' 'strict-dynamic' — no inline scripts
  *   survive outside the nonce (host allowlists are ignored by
  *   strict-dynamic-capable browsers; 'self' remains as the fallback)
+ *   · DEV MODE ONLY (session-42, ADR-049): + 'unsafe-eval' — React's dev
+ *     builds require eval() (callstack reconstruction); without the token
+ *     the Turbopack RSC client's checkEvalAvailabilityOnceDev probe logs a
+ *     console error on EVERY dev page load (measured 100% deterministic)
+ *     and React's dev tooling is disabled. Production NEVER carries the
+ *     token (React never evals in production; the E2E smoke spec pins the
+ *     negative).
  * - style-src 'self' 'unsafe-inline' — the app ships ZERO inline styles
  *   (measured), but framework-injected style attributes get insurance;
  *   styles are not the XSS vector scripts are
@@ -49,29 +56,18 @@ import { NextRequest, NextResponse } from "next/server";
  * the session-14 pin — the standing CSP smoke test stays green.
  */
 import { resolveStripeConfig } from "@/lib/stripe-config";
+import { buildCsp } from "@/lib/csp";
 
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const cspParts = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' https://media.base44.com data:",
-    "font-src 'self'",
-    "connect-src 'self'",
-    "frame-ancestors 'none'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ];
-  if (resolveStripeConfig(process.env).serverConfigured) {
-    // script-src host allowlist: ignored by strict-dynamic-capable
-    // browsers (it remains the fallback for the rest).
-    cspParts[1] = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com`;
-    cspParts[5] = "connect-src 'self' https://api.stripe.com";
-    cspParts.push("frame-src https://js.stripe.com https://hooks.stripe.com");
-  }
-  const csp = cspParts.join("; ");
+  // The CSP construction lives in the pure seam (session-42, ADR-049):
+  // production byte-identical to the session-14/22 forms; dev mode gains
+  // the 'unsafe-eval' carve-out (React's documented dev requirement).
+  const csp = buildCsp({
+    nonce,
+    isDev: process.env.NODE_ENV !== "production",
+    stripeConfigured: resolveStripeConfig(process.env).serverConfigured,
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

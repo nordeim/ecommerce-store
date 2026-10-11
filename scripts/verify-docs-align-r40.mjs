@@ -139,12 +139,12 @@ const adrHeaders = [...pad.matchAll(/\*\*ADR-(\d{3}):/g)].map((m) => parseInt(m[
 const dupes = adrHeaders.filter((n, i) => adrHeaders.indexOf(n) !== i);
 const monotonic = adrHeaders.every((n, i) => i === 0 || n > adrHeaders[i - 1]);
 const contiguous = adrHeaders.length > 0 && adrHeaders[0] === 1
-  && adrHeaders[adrHeaders.length - 1] === 48
-  && adrHeaders.length === 48;
+  && adrHeaders[adrHeaders.length - 1] === 49
+  && adrHeaders.length === 49;
 
 family("PAD ADR ledger", [
   [`strictly increasing (${adrHeaders.length} headers; dupes: ${[...new Set(dupes)].join(", ") || "none"})`, monotonic && dupes.length === 0],
-  ["contiguous 001→048, exactly 48 ADRs (recalibrated at session-41: ADR-048)", contiguous && adrHeaders.length === 48],
+  ["contiguous 001→049, exactly 49 ADRs (recalibrated at session-42: ADR-049)", contiguous && adrHeaders.length === 49],
 ]);
 
 // ---------------------------------------------------------------------------
