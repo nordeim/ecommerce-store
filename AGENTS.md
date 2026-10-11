@@ -753,6 +753,48 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
   the E2E calm pin while the seam's unit pins stay green — the
   consumer is the defect; M3 the timeline case dropped → the unit pin
   AND the E2E label pin).
+- **The customer-facing delivery estimate (session-37, DELIVERY-WINDOW-1,
+  ADR-045):** the order-surfaces arc answered "where is it" (session-36's
+  tracking link) but never stated the PROMISE — "when will it arrive?"
+  had no in-app answer: the confirmation ended at "Order Confirmed", the
+  detail's header ended at the status pill. The estimate composes from
+  `Order.status` + `Order.placedAt` ONLY (no schema change, no fixtures —
+  the session-71 framing). The pure seam is `src/lib/delivery-window.ts`
+  (`deliveryWindowView(status, placedAt)` — a discriminated union, the
+  calm branch carries NO fields): the standard-shipping window
+  `placedAt + 3` to `+ 7` calendar days (`DELIVERY_WINDOW_MIN_DAYS = 3` /
+  `DELIVERY_WINDOW_MAX_DAYS = 7`, exported + unit-pinned — the
+  FLAT_SHIPPING_CENTS precedent: the quoted bounds ARE the contract);
+  visible ONLY for the promise states (`processing`, `in_transit`);
+  `delivered` → calm (delivered IS the answer — a past window is noise),
+  `cancelled` → calm (no promise — the alert-fatigue rule), unknown →
+  calm (the parse-family fallthrough). **The date math is
+  UTC-deterministic** (`timeZone: "UTC"` in every format call): a fixed
+  instant renders the same window on any runner TZ (the formatOrderDate
+  lesson — the worker TZ is not a contract), so the unit layer pins
+  exact strings AND the E2E pins the seeded fixture's window exactly.
+  The format is the professional compressed window — same-month
+  "Mar 18 – 22, 2026", cross-month "Mar 31 – Apr 4, 2026", cross-year
+  "Dec 31, 2026 – Jan 4, 2027" (both years when they differ). The two
+  surfaces: the customer detail's header block (the estimate line UNDER
+  the order number/status row — the Amazon pattern; the header row moves
+  inside a `mb-8` wrapper so the CALM state renders byte-identically to
+  the pre-session-37 layout) and the confirmation's muted line stack
+  (the estimate — WHEN — before the money line — HOW MUCH; the mb
+  rhythm composes off which lines render, the session-33
+  refunded-confirmation rendering preserved byte-exactly). The admin
+  console is untouched (the estimate is a customer promise, not operator
+  data). Zero parity risk — both surfaces are superset-only. Pinned by
+  8 unit (the calm states ×3, the two promise states, the cross-month +
+  cross-year formats, the bounds constants) + 2 E2E (the ORD-2026-002
+  exact window + the 001/004 calm states; the fresh confirmation's
+  prefix + date SHAPE — the moving-date honesty, a fresh order's
+  placedAt is NOW), triple-mutation-proven (M1 the seam's MAX bound
+  mutated 7→5 → unit ×5 AND the E2E exact pin, the artifact rebuilt for
+  the E2E proof; M2 the detail's calm gate broken → the E2E calm pins
+  with the seam's unit pins green — the consumer is the defect; M3 the
+  confirmation's line dropped → the checkout E2E while both other
+  layers stay green — the second consumer is the defect).
 
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 

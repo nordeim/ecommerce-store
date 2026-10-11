@@ -75,6 +75,50 @@ test.describe("checkout", () => {
     await expect(page.getByRole("button", { name: "Cart", exact: true })).toBeVisible();
   });
 
+  // Session-37 (DELIVERY-WINDOW-1, ADR-045): the confirmation carries the
+  // delivery estimate — the "when will it arrive" moment is right after
+  // placement (the Amazon pattern: the promise is stated at the moment of
+  // purchase). The fresh order is `processing` — a promise state — so the
+  // estimate always renders on the just-placed confirmation, in the muted
+  // line stack before the money line (when > how much).
+  test("the confirmation carries the delivery estimate (session-37, DELIVERY-WINDOW-1)", async ({ page }) => {
+    // The full 3-step flow (the first test's anatomy).
+    const cont = page.getByRole("button", { name: "Continue to Payment" });
+    await expect(cont).toBeDisabled();
+    await page.getByRole("main").getByLabel("First Name").fill("John");
+    await page.getByRole("main").getByLabel("Last Name").fill("Doe");
+    await page.getByRole("main").getByLabel("Email").fill("john@example.com");
+    await page.getByRole("main").getByLabel("Address").fill("123 Main St");
+    await page.getByRole("main").getByLabel("City").fill("New York");
+    await page.getByRole("main").getByLabel("State").fill("NY");
+    await page.getByRole("main").getByLabel("ZIP").fill("10001");
+    await expect(cont).toBeEnabled();
+    await cont.click();
+
+    const review = page.getByRole("button", { name: "Review Order" });
+    await expect(review).toBeDisabled();
+    await page.getByRole("main").getByLabel("Card Number").fill("4242424242424242");
+    await page.getByRole("main").getByLabel("Expiry").fill("12/28");
+    await page.getByRole("main").getByLabel("CVC").fill("123");
+    await expect(review).toBeEnabled();
+    await review.click();
+
+    await expect(page.getByRole("heading", { name: /Review & Place Order/ })).toBeVisible();
+    await page.getByRole("button", { name: /Place Order — \$299\.99/ }).click();
+    await page.waitForURL(/\/checkout\/success\?order=/);
+    await expect(page.getByRole("heading", { name: "Order Confirmed" })).toBeVisible();
+
+    // The estimate line: the prefix + the date SHAPE. A fresh order's
+    // placedAt is NOW — the exact window moves with the clock, so the pin
+    // is the shape (the moving-date honesty; the exact strings are
+    // unit-pinned on fixed instants). The three forms: same-month
+    // "Mar 18 – 22, 2026", cross-month "Mar 31 – Apr 4, 2026", cross-year
+    // "Dec 31, 2026 – Jan 4, 2027".
+    await expect(page.getByTestId("delivery-window")).toHaveText(
+      /^Estimated delivery: [A-Z][a-z]{2} \d{1,2}(?:, \d{4})? – (?:[A-Z][a-z]{2} )?\d{1,2}, \d{4}$/,
+    );
+  });
+
   test("the placed order lands in the account order history", async ({ page }) => {
     await page.getByRole("main").getByLabel("First Name").fill("John");
     await page.getByRole("main").getByLabel("Last Name").fill("Doe");

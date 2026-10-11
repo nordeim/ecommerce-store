@@ -490,6 +490,42 @@ test.describe("account", () => {
     await expect(page.getByText("Tracking", { exact: true })).toHaveCount(0);
   });
 
+  // Session-37 (DELIVERY-WINDOW-1, ADR-045): the customer-facing delivery
+  // estimate — the "when will it arrive" affordance. The order-surfaces
+  // arc answered "where is it" (session-36's tracking link) but never
+  // stated the promise: the estimate composes from the status + placedAt
+  // (no schema change), rendering under the order header for the promise
+  // states (processing / in_transit) and NOTHING for the terminal states.
+  test("the in-transit order detail carries the delivery estimate (ORD-2026-002, session-37 DELIVERY-WINDOW-1)", async ({ page }) => {
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-002" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-002", exact: true })).toBeVisible();
+
+    // The estimate line under the order header: the standard-shipping
+    // window from the placed instant (2026-03-15T10:22:00Z + 3/+7 days →
+    // Mar 18 – 22). Exact-text pin: the seam's UTC-deterministic math
+    // renders the same string on any runner TZ (the formatOrderDate
+    // lesson — the worker TZ is not a contract).
+    await expect(page.getByTestId("delivery-window")).toHaveText(
+      "Estimated delivery: Mar 18 – 22, 2026",
+    );
+
+    // The calm states — the alert-fatigue rule: a delivered order IS the
+    // answer (a past window is noise) and a cancelled order carries no
+    // promise. Both render NO estimate line.
+    await page.goto("/account");
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-001" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-001", exact: true })).toBeVisible();
+    await expect(page.getByTestId("delivery-window")).toHaveCount(0);
+
+    await page.goto("/account");
+    await page.getByRole("tab", { name: "Orders" }).click();
+    await page.getByRole("link", { name: "ORD-2026-004" }).click();
+    await expect(page.getByRole("heading", { name: "ORD-2026-004", exact: true })).toBeVisible();
+    await expect(page.getByTestId("delivery-window")).toHaveCount(0);
+  });
+
   test("the owner gate: a non-owner gets the generic not-found block (GUEST-TOKEN-1 discipline)", async ({ browser, page }) => {
     // Grab john's ORD-2026-001 detail URL from the history link first.
     await page.getByRole("tab", { name: "Orders" }).click();

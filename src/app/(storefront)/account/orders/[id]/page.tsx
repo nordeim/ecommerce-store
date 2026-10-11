@@ -26,6 +26,12 @@ import { customerOrderTimeline, formatTimelineDate } from "@/lib/order-timeline"
 // carrier map (the public track link), the raw passthrough for unknown
 // carriers. The SAME seam the operator console composes (one vocabulary).
 import { orderTrackingView } from "@/lib/order-tracking";
+// Session-37 (DELIVERY-WINDOW-1, ADR-045): the "when will it arrive" read
+// vocabulary — the standard-shipping window quoted from the status + the
+// placed date (no schema change). The promise states (processing /
+// in_transit) carry the estimate; the terminal states stay calm. The SAME
+// seam the confirmation composes (one vocabulary, the DASH-ALERT-1 rule).
+import { deliveryWindowView } from "@/lib/delivery-window";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -129,6 +135,10 @@ export default async function CustomerOrderDetailPage({
   // carrier + number composed through the seam (the calm state renders
   // nothing; the number links to the carrier's public tracking page).
   const tracking = orderTrackingView(order.carrier, order.trackingNumber);
+  // Session-37 (DELIVERY-WINDOW-1): the delivery estimate — the promise
+  // composed from the status + placedAt (the calm state renders nothing:
+  // delivered IS the answer, cancelled carries no promise).
+  const estimate = deliveryWindowView(order.status, order.placedAt);
 
   return (
     <div className="flex-1">
@@ -136,21 +146,37 @@ export default async function CustomerOrderDetailPage({
         {/* The header — the admin-detail pattern (the back affordance, the
             number h1, the status pill, the total) with the ACCOUNT family's
             vocabulary: the pill composes the history rows' STATUS_STYLES
-            seam, not the console's Badge. */}
-        <div className="flex flex-wrap items-center gap-3 mb-8">
-          <Button asChild variant="ghost" size="sm" className="rounded-xl">
-            <Link href="/account">← Orders</Link>
-          </Button>
-          <h1 className="text-3xl font-bold">{order.number}</h1>
-          <span
-            className={`inline-flex items-center border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full ${
-              STATUS_STYLES[order.status] ??
-              "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80"
-            }`}
-          >
-            {STATUS_LABELS[order.status] ?? order.status}
-          </span>
-          <span className="text-2xl font-bold ml-auto">{formatCents(order.total)}</span>
+            seam, not the console's Badge. Session-37 (DELIVERY-WINDOW-1):
+            the header block gains the estimate line UNDER the row for the
+            promise states — the Amazon pattern (the estimate is the first
+            thing the customer reads after "where's my order"); the calm
+            state renders the wrapper with the row ONLY, byte-identical to
+            the pre-session-37 layout (the zero-visual-delta calm pattern —
+            the wrapper carries the row's former mb-8). */}
+        <div className="mb-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild variant="ghost" size="sm" className="rounded-xl">
+              <Link href="/account">← Orders</Link>
+            </Button>
+            <h1 className="text-3xl font-bold">{order.number}</h1>
+            <span
+              className={`inline-flex items-center border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full ${
+                STATUS_STYLES[order.status] ??
+                "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80"
+              }`}
+            >
+              {STATUS_LABELS[order.status] ?? order.status}
+            </span>
+            <span className="text-2xl font-bold ml-auto">{formatCents(order.total)}</span>
+          </div>
+          {estimate.visible && (
+            <p
+              className="text-sm text-muted-foreground mt-2"
+              data-testid="delivery-window"
+            >
+              Estimated delivery: {estimate.text}
+            </p>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 gap-4 mb-4">

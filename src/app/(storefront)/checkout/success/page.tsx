@@ -11,6 +11,12 @@ import { formatCents } from "@/lib/money";
 // pure seam — the paid wording byte-exact (session-22), the refunded state
 // carried by the customer-safe copy.
 import { confirmationMoneyLineView } from "@/lib/order-money-state";
+// Session-37 (DELIVERY-WINDOW-1, ADR-045): the confirmation carries the
+// delivery estimate — the "when will it arrive" moment is right after
+// placement. The SAME seam the order detail composes (one vocabulary);
+// the fresh order is `processing` (a promise state), so the just-placed
+// confirmation always carries the estimate.
+import { deliveryWindowView } from "@/lib/delivery-window";
 
 export const dynamic = "force-dynamic";
 
@@ -75,19 +81,36 @@ export default async function CheckoutSuccessPage({
               placed.
             </p>
             {/* The confirmation's money line (PAY-STRIPE-1 session-22 +
-                CUSTOMER-MONEY-1 session-33): one muted line when the order
-                carries a money state — paid (session-22's wording, byte-exact)
-                or refunded (the customer-side mirror). Demo orders (null)
-                render exactly as before; the mb rhythm keys off the
-                line's visibility. */}
+                CUSTOMER-MONEY-1 session-33) + the delivery estimate
+                (DELIVERY-WINDOW-1 session-37): the muted line stack — the
+                estimate (WHEN) before the money line (HOW MUCH). One muted
+                line per state when the order carries it — paid (session-22's
+                wording, byte-exact), refunded (the customer-side mirror),
+                or the promise states' window. The mb rhythm keys off which
+                lines render: the LAST visible line carries mb-8; the calm
+                states (a cancelled demo order carries neither) render
+                byte-identically to the pre-session-37 confirmation. */}
             {(() => {
               const money = confirmationMoneyLineView(order!.paymentStatus);
+              // Session-37 (DELIVERY-WINDOW-1): the estimate — a fresh
+              // order is always `processing` (visible); a cancelled
+              // revisit is calm (no promise).
+              const estimate = deliveryWindowView(order!.status, order!.placedAt);
+              const anyLine = money.visible || estimate.visible;
               return (
                 <>
-                  <p className={`text-muted-foreground ${money.visible ? "mb-1" : "mb-8"}`}>
+                  <p className={`text-muted-foreground ${anyLine ? "mb-1" : "mb-8"}`}>
                     A confirmation was sent to{" "}
                     <span className="font-medium text-foreground">{order!.email}</span>.
                   </p>
+                  {estimate.visible && (
+                    <p
+                      className={`text-sm text-muted-foreground ${money.visible ? "mb-1" : "mb-8"}`}
+                      data-testid="delivery-window"
+                    >
+                      Estimated delivery: {estimate.text}
+                    </p>
+                  )}
                   {money.visible && (
                     <p className="text-sm text-muted-foreground mb-8">{money.text}</p>
                   )}
