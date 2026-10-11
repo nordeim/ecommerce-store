@@ -150,7 +150,7 @@ model Address {
 
 model Order {
   id              String       @id @default(cuid())
-  number          String       @unique // ORD-YYYY-NNNNNN
+  number          String       @unique // ORD-YYYY-NNN (zero-padded 3)
   userId          String?
   user            User?        @relation(fields: [userId], references: [id])
   email           String
@@ -202,7 +202,7 @@ model OrderEvent {
   id        String   @id @default(cuid())
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  type      String // "placed" | "status_changed" | "payment_succeeded" | "payment_failed"
+  type      String // "placed" | "status_changed" | "payment_succeeded" | "payment_failed" | "payment_refunded" | "tracking_added"
   note      String?
   createdAt DateTime @default(now())
 }

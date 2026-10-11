@@ -107,7 +107,7 @@ Verified against the lockfile (`bun pm ls`, 2026-10-07):
 | UI runtime | react / react-dom | 19.3.0 | Compiler lints ON — `react-hooks/set-state-in-effect` is an ERROR |
 | Language | typescript | 5.9.3 | `strict`; `tsc --noEmit` is the gate (build has `ignoreBuildErrors` from the scaffold) |
 | Styling | tailwindcss + @tailwindcss/postcss | 4.3.3 | CSS-first `@theme inline`; NO tailwind.config.*; v3-parity pins are load-bearing (§4) |
-| UI primitives | @radix-ui/react-* (dialog, select, tabs, popover, label, radio-group, alert-dialog, toast, slot) | 1.x–2.x | shadcn-style wrappers in `src/components/ui/` |
+| UI primitives | @radix-ui/react-* (dialog, select, tabs, label, radio-group, slot — exactly the six installed) | 1.x–2.x | shadcn-style wrappers in `src/components/ui/` |
 | Variants | class-variance-authority 0.7.1 + clsx + tailwind-merge 3.3.1 | — | `cn()` helper in `src/lib/utils.ts` |
 | Icons | lucide-react | 0.525.0 | Exact reference icon set (`lucide-shopping-bag`, `lucide-menu`, …) |
 | ORM | prisma + @prisma/client | 6.19.3 | SQLite provider; 15 models; `db push` (no migrations dir) |
@@ -117,13 +117,17 @@ Verified against the lockfile (`bun pm ls`, 2026-10-07):
 | E2E tests | @playwright/test | 1.63.0 | Chromium; production standalone server on :3100 |
 | Runtime/PM | bun | ≥1.3 | Runs TS directly (seed, global-setup); `bun run` scripts |
 
-**Environment variables (3 — see `.env.example`):**
+**Environment variables (7 — see `.env.example`):**
 
 | Variable | Purpose | Default/dev |
 |---|---|---|
 | `DATABASE_URL` | SQLite location, schema-relative `file:` URL | `file:../db/custom.db` |
 | `NEXT_PUBLIC_SITE_URL` | Canonical origin for metadata/sitemap/robots | `http://localhost:3000` |
 | `AUTH_SECRET` | HMAC secret for the session cookie (REQUIRED in prod) | insecure dev constant |
+| `AUTH_REQUIRE_EMAIL_VERIFICATION` | Gate registration behind the 6-digit code (ADR-011) | `""` (OFF — no email provider wired) |
+| `STRIPE_SECRET_KEY` | Server-side Stripe SDK key (ADR-030) | `""` (demo checkout) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client Payment Element key | `""` |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signature verification (ADR-031) | `""` |
 
 **⚠ Environment shadowing:** Bun loads `.env` walking UP parent directories,
 and a `DATABASE_URL` already in the process environment (shell export, CI
@@ -186,7 +190,7 @@ Tailwind config file. The values were MEASURED on the live reference
 ### 4.2 The v3-parity pin system (the trap log — violations silently break parity)
 
 The reference compiles Tailwind v3 classes; this port runs v4. Same class
-strings, DIFFERENT engine → eight measured differences, all pinned in
+strings, DIFFERENT engine → eight @theme/pin-family differences below, all pinned in
 `globals.css`:
 
 1. **Colors** — theme values must be FULL `hsl(...)` literals; bare
@@ -246,7 +250,7 @@ app (routes) → components (ui/store/account/checkout) → lib (domains+actions
 - **Layer 0 Data:** `src/lib/db.ts` — the ONLY Prisma instantiation
   (globalThis HMR-safe singleton); sets `process.env.DATABASE_URL` via
   `src/lib/db-path.ts` at import time. Never import from a client file.
-- **Layer 1 Domains:** `src/lib/{auth,password,cart,wishlist,money,validation,rate-limit}.ts`
+- **Layer 1 Domains:** `src/lib/{auth,password,cart,wishlist,money,validation,rate-limit}.ts` + the accreted seams — `order-status`, `order-money-state`, `order-timeline`, `order-tracking`, `order-view-token`, `delivery-window`, `admin-orders`, `admin-payments`, `admin-products`, `stripe`, `stripe-config`, `stripe-payment`, `metadata`, `reset-token`, `cart-quantity`, `format`, `verification`, `utils` (27 non-test modules)
   — server modules, no React imports.
 - **Layer 2 Mutations:** `src/lib/actions/*.ts` — the ONLY write seam
   (`"use server"` + Zod + `ActionResult<T>`).
@@ -260,23 +264,23 @@ app (routes) → components (ui/store/account/checkout) → lib (domains+actions
 | Group | Layout | Contains |
 |---|---|---|
 | — (root) | `src/app/layout.tsx` — html/body/font/metadata ONLY | `not-found.tsx` (chrome-less platform 404), `api/*`, `sitemap.ts`, `robots.ts` |
-| `(storefront)` | chrome + StoreProvider hydration | home, `shop/`, `product/[slug]/`, `cart/` (server page owning "Cart | Lumina" + `cart-client.tsx` island), `checkout/` (+success), `wishlist/`, `account/`, `admin/` |
-| `(auth)` | `min-h-screen flex items-center justify-center bg-background px-4` | `login/`, `register/`, `forgot-password/`, `verify-email/` — standalone cards, no chrome. Each route = server `page.tsx` (owns `Metadata`; root template appends "\| Lumina") + a `*-form.tsx` client island; the tinted error BOX (`auth-error.tsx`) is shared by all four screens |
+| `(storefront)` | chrome + StoreProvider hydration | home, `shop/`, `product/[slug]/`, `cart/` (server page owning "Cart | Lumina" + `cart-client.tsx` island), `checkout/` (+success), `wishlist/`, `account/` (+ `orders/[id]` customer detail, sessions 34–35), `admin/` (dashboard, orders + `orders/[id]`, products, payments) |
+| `(auth)` | `min-h-screen flex items-center justify-center bg-background px-4` | `login/`, `register/`, `forgot-password/`, `verify-email/`, `reset-password/` — five standalone cards, no chrome. Each route = server `page.tsx` (owns `Metadata`; root template appends "\| Lumina") + a `*-form.tsx` client island; the tinted error BOX (`auth-error.tsx`) is shared by all five screens |
 
-Consequences: the auth routes are statically prerendered; unknown PRODUCT
+Consequences: register/forgot-password/reset-password are force-dynamic (per-request CSP nonces, ADR-022) and login/verify-email render dynamic via searchParams; unknown PRODUCT
 slugs render an in-chrome "Product not found" block (`product/[slug]/page.tsx`)
 while unknown ROUTES hit the chrome-less 404; the StoreProvider instance
 survives client navigation inside `(storefront)` — logout MUST call
 `setUser(null)` (§6).
 
-### 5.3 Component inventory (55 tsx in src; 26 `"use client"`)
+### 5.3 Component inventory (68 tsx in src; 34 `"use client"`)
 
 | Directory | Contents |
 |---|---|
-| `src/components/ui/` | shadcn-style primitives with the reference's exact class strings: button, badge, input, label, separator, select, sheet, tabs, radio-group, toast |
-| `src/components/store/` | announcement-bar, header (nav + cart badge + account icon), search-bar (typeahead combobox), mobile-nav (left Sheet w-72), cart-drawer (right Sheet, delta steppers), product-card (toast on add), buy-panel (toast on add), hero-carousel, category-showcase (feature bar as bordered cards), footer, star-rating, store-provider (cart/wishlist/user + toast queue), toast-viewport |
-| `src/components/account/` | account-tabs (4 tabs, useActionState forms; reference anatomy: User-icon avatar, highlighted default address card, Change Password/Notifications sections + Session superset), admin rows |
-| `src/components/checkout/` | checkout-flow (3-step wizard client island) |
+| `src/components/ui/` | shadcn-style primitives with the reference's exact class strings: button, badge, input, label, separator, select, sheet, tabs, radio-group, skeleton |
+| `src/components/store/` | announcement-bar, header (nav + cart badge + account icon), search-bar (typeahead combobox), mobile-nav (left Sheet w-72), cart-drawer (right Sheet, delta steppers), product-card (toast on add), buy-panel (toast on add), hero-carousel, category-card (feature bar as bordered cards), footer, star-rating, logo, newsletter-form, platform-404 (the shared v3-slate 404), shop-filters, store-provider (cart/wishlist/user + toast queue), toast-viewport — 17 members |
+| `src/components/account/` | account-tabs (4 tabs, useActionState forms; reference anatomy: User-icon avatar, highlighted default address card, Change Password/Notifications sections + Session superset) + the admin console family: admin-order-row, admin-order-filters, admin-product-row, admin-product-filters, admin-payment-filters, admin-tracking-form (session-36), refund-order-button (session-32) |
+| `src/components/checkout/` | checkout-flow (3-step wizard client island) + stripe-pay (the Payment Element island, ADR-030 — env-gated) |
 
 ### 5.4 Server/client decision tree
 
@@ -316,10 +320,12 @@ There are no custom hooks; one context covers all state:
   no enums).
 - **Seed** (`prisma/seed.ts`): idempotent natural-key upserts — 6 categories,
   12 products (the reference catalog transcribed verbatim: names, prices,
-  ratings, review counts, badges, descriptions), 3 demo orders pinned to the
+  ratings, review counts, badges, descriptions), 4 demo orders pinned to the
   reference account page (ORD-2026-001 $349.98 delivered · 002 $189.00 in
-  transit · 003 $524.97 delivered — 003's total is pinned; line items sum to
-  524.98), demo user + admin user, 3 hero slides, demo address.
+  transit + the UPS tracking fixture · 003 $524.97 delivered — 003's total is
+  pinned; line items sum to 524.98 · 004 $79.99 cancelled + refunded — the
+  session-33 money-state fixture), the seeded timeline `status_changed` events
+  (session-35), demo user + admin user, 3 hero slides, demo address.
 - **Catalog order is a parity contract (ADR-009):** `Product.sortOrder`
   mirrors the reference's array position 1:1 (headphones=1, watch=2, tee=3,
   speaker=4, planter=5, shoes=6, serum=7, blanket=8, sunglasses=9, mat=10,
@@ -497,8 +503,11 @@ There are no custom hooks; one context covers all state:
 bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
 bun run test          # 332 unit + integration tests pass
-bun run build         # compiles; 23 routes
+bun run build         # compiles; 26 routes
 bun run test:e2e      # 254 tests pass (253 spec + the setup login; requires the build)
+bun run test:watch    # vitest watch mode
+bun run db:generate   # prisma client only
+bun run db:migrate    # prisma migrate dev
 ```
 
 Then:
@@ -690,7 +699,7 @@ Then:
     script) AND on the response (browser enforcement). Per-request
     nonces require per-request rendering — any statically-prerendered
     page needs `export const dynamic = "force-dynamic"` or its scripts
-    ship un-nonced and CSP blocks them (the reason the two static auth
+    ship un-nonced and CSP blocks them (the reason the three static auth
     screens opted out). The brick risk everyone fears is real but
     testable: the full E2E suite is the hydration regression net — the
     register/login form-fill specs fail loudly on the first un-nonced
@@ -847,7 +856,7 @@ Then:
     not div children), and schema.org `offers.price` is DECIMAL USD
     (`price / 100`), never integer cents.
 
-33. **Synthetic `evaluate(() => el.click())` generates ZERO interaction
+32. **Synthetic `evaluate(() => el.click())` generates ZERO interaction
     entries (L32, session-21 INP round).** `interactionId` attaches only
     to input events dispatched through the browser input pipeline (CDP
     `Input.dispatchMouseEvent` / trusted keyboard events); Playwright
@@ -858,7 +867,7 @@ Then:
     before suspecting the observer — and any INP protocol must use
     trusted clicks exclusively.
 
-34. **The event-timing observer's default durationThreshold hides fast
+33. **The event-timing observer's default durationThreshold hides fast
     interactions (L33, session-21 INP round).** `observe({type: "event"})`
     defaults `durationThreshold` to 16ms — sub-16ms interactions NEVER
     surface as entries. The INP collector pins `durationThreshold: 0`
@@ -873,7 +882,7 @@ Then:
     wishlist.spec sorts AFTER performance.spec alphabetically, so an
     authed heart-toggle would break its count assertions.
 
-35. **`@stripe/stripe-js`'s DEFAULT entry eagerly injects js.stripe.com at
+34. **`@stripe/stripe-js`'s DEFAULT entry eagerly injects js.stripe.com at
     module scope (L34, session-22 Stripe round).** The default module runs
     `Promise.resolve().then(() => getStripePromise())` — importing
     `loadStripe` from `"@stripe/stripe-js"` fires a third-party request to
@@ -889,7 +898,7 @@ Then:
     false-green — reload under the listener). Pinned by
     `tests/e2e/stripe.spec.ts`.
 
-36. **The idempotency row must commit WITH the side effects (L35, session-23
+35. **The idempotency row must commit WITH the side effects (L35, session-23
     webhook hardening — the H4d/L9 lesson, transplanted from the reference
     skill).** The session-22 webhook committed its `StripeEvent` dedup row
     BEFORE the placement transaction and answered 200 on every failure —
@@ -907,7 +916,7 @@ Then:
     dedup row ABSENT, and the re-delivery must place the order
     (`tests/stripe-webhook.integration.test.ts`, the H4d recovery proof).
 
-37. **Reference CONTENT drifts invisibly to computed-style gates — pin the
+36. **Reference CONTENT drifts invisibly to computed-style gates — pin the
     content observables of parity surfaces (L36, session-26 reference-drift
     round).** The reference site silently regenerated its slide-3 hero image
     and re-pointed all three hero CTAs to plain /shop while THIRTEEN rounds
@@ -934,7 +943,7 @@ Then:
     cluster x=218 at 390) — M1/M2 mutation-proven (the stale-hash revert
     and the gap-2 revert each fail exactly one pin family).
 
-38. **An out-of-band pixel reading on a cold first-boot battery can be a
+37. **An out-of-band pixel reading on a cold first-boot battery can be a
     remote-media paint race — instrument the capture phase before
     diagnosing drift (L37, session-28 SWEEP-DIAG-1).** The round-28
     battery's FIRST sweep measured home 59.95% (471,434 px ≈ exactly the
@@ -957,7 +966,7 @@ Then:
     drift (run the playbook). Proof shape: the instrumented sweep's output
     line `home 0% (6 px) [hero ref=…(painted) clone=…(painted)]`.
 
-39. **A battery login helper that reads the landing pathname after a
+38. **A battery login helper that reads the landing pathname after a
     fixed wait breaks silently when the reference's redirect chain slows
     — wait for the URL to LEAVE the login page, not for network quiet
     (L38, session-29).** The round-29 battery's FIRST sweep read `ref
@@ -999,7 +1008,8 @@ Then:
 - **Don't** use `text-amber-400` star rows or 5-star displays — the reference
   renders one star + numeric rating.
 - **Don't** create REST mutation routes; server actions are the only seam
-  (3-endpoint route whitelist).
+  (4-endpoint route whitelist: health, search, newsletter, stripe webhook —
+  the webhook is a signature-verified notify handler, not a mutation surface).
 - **Don't** re-add the `@media (hover: hover)` gate on hover variants or
   remove `@custom-variant hover (&:hover);` from `globals.css` (trap 11) —
   the reference is a v3 app; hover effects must render in touch/hybrid
@@ -1328,7 +1338,7 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 
 | Path | What |
 |---|---|
-| `src/app/globals.css` | ALL design tokens + the 8 trap-log pins |
+| `src/app/globals.css` | ALL design tokens + the trap-log pins (14 entries — §4.2's first eight + AGENTS.md's traps 9–14: the grid-stretch, hero line-height, hover-gate, font-smoothing, font-file, and Stripe-/pure entries) |
 | `src/app/(storefront)/layout.tsx` | chrome + StoreProvider hydration |
 | `src/app/not-found.tsx` + `src/app/[...notFound]/page.tsx` | chrome-less platform 404 (slate, quoted path) + the catch-all that titles unknown routes from the humanized path |
 | `src/components/store/store-provider.tsx` | the client state seam |
@@ -1338,4 +1348,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session39.md` | the post-push audits this skill distills (latest: session-39) |
+| `docs/remediation-plan-session1.md` … `session40.md` | the post-push audits this skill distills (latest: session-40, the DOCS-ALIGN round) |

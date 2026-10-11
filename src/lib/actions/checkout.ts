@@ -6,7 +6,7 @@
  * The client-side 3-step wizard (shipping → payment → review) submits here.
  * Prices are re-derived from the DATABASE cart (never trusted from the
  * client); the cart is cleared in the same transaction; the order number is
- * `ORD-YYYY-NNNNNN` allocated under a serialized retry loop (SQLite has a
+ * `ORD-YYYY-NNN` (zero-padded 3) allocated under a serialized retry loop (SQLite has a
  * single writer, so count-then-increment is race-free within the tx).
  *
  * session-22 (PAY-STRIPE-1) — the Stripe path: the form may carry a

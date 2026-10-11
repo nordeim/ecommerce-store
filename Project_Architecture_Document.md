@@ -1,9 +1,9 @@
-# LUXE Store — Master Project Architecture Document (PAD) v1.39
+# LUXE Store — Master Project Architecture Document (PAD) v1.40
 
 **Classification:** Internal Engineering Reference
 **Status:** DEFINITIVE, PRODUCTION-LOCKED BLUEPRINT
 **Companion Document:** [README.md](README.md) · [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) · [docs/Tailwind-V4-Validation-Report.md](docs/Tailwind-V4-Validation-Report.md)
-**Last Updated:** 2026-10-11
+**Last Updated:** 2026-10-11 (session-40)
 **Audience:** Senior Engineers, Tech Leads, DevOps, and Onboarding Engineers
 **Rule:** Every architectural decision in this document traces to a specific rationale. Nothing is here "because it's popular."
 
@@ -51,6 +51,7 @@
 | 1.37 | 2026-10-11 | Review agent (Super Z) | [REM] | Session-37 remediation: the customer delivery estimate round (DELIVERY-WINDOW-1, ADR-045 — session-71's first named candidate, "no schema change — composed from the status + placedAt"; the rate-limiter store re-deferred, the Stripe-dashboard deep-link re-deferred on the configured-mode gate): the order-surfaces arc answered "where is it" (ADR-044's tracking link) but never stated the PROMISE — "when will it arrive?" had no in-app answer: the confirmation ended at "Order Confirmed", the detail's header ended at the status pill (verified at audit: zero estimate code in the codebase). (a) The pure seam src/lib/delivery-window.ts — deliveryWindowView(status, placedAt), a discriminated union (the calm branch carries NO fields): the standard-shipping window placedAt + 3 to + 7 calendar days (DELIVERY_WINDOW_MIN_DAYS/MAX_DAYS exported + unit-pinned, the FLAT_SHIPPING_CENTS precedent — the quoted bounds ARE the contract); visible ONLY for the promise states (processing, in_transit); delivered → calm (delivered IS the answer), cancelled → calm (no promise — the alert-fatigue rule), unknown → calm (the parse-family fallthrough). The date math is UTC-deterministic (timeZone: "UTC" in every format call — the formatOrderDate lesson: the worker TZ is not a contract), so the unit layer pins exact strings AND the E2E pins the seeded fixture's window exactly; the format is the professional compressed window (same-month "Mar 18 – 22, 2026", cross-month "Mar 31 – Apr 4, 2026", cross-year "Dec 31, 2026 – Jan 4, 2027"). (b) The customer detail surface — the estimate line UNDER the order number/status row (the Amazon pattern; the header row moves inside a mb-8 wrapper so the calm state renders byte-identically to the pre-round layout). (c) The confirmation surface — the estimate joins the muted line stack as the WHEN before the money line's HOW MUCH; the mb rhythm composes off which lines render (the session-33 refunded-confirmation rendering preserved byte-exactly); renders for the owner AND the guest token view. The admin console is untouched (the estimate is a customer promise, not operator data). Zero schema change, no fixtures, no env plumbing — the lightest round of the arc. +8 unit + 2 E2E (575 total: 321 + 254 ×2 consecutive runs); triple-mutation-proven (M1 the seam's MAX bound mutated 7→5 → unit ×5 AND the E2E exact pin, the artifact rebuilt for the E2E proof; M2 the detail's calm gate broken → the E2E calm pins with the seam's unit pins green — the consumer is the defect; M3 the confirmation's line dropped → the checkout E2E while both other layers stay green — the second consumer is the defect); the 37th mobile-nav token-exact verification (re-run post-change); sweep at baseline; watches + census clean; VLM 5/5 (two description corrections — the footer's public contact email is expected chrome; the confirmation's window moved with the UTC-midnight rollover between probe and capture, the math verified correct) — see docs/remediation-plan-session37.md |
 | 1.38 | 2026-10-11 | Review agent (Super Z) | [REM] | Session-38 remediation: the business-day delivery-window round (DELIVERY-WINDOW-2, ADR-046 — session-73's second named candidate, "weekend skipping — the current quote is the honest calendar-day form"; the rate-limiter store re-deferred; the per-order shipping-method surface re-evaluated and DEFERRED on NEW evidence: the reference-checkout probe verified the reference's checkout step 1 carries NO shipping-method selector — address fields only — so a visible selector would change the resting visual of a checkout parity surface): ADR-045's window counted CALENDAR days — on the seeded fixture itself the amateur form was visible (ORD-2026-002, placed Sunday 2026-03-15, quoted "Mar 18 – 22, 2026" — the max bound ON A SUNDAY, a day the standard carrier tier does not deliver). The refinement is contained to the seam (src/lib/delivery-window.ts — the round's ONLY production change; both surfaces call deliveryWindowView unchanged): addBusinessDays steps forward in fixed 24h UTC increments counting Mon–Fri days (isBusinessDay — UTC weekday 1–5; UTC has no DST so the weekday a step lands on is exact); from = +3 business days, to = +7; holidays deliberately not modeled (jurisdiction-specific — the standard store quote is Mon–Fri). The constants renamed for honesty: DELIVERY_WINDOW_MIN_BUSINESS_DAYS = 3 / DELIVERY_WINDOW_MAX_BUSINESS_DAYS = 7 (the tdd skill's REFACTOR step: green, behavior-neutral). The unit layer adds the never-a-weekend-bound PROPERTY pin (a 14-placement-day sweep parsing the seam's three text formats back into UTC dates, asserting both bounds' weekday ∈ Mon–Fri). Verified windows: ORD-2026-002 (Sunday-placed) → "Mar 18 – 24, 2026"; the Saturday instant → "Apr 1 – 7, 2026" (the format branch moves to same-month); the Monday cross-year instant → "Dec 31, 2026 – Jan 6, 2027"; a Friday placement → "Mar 25 – 31, 2026". The seeded-story coherence holds in the honest unit (ORD-2026-001: placed Sat 03-28, delivered Thu 04-02 = 4 business days). Zero parity risk — doubly superset-only (verified live: the reference carries NO estimate on ANY surface). +2 net unit (8 → 10 in the seam file; 577 total: 323 + 254 ×2 consecutive runs); the E2E exact pin updated to the refined window; triple-mutation-proven (M1 the regression-to-calendar mutation — the weekend check dropped → unit ×6 AND the E2E exact pin at both layers; M2 the MAX bound 7→5 → unit ×6 AND the E2E; M3 the MIN bound 3→2 → unit ×6 AND the E2E); the 38th mobile-nav token-exact verification (re-run post-change); sweep at baseline; watches + census clean; VLM 5/5 (the close-up re-captured at 2x — the 1x crop's 14px text was below the VLM's reliable OCR threshold); PAD §8.1/§8.4 stale-count fixes (four rounds of table drift) — see docs/remediation-plan-session38.md |
 | 1.39 | 2026-10-11 | Review agent (Super Z) | [REM] | Session-39 remediation: the carrier-holiday delivery-window round (DELIVERY-WINDOW-3, ADR-047 — session-75's named candidate "a carrier-holiday calendar for the window (jurisdiction-aware — needs a store-config decision)"; the decision MADE: the store is US-denominated (USD, the $9.99 flat US tier, the State/ZIP form) so the calendar is the six-date standard US carrier set — New Year's Day, Memorial Day, Independence Day, Labor Day, Thanksgiving, Christmas Day, the UPS/FedEx ground-tier no-delivery set, NOT the USPS retail-closure set — under an EXACT-DATE policy (a weekend-falling fixed holiday is already skipped by the weekday rule; no observed-day shift — pinned by the Jul-4 policy pin, green through RED and GREEN); the rate-limiter store re-deferred, the per-order shipping-method surface re-deferred on the session-38 parity ruling): the session-38 window counted Mon–Fri but was holiday-blind — a Fri 2026-12-18 placement's +7 bound IS Christmas Day and a Fri 2026-11-20 placement's +7 bound IS Thanksgiving (the independent full-year oracle counts 10 such placements of 2026). The refinement is contained to the seam (src/lib/delivery-window.ts — the round's ONLY production change): the exported carrierHolidaysForYear(year) (the six-date table, UTC calendar arithmetic, pinned by HAND-COMPUTED 2026/2027 oracle tables — never derived from the seam's own calendar), isDeliverableDay = isBusinessDay && !isCarrierHoliday (the honest addDeliverableDays rename), the per-step year resolution (a window crossing Dec 31 picks up the next year's table — the double-holiday pin: placed Tue 2026-12-22 → "Dec 28, 2026 – Jan 4, 2027", crossing BOTH Christmas and New Year's). Zero E2E pin churn (the seeded fixtures are March-placed, holiday-free — the ORD-2026-002 exact pin holds; the round's documented known limitation: the E2E layer has no holiday-exercising pin — re-dating the fixtures would churn every spec; live orders place at NOW). +9 unit (10 → 19 in the seam file; 586 total: 332 + 254 ×2 consecutive runs); triple-mutation-proven at the unit layer (M1 the holiday check dropped → 7 failures; M2 Thanksgiving 4th→3rd Thursday → 4; M3 Christmas Dec 25→26 → 5); the 39th mobile-nav token-exact verification (re-run post-change); sweep at baseline; watches + census clean; VLM 5/5; the §8.1 six stale per-file E2E rows + §9.2 env table + §11 reset row + §2 topology + §6.4 PSP-note stale-spot fixes — see docs/remediation-plan-session39.md |
+| 1.40 | 2026-10-11 | Review agent (Super Z) | [DOC] | Session-40 (Round 40) — DOCS-ALIGN-1: the structural docs rewrites — §3.2's annotated tree rewritten (all 128 src files: the actions/ seam, the order-*/admin-*/stripe lib families, src/proxy.ts, the 4-endpoint route whitelist, the 19 e2e specs + the integration test), §4.1's ER diagram extended to 15/15 models (+ PasswordResetToken/StripeEvent/NewsletterSubscriber, the User→PasswordResetToken relation, and the payment/fulfillment column notes), §12 re-counted (12/14 rows had drifted ~49% total) + the delivery-window row; the ADR-046 DUPLICATE repaired (the session-39 ordering fix had left the original copy — 48 headers for 47 ADRs); ADR-004's session-22 addendum; §6.1 the two missing limiters + §6.2 the three missing security utilities; §1.2's ghost z-ai-web-dev-sdk row dropped; ADR-001's path fixed; the AGENTS/CLAUDE/README/SKILL stale-spot ledger (~36 spots) + 4 code-comment fixes; scripts/verify-docs-align-r40.mjs the standing drift watch — see docs/remediation-plan-session40.md |
 
 ## Table of Contents
 
@@ -95,7 +96,6 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 | Unit tests | Vitest | ^5 | Fast, node-env, co-located; mirrors tsconfig aliases |
 | E2E tests | Playwright (Chromium) | ^1.63 | Drives the production standalone build; computed-style assertions are the parity gate |
 | Package manager | Bun | ≥1.3 | Executes TS seeds/setup scripts directly; fast installs |
-| AI SDK | z-ai-web-dev-sdk | ^0.0.18 | Available for future AI features; not on any request path today |
 
 ### 1.3 Architecture Decision Records
 
@@ -126,6 +126,8 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 - **Rationale:** Actions give progressive enhancement + typed callsites without a REST surface to version. The whitelist keeps the attack surface auditable (three endpoints, each rate-limited or trivial).
 - **Consequences:** (+) One validation dialect, one result envelope. (−) No external API for mutations by design — an integration API would be a new ADR.
 - **Alternatives Rejected:** REST mutation routes (double validation layer, more surface); tRPC (another dependency for no gain inside one app).
+
+*Session-22 addendum (ADR-030):* the whitelist gained its fourth member — `POST /api/stripe/webhook`, the signature-verified payment backstop. The whitelist PRINCIPLE stands (no REST for UI mutations; the webhook is a notify handler, not a mutation surface for the app's own clients).
 
 **ADR-005: Tailwind v4 with pinned v3 token geometry (the trap-log system)**
 - **Context:** The reference app compiles Tailwind v3-era classes; the port must render byte-identical computed styles on v4.
@@ -422,19 +424,15 @@ The product is a visual clone of a reference storefront (`fuzzy-lumina-style-hub
 
 ---
 
-**ADR-046: The business-day delivery window — weekend skipping in the standard-shipping quote (round 38, DELIVERY-WINDOW-2)**
-
-- **Context:** ADR-045's window counted calendar days (placedAt + 3 to + 7). On the seeded fixture itself the amateur form was visible: ORD-2026-002 (placed Sunday 2026-03-15) quoted "Mar 18 – 22, 2026" — the max bound IS a Sunday, a day the standard carrier tier does not deliver. Every high-end store quotes business days (the Amazon/Shopify form) because the carrier SLA is Mon–Fri; the calendar form both under-promises (a Sunday max bound the carrier will beat) and over-promises (a weekend-blind quote can straddle a Saturday the carrier skips). Session-73 named the refinement the second audit-derived candidate; ADR-045's own (−) documented "no business-day math" as an open limitation.
-- **Decision:** The refinement is contained to the seam — `src/lib/delivery-window.ts` is the round's ONLY production change; both consumer surfaces (`/account/orders/[id]`, `/checkout/success`) call `deliveryWindowView(status, placedAt)` unchanged (zero consumer churn, zero schema change, zero fixtures). The math: `addBusinessDays(placedAt, n)` steps forward in fixed 24h UTC increments counting Mon–Fri days (`isBusinessDay` — UTC weekday 1–5); `from = addBusinessDays(placedAt, 3)`, `to = addBusinessDays(placedAt, 7)`. Holidays deliberately NOT modeled (jurisdiction-specific; the standard store quote is Mon–Fri). The constants are renamed for honesty: `DELIVERY_WINDOW_MIN_BUSINESS_DAYS = 3` / `DELIVERY_WINDOW_MAX_BUSINESS_DAYS = 7` — the quoted bounds ARE business days now, and the old `*_DAYS` names would mislead the next reader (the rename shipped as the tdd skill's REFACTOR step: green, behavior-neutral, the full unit layer re-run). The unit layer gains the never-a-weekend-bound PROPERTY pin: a 14-placement-day sweep (Mar 15–28, 2026 — both weekend days and every weekday) parses the seam's three pinned text formats back into UTC dates and asserts both bounds' weekday ∈ Mon–Fri — the guard against off-by-one regressions across ALL placements, not just the chosen instants.
-- **Rationale:** The business-day form is what the carrier actually does — quoting a Sunday arrival is the amateur form, and the seeded fixture rendered it on every load of the round-37 surface. The UTC-determinism discipline extends naturally to the stepper: fixed 24h increments in a no-DST timezone make the weekday each step lands on exact on any runner TZ, so the refined window stays unit-pinnable to exact strings and E2E-pinnable on the seeded fixture. The property pin (parse the text back) keeps the test at the PUBLIC seam — no internals exported for testability. The rename is the FLAT_SHIPPING_CENTS precedent applied to a name that would otherwise lie.
-- **Consequences:** (+) 577-test gate (323 Vitest + 254 E2E, two consecutive full runs on the final code); triple-mutation-proven (M1 the regression-to-calendar mutation — the weekend check dropped from the stepper → unit ×6 AND the E2E exact pin, proving the new pins would catch a regression to the round-37 form at both layers; M2 the MAX bound mutated 7→5 → unit ×6 AND the E2E "Mar 18 – 20"; M3 the MIN bound mutated 3→2 → unit ×6 AND the E2E "Mar 17 – 24"); the 38th mobile-nav token-exact verification (re-run post-change); sweep at baseline; watches + census clean; VLM 5/5. (−) Business days are Mon–Fri only — carrier holidays are not modeled (the honest generic quote; a jurisdiction-aware calendar would need per-store configuration); the window remains shipping-method-blind (a per-order method surface stays deferred on the parity ruling — the reference checkout carries no method selector); the rate-limiter store migration and the Stripe-dashboard deep-link remain deferred (unchanged).
-
 **ADR-045: The customer-facing delivery estimate — the standard-shipping window quoted from the status + the placed date ("when will it arrive?", round 37, DELIVERY-WINDOW-1)**
 
 - **Context:** The customer order-surfaces arc (ADR-041 the money mirror, ADR-042 the detail read surface, ADR-043 the timeline, ADR-044 the tracking link) rendered the order's money state, its resting state, its story, and its actionable "where is it" — but every rendered fact is backward-looking. The natural question at the moment of purchase and while the order is in flight — "when will it arrive?" — had no in-app answer: the confirmation ended at "Order Confirmed", the detail's header ended at the status pill, and the customer was left to do day math on the placed date to form an expectation (verified at audit: zero estimate code in the codebase). Every high-end store states the promise explicitly (the Amazon/Shopify pattern: "Estimated delivery: Mar 18 – 22"); session-71 named the surface the first audit-derived candidate, explicitly "no schema change — composed from the status + placedAt."
 - **Decision:** One seam, two surfaces, zero schema change. (1) **The pure seam** — `src/lib/delivery-window.ts`: `deliveryWindowView(status, placedAt)` returns a discriminated union (the order-tracking precedent — the calm branch carries NO fields): the standard-shipping window `placedAt + 3` to `+ 7` calendar days (`DELIVERY_WINDOW_MIN_DAYS = 3` / `DELIVERY_WINDOW_MAX_DAYS = 7`, exported + unit-pinned — the FLAT_SHIPPING_CENTS precedent: the quoted bounds ARE the contract; the seeded fulfillment stories sit inside it — ORD-2026-001 placed 03-28, delivered 04-02 = 5 days). Visible ONLY for the promise states (`processing` — just placed / being prepared, and `in_transit` — the promise still stands); `delivered` → calm (delivered IS the answer — a past window is noise), `cancelled` → calm (no promise — the alert-fatigue rule), unknown → calm (the parse-family fallthrough). The date math is **UTC-deterministic** (`timeZone: "UTC"` in every format call — a fixed instant renders the same window on any runner TZ; the formatOrderDate lesson: the worker TZ is not a contract), so the unit layer pins exact strings AND the E2E pins the seeded fixture's window exactly. The format is the professional compressed window: same-month "Mar 18 – 22, 2026", cross-month "Mar 31 – Apr 4, 2026", cross-year "Dec 31, 2026 – Jan 4, 2027" (both years when they differ — the honest form). (2) **The customer detail surface** — the estimate line renders UNDER the order number/status row (the Amazon pattern: the estimate is the first thing the customer reads after "where's my order") in `text-sm text-muted-foreground mt-2`; the header row moves inside a `mb-8` wrapper so the CALM state renders byte-identically to the pre-round layout (the zero-visual-delta calm pattern). (3) **The confirmation surface** — the estimate joins the muted line stack as the WHEN before the money line's HOW MUCH (the reading order: thank-you → email → estimate → money → items); the mb rhythm composes off which lines render (the last visible line carries mb-8; the session-33 refunded-confirmation rendering preserved byte-exactly — a cancelled revisit carries no estimate); renders for the owner AND the guest token view (the estimate is customer-safe info). The admin console is untouched — the estimate is a customer promise, not operator data (the operator sees the status and sets the tracking; quoting the customer's window back to them is console noise).
 - **Rationale:** The bounds-as-exported-constants decision follows FLAT_SHIPPING_CENTS: the quote the storefront makes IS the contract, and pinning it in the unit layer makes a silent change a test failure. The UTC-deterministic math is the formatOrderDate lesson applied forward: the seam's output must be pinnable to exact strings (unit) and to the seeded fixture (E2E) without the runner's TZ being a party to either. The calm-state discipline (delivered/cancelled render nothing) is the DASH-ALERT-1 alert-fatigue rule: only the states that OWE the customer a promise carry pixels — a delivered order re-stating a past window and a cancelled order promising anything are both noise. The header placement (not the Shipping card) follows the professional pattern: the estimate is the customer's first question, and the card placement would bury the answer under the address. The confirmation placement BEFORE the money line is the reading order of the moment (when > how much); the composed mb rhythm keeps every pre-existing rendering byte-exact.
 - **Consequences:** (+) 575-test gate (321 Vitest + 254 E2E, two consecutive full runs on the final code); triple-mutation-proven (M1 the seam's MAX bound mutated 7→5 → unit ×5 AND the E2E exact pin — the artifact rebuilt for the E2E proof, the session-36 lesson; M2 the detail's calm gate broken → the E2E calm pins with the seam's unit pins green — the consumer is the defect; M3 the confirmation's line dropped → the checkout E2E while both other layers stay green — the second consumer is the defect); the 37th mobile-nav token-exact verification (re-run post-change); sweep at baseline; watches + census clean; VLM 5/5. (−) The window is a flat 3–7 day quote — no per-order shipping-method awareness (the store ships one method; a second method would need the order to carry the choice); business-day math (weekend skipping) is deliberately absent (the honest simple quote — the calendar-day window matches the seeded fulfillment stories); the rate-limiter store migration and the Stripe-dashboard deep-link remain deferred (unchanged).
+
+---
+
 **ADR-046: The business-day delivery window — weekend skipping in the standard-shipping quote (round 38, DELIVERY-WINDOW-2)**
 
 - **Context:** ADR-045's window counted calendar days (placedAt + 3 to + 7). On the seeded fixture itself the amateur form was visible: ORD-2026-002 (placed Sunday 2026-03-15) quoted "Mar 18 – 22, 2026" — the max bound IS a Sunday, a day the standard carrier tier does not deliver. Every high-end store quotes business days (the Amazon/Shopify form) because the carrier SLA is Mon–Fri; the calendar form both under-promises (a Sunday max bound the carrier will beat) and over-promises (a weekend-blind quote can straddle a Saturday the carrier skips). Session-73 named the refinement the second audit-derived candidate; ADR-045's own (−) documented "no business-day math" as an open limitation.
@@ -503,29 +501,50 @@ ecommerce-store/
 ├── prisma/
 │   ├── schema.prisma            ← 15 models; integer cents; String-"enums"
 │   ├── seed.ts                  ← idempotent natural-key upserts; reference-parity fixtures
-│   └── e2e-reset.ts             ← clears carts/wishlists/spec-users before E2E runs
+│   ├── e2e-reset.ts             ← clears carts/wishlists/spec-users before E2E runs
+│   └── dev-cleanup.ts           ← post-live-audit hygiene (stray orders/events, targeted deletes)
 ├── src/
+│   ├── proxy.ts                 ← the ONLY middleware file (Next 16 proxy convention): CSP nonce minting (ADR-022)
 │   ├── app/
 │   │   ├── layout.tsx           ← MINIMAL shell: fonts + metadata only (ADR-008)
 │   │   ├── globals.css          ← Tailwind v4 @theme + ALL v3-parity pins (ADR-005)
 │   │   ├── not-found.tsx        ← chrome-less platform 404 (v3 slate, quoted path)
+│   │   ├── [...notFound]/page.tsx ← the unknown-ROUTE catch-all (title from the last lettered segment, session-8)
 │   │   ├── (storefront)/        ← chrome layout + shopper pages (ADR-008)
 │   │   │   ├── page.tsx         ← home: hero carousel + 4 sections (RSC)
 │   │   │   ├── shop/page.tsx    ← PLP: filters from searchParams (RSC)
 │   │   │   ├── product/[slug]/  ← PDP + generateMetadata + in-chrome not-found block
-│   │   │   ├── cart/page.tsx    ← REAL cart (reference hardcodes empty — superset fix)
-│   │   │   ├── checkout/        ← wizard page + success confirmation
-│   │   │   ├── account/         ← dashboard (auth-gated, tabs)
+│   │   │   ├── cart/            ← REAL cart page (reference hardcodes empty — superset fix) + cart-client island
+│   │   │   ├── checkout/        ← wizard page + success/ confirmation (ADR-039 token-gated)
+│   │   │   ├── account/
+│   │   │   │   ├── page.tsx     ← dashboard (auth-gated, tabs)
+│   │   │   │   └── orders/[id]/page.tsx ← customer order detail (ADR-042: read surface + timeline + estimate)
 │   │   │   ├── wishlist/        ← hearts page
-│   │   │   └── admin/           ← role-gated console: dashboard + orders + orders/[id] detail + products (superset)
-│   │   ├── (auth)/              ← STANDALONE login/register/forgot-password/verify-email (ADR-008/010/011)
-│   │   ├── api/{health,search,newsletter}/route.ts   ← the 3-endpoint whitelist
-│   │   └── sitemap.ts · robots.ts
+│   │   │   └── admin/           ← role-gated console (superset): dashboard + orders + orders/[id]
+│   │   │       │                 detail (tracking form + refund action) + products + payments (ADR-032)
+│   │   ├── (auth)/              ← STANDALONE chrome-less group (ADR-008/010/011/028):
+│   │   │   ├── layout.tsx       ←   the shared minimal auth shell
+│   │   │   ├── auth-error.tsx   ←   the shared tinted error box
+│   │   │   ├── login/ · register/ · forgot-password/
+│   │   │   ├── verify-email/    ←   the 6-digit gate (ADR-011, env-gated OFF)
+│   │   │   └── reset-password/  ←   the fifth member (ADR-028: token landing, two states)
+│   │   ├── api/
+│   │   │   ├── health/route.ts  ← the ops heartbeat (db connectivity probe)
+│   │   │   ├── search/route.ts  ← typeahead (60/min/IP)
+│   │   │   ├── newsletter/route.ts ← idempotent upsert (10/10min/IP)
+│   │   │   └── stripe/webhook/route.ts ← signature-verified placement backstop (ADR-030/031 — the 4th endpoint)
+│   │   ├── sitemap.ts           ← 17 URLs (5 static + 12 products)
+│   │   └── robots.ts            ← private-family disallows + sitemap link
 │   ├── components/
-│   │   ├── ui/                  ← shadcn-style primitives, reference class strings
-│   │   ├── store/               ← storefront chrome + islands + StoreProvider
-│   │   ├── account/             ← account-tabs + admin rows (client)
-│   │   └── checkout/            ← 3-step wizard (client)
+│   │   ├── ui/                  ← shadcn-style primitives (badge/button/input/label/radio-group/
+│   │   │                          select/separator/sheet/skeleton/tabs — reference class strings)
+│   │   ├── store/               ← storefront chrome + islands + StoreProvider (announcement-bar,
+│   │   │                          buy-panel, cart-drawer, category-card, footer, header, hero-carousel,
+│   │   │                          logo, mobile-nav, newsletter-form, platform-404, product-card,
+│   │   │                          search-bar, shop-filters, star-rating, store-provider, toast-viewport)
+│   │   ├── account/             ← account-tabs + the admin console family (order/product/payment
+│   │   │                          filters + rows, admin-tracking-form, refund-order-button)
+│   │   └── checkout/            ← checkout-flow (3-step wizard) + stripe-pay (Payment Element island, ADR-030)
 │   └── lib/
 │       ├── db.ts · db-path.ts   ← client singleton + URL contract (test-pinned)
 │       ├── auth.ts              ← sessions, getCurrentUser, isAdmin
@@ -537,12 +556,39 @@ ecommerce-store/
 │       ├── verification.ts      ← email-verification domain: budget, TTL, gating (ADR-011)
 │       ├── validation.ts        ← every Zod schema
 │       ├── rate-limit.ts        ← in-memory fixed windows
-│       └── *.test.ts            ← co-located unit layer
+│       ├── reset-token.ts       ← sha256-indexed single-use password-reset tokens (ADR-028)
+│       ├── metadata.ts          ← the pageMetadata() OG/Twitter/PWA builder (ADR-017)
+│       ├── order-status.ts      ← status vocabulary + transitions (ADR-041)
+│       ├── order-money-state.ts ← customer-safe money-state mirror (ADR-041)
+│       ├── order-timeline.ts    ← operator→customer event vocabulary (ADR-043)
+│       ├── order-tracking.ts    ← carrier map + tracking URL composition (ADR-044)
+│       ├── order-view-token.ts  ← HMAC capability tokens for guest order views (ADR-039)
+│       ├── delivery-window.ts   ← the carrier-holiday delivery estimate seam (ADR-045/046/047)
+│       ├── admin-orders.ts · admin-products.ts ← console read seams (ADR-021/026)
+│       ├── admin-payments.ts    ← payment-family vocabulary + refund eligibility (ADR-032/040)
+│       ├── stripe.ts            ← the server-side SDK client (keyed, lazy)
+│       ├── stripe-config.ts     ← the client-safe config truth table (L16/R8-1)
+│       ├── stripe-payment.ts    ← intent reflection + placement classification seams (ADR-030/031)
+│       ├── utils.ts             ← the cn() class merge
+│       ├── actions/             ← ALL mutations (the ActionResult seam):
+│       │   ├── auth.ts          ←   login/register/logout + verification + reset request/confirm
+│       │   ├── account.ts       ←   profile/address mutations
+│       │   ├── cart.ts          ←   add/update/merge/remove
+│       │   ├── checkout.ts      ←   the transactional placement (ADR-007)
+│       │   ├── admin.ts         ←   setStock/status/tracking/refund (role-gated)
+│       │   └── stripe.ts        ←   createPaymentIntent (ADR-030)
+│       └── *.test.ts            ← co-located unit layer (19 files)
 ├── tests/
-│   ├── db-path.test.ts
-│   └── e2e/                     ← 12 specs + auth.setup + global-setup
-├── docs/                        ← trap log, deployment, ssh push runbook
-└── AGENTS.md · CLAUDE.md · README.md · Project_Architecture_Document.md
+│   ├── db-path.test.ts          ← the URL-resolution contract
+│   ├── stripe-webhook.integration.test.ts ← 18 integration tests (real handler, HMAC-signed)
+│   └── e2e/                     ← 19 specs + auth.setup + global-setup + helpers
+│                                  (smoke, storefront-parity, catalog-parity, mobile-navigation, cart,
+│                                   guest-cart, checkout, guest-checkout, stock, wishlist, account,
+│                                   admin, auth, verify-email, search, seo, stripe, accessibility,
+│                                   performance)
+├── docs/                        ← 40 remediation plans + session logs + the ssh push runbook + screenshots
+├── scripts/                     ← the per-round battery + verification scripts (sweep/census/watches)
+└── AGENTS.md · CLAUDE.md · README.md · Project_Architecture_Document.md · ecommerce-store_SKILL.md
 ```
 
 ### 3.3 Critical Code Patterns
@@ -585,6 +631,7 @@ if (prevUrlSearch !== activeSearch) {
 ```mermaid
 erDiagram
     User ||--o{ Session : "has"
+    User ||--o{ PasswordResetToken : "resets via"
     User ||--o{ Address : "saves"
     User ||--o| Cart : "owns"
     User ||--o| Wishlist : "owns"
@@ -597,9 +644,13 @@ erDiagram
     Wishlist ||--o{ WishlistItem : "holds"
     Order ||--o{ OrderItem : "lines"
     Order ||--o{ OrderEvent : "timeline"
+    Order ||--o| StripeEvent : "payment reflection"
+    NewsletterSubscriber {
+        string email
+    }
 ```
 
-**Model notes:** `Product.price`/`compareAtPrice` integer cents (compare-at drives the `-N%` badge); `Product.features` is a JSON-encoded `string[]` (SQLite has no scalar lists); `Order.shippingAddress` is a JSON snapshot (addresses are editable post-order without rewriting history); `OrderItem` carries `nameSnapshot`/`imageSnapshot`/`unitPrice` (cart-independent history); `Cart.userId` and `Wishlist.userId` are `@unique` (at most one per user).
+**Model notes:** `Product.price`/`compareAtPrice` integer cents (compare-at drives the `-N%` badge); `Product.features` is a JSON-encoded `string[]` (SQLite has no scalar lists); `Order.shippingAddress` is a JSON snapshot (addresses are editable post-order without rewriting history); `OrderItem` carries `nameSnapshot`/`imageSnapshot`/`unitPrice` (cart-independent history); `Cart.userId` and `Wishlist.userId` are `@unique` (at most one per user). The payment/fulfillment columns accreted over sessions 22–36: `Order.stripePaymentIntentId` (UNIQUE — the placement idempotency anchor, ADR-030) + `Order.paymentStatus` (`paid`/`refunded`, webhook-written, ADR-040) + `Order.carrier`/`Order.trackingNumber` (ADR-044); `StripeEvent` carries the dedup key (`stripeEventId` UNIQUE), the family `type`, the reflection columns (`amount`, `failureReason`), and the `receivedAt` window; `PasswordResetToken` stores sha256-hashed single-use tokens with a 30-minute TTL (ADR-028); `NewsletterSubscriber` is the idempotent upsert target (natural key: email).
 
 ### 4.2 Data Models (invariants)
 
@@ -668,7 +719,7 @@ Hover image zoom 500ms; slide-up Add-to-Cart 300ms; Sheet slide 500ms open / 300
 | SQL injection impossible | Prisma parameterized queries only; no `$queryRaw` with user input |
 | Passwords never stored/Logged | scrypt hashes only (`password.ts`); no secret ever appears in logs (actions log ids/status, not payloads) |
 | Sessions revocable + integrity | DB `Session` rows + HMAC-signed cookie (`auth.ts`); logout deletes the row |
-| Rate limiting | Login 10/15min/IP+email; password-reset 5/15min/IP+email (anti-enumeration, ADR-010); checkout 10/10min; newsletter 10/10min/IP; search 60/min/IP (`rate-limit.ts`; in-memory — single-instance scope documented) |
+| Rate limiting | Login 10/15min/IP+email; verify-resend 3/10min/IP+email (ADR-011); password-reset 5/15min/IP+email (anti-enumeration, ADR-010); checkout 10/10min/user+IP; stripe-intent 10/10min/user+IP (ADR-030); newsletter 10/10min/IP; search 60/min/IP (`rate-limit.ts`; in-memory — single-instance scope documented) |
 | XSS | React escaping only; no `dangerouslySetInnerHTML` anywhere in the codebase |
 | Admin surface | `getCurrentUser()` + `isAdmin()` re-check INSIDE every admin action (never trust the UI gate); pages additionally `redirect()` |
 | Object ownership | Cart/wishlist/address mutations verify row ownership before writing (`account.ts`, `cart.ts`) |
@@ -677,7 +728,7 @@ Hover image zoom 500ms; slide-up Add-to-Cart 300ms; Sheet slide 500ms open / 300
 
 ### 6.2 Security Utilities Inventory
 
-`src/lib/password.ts` (scrypt hash/verify, timing-safe compare) · `src/lib/auth.ts` (session create/resolve/destroy, HMAC, role check) · `src/lib/rate-limit.ts` (fixed windows + client-IP extraction from proxy headers) · `src/lib/validation.ts` (all input schemas).
+`src/lib/password.ts` (scrypt hash/verify, timing-safe compare) · `src/lib/auth.ts` (session create/resolve/destroy, HMAC, role check) · `src/lib/rate-limit.ts` (fixed windows + client-IP extraction from proxy headers) · `src/lib/validation.ts` (all input schemas) · `src/lib/reset-token.ts` (sha256-indexed single-use reset tokens, ADR-028) · `src/lib/order-view-token.ts` (HMAC capability tokens for guest order views, ADR-039) · `src/lib/stripe.ts` + `src/lib/stripe-payment.ts` (the SDK client + webhook signature verification and intent reflection, ADR-030/031).
 
 ### 6.3 AuthN / AuthZ Model
 
@@ -877,20 +928,23 @@ See the table in [AGENTS.md](AGENTS.md) (single source: dev, db, lint, typecheck
 
 | File | Lines | Purpose |
 |---|---|---|
-| `src/app/globals.css` | ~110 | Tailwind v4 `@theme` + every v3-parity pin (ADR-005) — load-bearing |
+| `src/app/globals.css` | ~175 | Tailwind v4 `@theme` + every v3-parity pin (ADR-005) — load-bearing |
 | `src/lib/db-path.ts` | ~107 | Schema-relative SQLite URL contract (test-pinned) |
-| `src/lib/cart.ts` | ~230 | Cart resolution, guest/user merge, cookie-token mutations, DTO + totals |
-| `src/lib/actions/checkout.ts` | ~140 | Transactional order placement (ADR-007) |
-| `src/lib/auth.ts` | ~100 | Sessions, HMAC cookie, role checks (ADR-006) |
-| `src/components/store/store-provider.tsx` | ~200 | The single client commerce-state seam (cart/wishlist/user + toast notifications) |
-| `src/components/store/toast-viewport.tsx` | ~50 | The reference-exact dark bottom-right toast region (ADR-011) |
-| `src/components/store/hero-carousel.tsx` | ~150 | Hero slides + the pinned sRGB overlay |
-| `src/components/checkout/checkout-flow.tsx` | ~370 | 3-step wizard with per-step validation gates |
-| `src/components/account/account-tabs.tsx` | ~430 | Account dashboard (4 tabs) |
-| `prisma/schema.prisma` | ~190 | 15 models, integer cents |
-| `prisma/seed.ts` | ~330 | Idempotent seed + reference-parity fixtures |
-| `tests/e2e/storefront-parity.spec.ts` | ~110 | The computed-style parity gate |
-| `tests/e2e/mobile-navigation.spec.ts` | ~90 | The trap-log-pinned mobile nav surface |
+| `src/lib/cart.ts` | ~265 | Cart resolution, guest/user merge, cookie-token mutations, DTO + totals |
+| `src/lib/actions/checkout.ts` | ~230 | Transactional order placement (ADR-007) |
+| `src/lib/auth.ts` | ~110 | Sessions, HMAC cookie, role checks (ADR-006) |
+| `src/lib/delivery-window.ts` | ~205 | The carrier-holiday delivery estimate seam (ADR-045/046/047) — pure, UTC-deterministic |
+| `src/components/store/store-provider.tsx` | ~220 | The single client commerce-state seam (cart/wishlist/user + toast notifications) |
+| `src/components/store/toast-viewport.tsx` | ~53 | The reference-exact dark bottom-right toast region (ADR-011) |
+| `src/components/store/hero-carousel.tsx` | ~172 | Hero slides + the pinned sRGB overlay |
+| `src/components/checkout/checkout-flow.tsx` | ~401 | 3-step wizard with per-step validation gates |
+| `src/components/account/account-tabs.tsx` | ~511 | Account dashboard (4 tabs) |
+| `prisma/schema.prisma` | ~245 | 15 models, integer cents |
+| `prisma/seed.ts` | ~763 | Idempotent seed + reference-parity fixtures (4 demo orders + timeline/tracking events) |
+| `tests/e2e/storefront-parity.spec.ts` | ~564 | The computed-style parity gate (traps, fonts, hover, smoothing) |
+| `tests/e2e/mobile-navigation.spec.ts` | ~80 | The trap-log-pinned mobile nav surface |
+
+*Line counts refreshed at session-40 (DOCS-ALIGN-1); `scripts/verify-docs-align-r40.mjs` re-checks them against `wc -l` — a future drift is a verifier failure, not a silent rot.*
 
 ## 13. Glossary
 

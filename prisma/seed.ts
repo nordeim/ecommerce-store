@@ -3,7 +3,7 @@
  *
  * Natural-key upserts only: running it twice produces the same state.
  * Demo fixtures mirror the reference storefront so the account dashboard
- * renders the same order history (ORD-2026-001/002/003) after login.
+ * renders the same order history (ORD-2026-001–004) after login.
  *
  * Run: bun prisma/seed.ts   (or: bun run db:seed)
  */

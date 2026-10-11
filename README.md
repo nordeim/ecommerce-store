@@ -62,10 +62,10 @@ flowchart TB
         AT[Account tabs]
     end
     subgraph NextApp[Next.js 16 — RSC + actions]
-        PAGES[Pages: / /shop /product/... /cart<br/>/checkout /account /admin /wishlist<br/>/login /register /forgot-password /verify-email]
-        ACTIONS[Server actions<br/>auth · cart · account · checkout · admin]
-        RH[Route handlers<br/>/api/health /api/search /api/newsletter]
-        LIB[Domain libs<br/>cart · wishlist · auth · money · validation · rate-limit]
+        PAGES[Pages: / /shop /product/... /cart<br/>/checkout /account /account/orders/... /admin/* /wishlist<br/>/login /register /forgot-password /verify-email /reset-password]
+        ACTIONS[Server actions<br/>auth · cart · account · checkout · admin · stripe]
+        RH[Route handlers<br/>/api/health /api/search /api/newsletter /api/stripe/webhook]
+        LIB[Domain libs<br/>cart · wishlist · auth · money · validation · rate-limit<br/>order-* · delivery-window · admin-* · stripe-*]
         PRISMA[Prisma Client — db/custom.db]
     end
     UI -->|server actions| ACTIONS
@@ -93,27 +93,28 @@ flowchart TB
 │   │   ├── 📂 (storefront)/       ← chrome layout + shopper pages (URL-neutral)
 │   │   │   ├── 📄 page.tsx        ← home
 │   │   │   ├── 📂 shop/ · product/[slug]/ · cart/ (page + client island) · checkout/ (+ success/)
-│   │   │   └── 📂 wishlist/ · account/ · admin/ (dashboard, orders + orders/[id] detail, products)
-│   │   ├── 📂 (auth)/             ← standalone login/register/forgot-password/verify-email (no chrome)
-│   │   └── 📂 api/                ← health · search (typeahead) · newsletter
+│   │   │   └── 📂 wishlist/ · account/ (+ orders/[id] customer detail) · admin/ (dashboard, orders + orders/[id] detail, products, payments)
+│   │   ├── 📂 (auth)/             ← standalone login/register/forgot-password/verify-email/reset-password (no chrome)
+│   │   └── 📂 api/                ← health · search (typeahead) · newsletter · stripe/webhook (payment backstop)
 │   ├── 📂 components/
 │   │   ├── 📂 ui/                 ← shadcn-style primitives (button…radio-group)
-│   │   ├── 📂 store/              ← header, mobile-nav, cart-drawer, search-bar, product-card, hero-carousel, footer, store-provider
-│   │   ├── 📂 account/            ← account-tabs, admin rows
-│   │   └── 📂 checkout/           ← 3-step checkout-flow
+│   │   ├── 📂 store/              ← header, mobile-nav, cart-drawer, search-bar, buy-panel, shop-filters, product-card, hero-carousel, footer, store-provider, toast-viewport, platform-404, …
+│   │   ├── 📂 account/            ← account-tabs, admin rows/filters, admin-tracking-form, refund-order-button
+│   │   └── 📂 checkout/           ← 3-step checkout-flow + stripe-pay (Payment Element island)
 │   └── 📂 lib/
 │       ├── 📄 db.ts · db-path.ts  ← Prisma singleton + schema-relative SQLite URL
-│       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts · cart-quantity.ts · format.ts · verification.ts
-│       └── 📂 actions/            ← the mutation seam (ActionResult<T> + Zod)
+│       ├── 📄 auth.ts · password.ts · cart.ts · wishlist.ts · money.ts · validation.ts · rate-limit.ts · cart-quantity.ts · format.ts · verification.ts · metadata.ts · reset-token.ts
+│       ├── 📄 order-status · order-money-state · order-timeline · order-tracking · order-view-token · delivery-window · admin-orders · admin-payments · admin-products · stripe · stripe-config · stripe-payment
+│       └── 📂 actions/            ← the mutation seam (ActionResult<T> + Zod): auth · cart · account · checkout · admin · stripe
 ├── 📂 tests/
-│   ├── 📂 e2e/                    ← 19 spec files (254 tests) + setup/global-setup
-│   └── 📄 db-path.test.ts         ← URL-resolution contract
+│   ├── 📂 e2e/                    ← 19 spec files (253 tests) + auth.setup login (254 total) + global-setup/helpers
+│   └── 📄 db-path.test.ts + stripe-webhook.integration.test.ts ← URL contract + webhook integration (18 tests)
 └── 📄 AGENTS.md · CLAUDE.md · Project_Architecture_Document.md · ecommerce-store_SKILL.md
 ```
 
 ## Quick Start
 
-**Prerequisites:** Node.js ≥ 20, Bun ≥ 1.1 (or substitute `npx tsx` where `bun` runs TS), SQLite (bundled with Prisma).
+**Prerequisites:** Node.js ≥ 20, Bun ≥ 1.3 (or substitute `npx tsx` where `bun` runs TS), SQLite (bundled with Prisma).
 
 ```bash
 # 1. Install dependencies
