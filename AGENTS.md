@@ -795,6 +795,52 @@ The reference app was built on Tailwind v3; this port runs v4. Pinned in `src/ap
   with the seam's unit pins green — the consumer is the defect; M3 the
   confirmation's line dropped → the checkout E2E while both other
   layers stay green — the second consumer is the defect).
+- **The business-day delivery window (session-38, DELIVERY-WINDOW-2,
+  ADR-046):** the session-37 window counted CALENDAR days — on the seeded
+  fixture itself the amateur form was visible: ORD-2026-002 (placed
+  Sunday 2026-03-15) quoted "Mar 18 – 22, 2026", a max bound ON A SUNDAY,
+  a day the standard carrier tier does not deliver. Every high-end store
+  quotes business days (the Amazon/Shopify form: "3-7 business days")
+  because the carrier SLA is Mon–Fri. The refinement is contained to the
+  seam (`src/lib/delivery-window.ts`) — the ONLY production change of the
+  round; both surfaces (`/account/orders/[id]`, `/checkout/success`) call
+  `deliveryWindowView` unchanged (zero consumer churn, zero schema
+  change, zero fixtures — the lightest refinement form). The math:
+  `addBusinessDays(placedAt, n)` steps forward in fixed 24h UTC
+  increments counting Mon–Fri days (`isBusinessDay` — UTC weekday 1–5;
+  UTC has no DST, so the weekday a step lands on is exact — the
+  UTC-determinism discipline extends to the stepper); `from =
+  addBusinessDays(placedAt, 3)`, `to = addBusinessDays(placedAt, 7)`.
+  Holidays deliberately NOT modeled (jurisdiction-specific; the standard
+  store quote is Mon–Fri — documented in the seam). The constants are
+  renamed for honesty: `DELIVERY_WINDOW_MIN_BUSINESS_DAYS = 3` /
+  `DELIVERY_WINDOW_MAX_BUSINESS_DAYS = 7` (the old `*_DAYS` names would
+  mislead the next reader — the tdd skill's REFACTOR step: green,
+  behavior-neutral, the full unit layer re-run). The verified windows:
+  ORD-2026-002 (Sunday-placed) → "Mar 18 – 24, 2026"; the Saturday
+  instant → "Apr 1 – 7, 2026" (the format branch moves to same-month);
+  the Monday cross-year instant → "Dec 31, 2026 – Jan 6, 2027"; a
+  Friday placement → "Mar 25 – 31, 2026" (the tightest interaction —
+  both bounds straddle TWO weekends). The seeded-story coherence holds
+  in the honest unit: ORD-2026-001 placed Sat 2026-03-28, delivered Thu
+  2026-04-02 = 4 business days — inside the window. The unit layer adds
+  the never-a-weekend-bound PROPERTY pin (a 14-placement-day sweep,
+  parsing the seam's three text formats back into UTC dates, asserting
+  both bounds' weekday ∈ Mon–Fri — the guard against off-by-one
+  regressions across ALL placements, not just the chosen instants).
+  Zero parity risk — doubly superset-only (the reference carries NO
+  estimate on ANY surface: verified live this round — the reference PDP
+  has no delivery date, the reference orders link nowhere, the
+  reference confirmation is the mock). Pinned by 10 unit (the calm ×3,
+  the promise states' 5 exact windows, the property pin, the bounds
+  constants) + the 2 E2E (the ORD-2026-002 exact window updated to
+  "Mar 18 – 24, 2026" + the calm states; the confirmation's SHAPE pin
+  — unchanged, the moving-date honesty), triple-mutation-proven (M1
+  the regression-to-calendar mutation — the weekend check dropped from
+  the stepper → unit ×6 AND the E2E exact pin at both layers; M2 the
+  MAX bound mutated 7→5 → unit ×6 AND the E2E ("Mar 18 – 20"), the
+  artifact rebuilt; M3 the MIN bound mutated 3→2 → unit ×6 AND the E2E
+  ("Mar 17 – 24"), the artifact rebuilt).
 
 Computed-style parity is enforced by `tests/e2e/storefront-parity.spec.ts` — values were measured live on the reference. If you change theme tokens, re-measure, don't guess.
 

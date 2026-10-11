@@ -496,18 +496,19 @@ test.describe("account", () => {
   // stated the promise: the estimate composes from the status + placedAt
   // (no schema change), rendering under the order header for the promise
   // states (processing / in_transit) and NOTHING for the terminal states.
-  test("the in-transit order detail carries the delivery estimate (ORD-2026-002, session-37 DELIVERY-WINDOW-1)", async ({ page }) => {
+  test("the in-transit order detail carries the delivery estimate (ORD-2026-002, session-37 DELIVERY-WINDOW-1 + session-38 DELIVERY-WINDOW-2)", async ({ page }) => {
     await page.getByRole("tab", { name: "Orders" }).click();
     await page.getByRole("link", { name: "ORD-2026-002" }).click();
     await expect(page.getByRole("heading", { name: "ORD-2026-002", exact: true })).toBeVisible();
 
     // The estimate line under the order header: the standard-shipping
-    // window from the placed instant (2026-03-15T10:22:00Z + 3/+7 days →
-    // Mar 18 – 22). Exact-text pin: the seam's UTC-deterministic math
-    // renders the same string on any runner TZ (the formatOrderDate
-    // lesson — the worker TZ is not a contract).
+    // window from the placed instant (2026-03-15T10:22:00Z, a Sunday + 3/+7
+    // BUSINESS days → Mar 18 – 24, skipping the Mar 21–22 weekend —
+    // session-38 DELIVERY-WINDOW-2). Exact-text pin: the seam's
+    // UTC-deterministic math renders the same string on any runner TZ (the
+    // formatOrderDate lesson — the worker TZ is not a contract).
     await expect(page.getByTestId("delivery-window")).toHaveText(
-      "Estimated delivery: Mar 18 – 22, 2026",
+      "Estimated delivery: Mar 18 – 24, 2026",
     );
 
     // The calm states — the alert-fatigue rule: a delivered order IS the
