@@ -155,7 +155,9 @@ export function RegisterForm() {
           </div>
 
           <Button type="submit" className="w-full h-12 font-medium" disabled={pending}>
-            {pending ? "Creating account…" : "Create account"}
+            {/* Round-47 (AUTH-ERROR-1): THREE ASCII DOTS — the reference's
+                measured pending label (the U+2026 ellipsis was a divergence). */}
+            {pending ? "Creating account..." : "Create account"}
           </Button>
         </form>
       </div>

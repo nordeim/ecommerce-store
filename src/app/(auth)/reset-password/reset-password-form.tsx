@@ -150,7 +150,9 @@ export function ResetPasswordForm({ token }: { token: string }) {
           </div>
 
           <Button type="submit" className="w-full h-12 font-medium" disabled={pending}>
-            {pending ? "Resetting…" : "Reset password"}
+            {/* Round-47 (AUTH-ERROR-1): THREE ASCII DOTS — the reference's
+                measured pending label (the U+2026 ellipsis was a divergence). */}
+            {pending ? "Resetting..." : "Reset password"}
           </Button>
         </form>
       </div>

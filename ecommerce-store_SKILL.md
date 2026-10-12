@@ -6,7 +6,7 @@ description: >
   app, delivered on Tailwind v4 via a pinned token system with Prisma/SQLite
   persistence. Use when extending, debugging, testing, onboarding onto, or
   replicating this architecture.
-version: 1.46.0
+version: 1.47.0
 last_updated: "2026-10-12"
 tags:
   - e-commerce
@@ -28,7 +28,7 @@ tags:
 > Companion docs: `AGENTS.md` (agent cheat-sheet), `CLAUDE.md` (workflow),
 > `Project_Architecture_Document.md` (PAD — ADRs and rationale),
 > `docs/Tailwind-V4-Validation-Report.md` (trap log detail),
-> `docs/remediation-plan-session1.md` … `session10.md` (post-push audits).
+> `docs/remediation-plan-session1.md` … `session47.md` (post-push audits; latest: session-47 — AUTH-ERROR-1, the auth family's error-state density + the mismatch-first and ASCII-dots parity fixes).
 
 ---
 
@@ -502,9 +502,9 @@ There are no custom hooks; one context covers all state:
 ```bash
 bun run lint          # 0 errors, 0 warnings
 bun run typecheck     # 0 errors
-bun run test          # 332 unit + integration tests pass
+bun run test          # 353 unit + integration tests pass (22 files)
 bun run build         # compiles; 26 routes
-bun run test:e2e      # 254 tests pass (253 spec + the setup login; requires the build)
+bun run test:e2e      # 312 tests pass (310 spec + the setup login ×2; requires the build; run as two half-suite invocations a–m/n–z — the 600s tooling cap)
 bun run test:watch    # vitest watch mode
 bun run db:generate   # prisma client only
 bun run db:migrate    # prisma migrate dev
@@ -1359,4 +1359,4 @@ curl localhost:3000/api/health                        # {"ok":true,"db":true}
 | `prisma/seed.ts` | the reference catalog + demo fixtures |
 | `tests/e2e/storefront-parity.spec.ts` | the computed-style parity gate |
 | `tests/e2e/helpers.ts` | openCartDrawer / clearCartViaDrawer |
-| `docs/remediation-plan-session1.md` … `session46.md` | the post-push audits this skill distills (latest: session-46, the SEARCH-BEHAVIOR round — the customer-surfaces pin-density sweep's fourth installment + the clip-fix discovery) |
+| `docs/remediation-plan-session1.md` … `session47.md` | the post-push audits this skill distills (latest: session-47, the AUTH-ERROR round — the customer-surfaces pin-density sweep's fifth installment + the mismatch-first priority and ASCII-dots pending-label parity fixes) |

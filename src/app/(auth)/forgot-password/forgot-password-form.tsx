@@ -67,7 +67,9 @@ export function ForgotPasswordForm() {
                 </div>
               </div>
               <Button type="submit" className="w-full h-12 font-medium" disabled={pending}>
-                {pending ? "Sending…" : "Send reset link"}
+                {/* Round-47 (AUTH-ERROR-1): THREE ASCII DOTS — the reference's
+                    measured pending label (the U+2026 ellipsis was a divergence). */}
+                {pending ? "Sending..." : "Send reset link"}
               </Button>
             </form>
           </>

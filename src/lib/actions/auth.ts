@@ -82,10 +82,18 @@ export async function registerAction(
     confirmPassword: formData.get("confirmPassword"),
   });
   if (!parsed.success) {
+    // Round-47 (AUTH-ERROR-1): the reference's mismatch-first priority —
+    // when the mismatch refine fires (short+MISMATCH and 129-char+MISMATCH
+    // both measured live reading "Passwords do not match"), its copy is
+    // shown regardless of the password's length/max state. Zod 3 runs the
+    // object-level refine even when the base shape fails, so issues[0] is
+    // the shape's password issue — the clone's length copy won where the
+    // reference shows the mismatch copy: this preference restores parity.
+    const mismatch = parsed.error.issues.find((i) => i.path[0] === "confirmPassword");
     return {
       ok: false,
       error: {
-        message: parsed.error.issues[0]?.message ?? "Invalid input",
+        message: (mismatch ?? parsed.error.issues[0])?.message ?? "Invalid input",
         fieldErrors: Object.fromEntries(parsed.error.issues.map((i) => [i.path[0]?.toString() ?? "", i.message])),
       },
     };

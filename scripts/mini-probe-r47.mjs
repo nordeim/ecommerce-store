@@ -1,0 +1,11 @@
+import { chromium } from "playwright-core";
+const browser = await chromium.launch();
+console.log("launched:", browser.version());
+const ctx = await browser.newContext();
+console.log("context OK");
+const page = await ctx.newPage();
+await page.goto("https://fuzzy-lumina-style-hub.base44.app/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+console.log("title:", await page.title());
+await ctx.close();
+await browser.close();
+console.log("DONE");

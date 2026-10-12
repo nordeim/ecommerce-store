@@ -133,7 +133,9 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           </div>
 
           <Button type="submit" className="w-full h-12 font-medium" disabled={pending}>
-            {pending ? "Logging in…" : "Log in"}
+            {/* Round-47 (AUTH-ERROR-1): THREE ASCII DOTS — the reference's
+                measured pending label (the U+2026 ellipsis was a divergence). */}
+            {pending ? "Logging in..." : "Log in"}
           </Button>
         </form>
       </div>
