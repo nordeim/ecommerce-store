@@ -219,8 +219,12 @@ export function CheckoutFlow({
               >
                 <label
                   className={cn(
-                    "flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-colors",
-                    payment.method === "card" ? "border-primary bg-accent" : "border-border",
+                    "flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-colors hover:border-primary/30",
+                    // PAYSTEP-1 (session-48): the reference's selected box
+                    // swaps to border-primary/30 (the theme orange at 30%
+                    // alpha) with NO background tint — measured live
+                    // (rgba(230,107,26,0.3), transparent bg, both states).
+                    payment.method === "card" ? "border-primary/30" : "border-border",
                   )}
                 >
                   <RadioGroupItem value="card" />
@@ -229,8 +233,8 @@ export function CheckoutFlow({
                 </label>
                 <label
                   className={cn(
-                    "flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-colors",
-                    payment.method === "paypal" ? "border-primary bg-accent" : "border-border",
+                    "flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-colors hover:border-primary/30",
+                    payment.method === "paypal" ? "border-primary/30" : "border-border",
                   )}
                 >
                   <RadioGroupItem value="paypal" />
@@ -239,13 +243,19 @@ export function CheckoutFlow({
                 </label>
               </RadioGroup>
 
-              {payment.method === "card" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/40">
+              {/* PAYSTEP-1 (session-48): the card fields ALWAYS render — the
+                  reference keeps them visible under PayPal selection (bbox +
+                  hit-test verified live), and its inputs carry no `required`
+                  (the Review advance is never blocked by empty visible
+                  fields). The island's cardValid gate remains the single
+                  enforcement for the card path; the container is unstyled
+                  (the reference's fields sit in a plain div — no tinted
+                  box). */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
                     <Label className="mb-2 block" htmlFor="co-card">Card Number</Label>
                     <Input
                       id="co-card"
-                      required
                       value={payment.cardNumber}
                       onChange={(e) => setPayment((p) => ({ ...p, cardNumber: formatCardNumber(e.target.value) }))}
                       placeholder="4242 4242 4242 4242"
@@ -257,7 +267,6 @@ export function CheckoutFlow({
                     <Label className="mb-2 block" htmlFor="co-exp">Expiry</Label>
                     <Input
                       id="co-exp"
-                      required
                       value={payment.cardExpiry}
                       onChange={(e) => setPayment((p) => ({ ...p, cardExpiry: formatExpiry(e.target.value) }))}
                       placeholder="MM/YY"
@@ -269,7 +278,6 @@ export function CheckoutFlow({
                     <Label className="mb-2 block" htmlFor="co-cvc">CVC</Label>
                     <Input
                       id="co-cvc"
-                      required
                       value={payment.cardCvc}
                       onChange={(e) => setPayment((p) => ({ ...p, cardCvc: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
                       placeholder="123"
@@ -278,7 +286,6 @@ export function CheckoutFlow({
                     />
                   </div>
                 </div>
-              )}
 
               <div className="flex gap-3 mt-2">
                 <Button type="button" variant="outline" className="rounded-xl h-10" onClick={() => setStep(1)}>
