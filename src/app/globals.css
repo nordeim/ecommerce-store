@@ -27,6 +27,10 @@
  *     byte-identical `shadow-sm` class rendering the v3 shadow.
  *  3. The hero overlay uses the sRGB-interpolated arbitrary gradient form —
  *     v4 interpolates `bg-gradient-to-*` in oklab (see HeroCarousel).
+ *  4. `--blur-sm` is pinned to the v3 value (4px): v4 renamed the blur scale
+   *   (sm 4→8, xs=4 added); the pin keeps every `backdrop-blur-sm`/`blur-sm`
+   *   class rendering v3's 4px (trap #8, session-51 — the card heart's
+   *   frosted glass measured blur(4px) on the reference vs blur(8px) here).
  * ------------------------------------------------------------------------- */
 
 @theme inline {
@@ -79,6 +83,17 @@
 
   /* v3 shadow-scale pin — trap log #5 */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  /* v3 blur-scale pin — trap log #8 (session-51, CARD-HOVER-1). v4 renamed
+   * the blur scale: v3's backdrop-blur-sm (4px) became v4's sm=8px (xs=4px
+   * was added instead), so the byte-identical `backdrop-blur-sm` class on
+   * the product card heart rendered blur(8px) against the reference's
+   * measured blur(4px) for 50 rounds (the resting pixel sweep cannot see
+   * it — the 4-vs-8 difference on photographic content sits under the
+   * sweep's per-channel tolerance). The pin keeps every `*-blur-sm` class
+   * rendering v3's 4px; md (12px) and xl (24px) are unchanged in v4 and
+   * verified byte-identical live (probes cardhover-probe-r51[d/e]). */
+  --blur-sm: 4px;
 
   /* v3 slate-scale pin — trap log #7. The reference's platform 404
    * (src/app/not-found.tsx) is built on the Tailwind v3 slate palette.

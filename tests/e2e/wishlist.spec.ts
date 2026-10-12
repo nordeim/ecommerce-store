@@ -86,6 +86,12 @@ test.describe("wishlist", () => {
   test("wishlist persists across reloads (DB-backed)", async ({ page }) => {
     await page.goto("/product/silk-pajama");
     await page.getByRole("button", { name: /Add Silk Pajama Set to wishlist/ }).click();
+    // r51 settle (session-51, CARD-HOVER-1's companion fix): the click
+    // resolves at DISPATCH — the server write lands later. The store's
+    // toggleWishlist awaits the action before flipping the aria-label,
+    // so the flipped label proves the DB write landed. Without this wait
+    // the reload can beat the write (the baseline's honest flake).
+    await page.getByRole("button", { name: /Remove Silk Pajama Set from wishlist/ }).waitFor();
     await page.reload();
     await page.goto("/wishlist");
     await expect(page.getByText("Silk Pajama Set").first()).toBeVisible();

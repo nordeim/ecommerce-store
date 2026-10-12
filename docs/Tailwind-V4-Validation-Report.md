@@ -311,3 +311,50 @@ assertions must read the right property per stack. (c) Next 16's dev-origin
 protection silently blocks dev chunks for the `127.0.0.1` origin (unhydrated page,
 native form GET fallbacks) — `allowedDevOrigins: ["127.0.0.1"]` in next.config.ts
 restores both origins.
+
+## Appendix — Project Trap Log — Trap 8: The Blur-Scale Shift (session 51)
+
+The sixth engine-level v3→v4 difference found in this codebase (CARD-HOVER-1,
+the pin-density sweep's ninth installment — the product card's hover family):
+
+- **v3 (the reference app's compiled CSS):**
+  `backdrop-blur-sm` → `backdrop-filter: blur(4px)` — the sm step of v3's
+  scale (sm 4 / [default] 8 / md 12 / lg 16 / xl 24 / 2xl 40 / 3xl 64).
+- **v4 (this codebase, pre-fix):**
+  `backdrop-blur-sm` → `backdrop-filter: blur(8px)` — v4 RENAMED the scale:
+  the old `blur` (8px) became `sm`, a new `xs` (4px) was added at the bottom,
+  and every step from md up kept its value (md 12 / lg 16 / xl 24 / 2xl 40).
+
+Consequence for a v3→v4 port with byte-identical class attributes: every
+`*-blur-sm` site renders a 2× stronger frosted glass than the reference. The
+affected census (this repo): exactly ONE site carries sm — the product card
+heart's frosted disc (`product-card.tsx`, `backdrop-blur-sm`), whose reference
+measures **blur(4px)** live while the clone rendered **blur(8px)** for 50
+green rounds. The `md` (12px) sites (the hero CTA badge + both carousel
+arrows) and the `xl` (24px) site (the sticky header) are UNCHANGED by v4 and
+verified byte-identical live — only the renamed step diverges.
+
+Why it survived 50 rounds of instrumentation: the divergence is
+**sub-tolerance for every pixel instrument** — a 4px-vs-8px gaussian behind a
+36px disc over photographic content shifts individual channels well under
+the paired sweep's 12-per-channel threshold (the resting /shop band never
+moved, and the hovered-card element diff read 0.129% before AND after the
+fix). The ONLY instrument that sees it is the computed-style probe
+(`getComputedStyle(el).backdropFilter`). The instrument lesson (the r48
+lesson inverted): pixel pipelines settle engine SPELLING differences;
+computed-style probes are the sole instrument for sub-tolerance VALUE
+differences.
+
+The fix (the shadow-sm pin's exact pattern, `src/app/globals.css` @theme):
+
+```css
+/* v3 blur-scale pin — trap log #8 (session-51, CARD-HOVER-1) */
+--blur-sm: 4px;
+```
+
+Same class string on both sides (`backdrop-blur-sm`), the v3 computed value
+restored site-wide — every future `backdrop-blur-sm`/`blur-sm` usage inherits
+the v3 value automatically. Pinned by `tests/e2e/cardhover-states.spec.ts`
+(P1 the heart's blur 4px; P11 the header 24px + hero 12px — the register
+guard). See `docs/remediation-plan-session51.md` §2.2 and the PAD's §8.1
+cardhover-states row.
