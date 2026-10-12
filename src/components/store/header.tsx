@@ -21,7 +21,7 @@ const NAV_LINKS = [
  * matching the reference DOM order.
  */
 export function Header() {
-  const { cart, setCartOpen, setMobileNavOpen, setSearchOpen, user } = useStore();
+  const { cart, setCartOpen, setMobileNavOpen, searchOpen, setSearchOpen, user } = useStore();
 
   return (
     <div className="flex items-center justify-between h-16">
@@ -61,7 +61,19 @@ export function Header() {
           the justify-between nav row 6px right of the old gap-2 layout).
           Pinned by the storefront-parity header-geometry test. */}
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" aria-label="Search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}>
+        {/* Session-46 (SEARCH-BEHAVIOR-1): the button TOGGLES the panel —
+            measured live on the reference (probe r46a2: the second click
+            closes the open panel). The old open-only onClick was a measured
+            divergence; aria-expanded exposes the state the toggle now
+            carries (superset a11y affordance). */}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Search"
+          aria-haspopup="dialog"
+          aria-expanded={searchOpen}
+          onClick={() => setSearchOpen(!searchOpen)}
+        >
           <Search className="h-5 w-5" />
         </Button>
         <Link href="/wishlist" aria-label="Wishlist">

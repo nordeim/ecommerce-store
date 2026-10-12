@@ -29,16 +29,13 @@ export function SearchBar() {
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Adjust-during-render: reset the query whenever the panel closes (the
-  // panel unmounts visually but local state persists across opens).
-  const [prevOpen, setPrevOpen] = React.useState(searchOpen);
-  if (prevOpen !== searchOpen) {
-    setPrevOpen(searchOpen);
-    if (!searchOpen) {
-      setQuery("");
-      setSuggestions([]);
-    }
-  }
+  // Session-46 (SEARCH-BEHAVIOR-1): the typed query + the cached
+  // suggestions are PRESERVED across close/reopen — measured live on the
+  // reference (probe r46a2: type "serum" -> toggle-close -> reopen -> the
+  // input STILL CARRIES "serum"). The old reset-on-close block was a
+  // session-8-era choice the live reference contradicts; removing it keeps
+  // the query in the input and lets the cached popover re-appear on reopen
+  // (the superset detail — the reference has no popover to preserve).
 
   // Focus the input when the panel opens (external system — the DOM).
   React.useEffect(() => {
@@ -99,7 +96,15 @@ export function SearchBar() {
   if (!searchOpen) return null;
 
   return (
-    <div className="border-t border-border overflow-hidden animate-in slide-in-from-top-2 duration-300">
+    // Session-46 (SEARCH-BEHAVIOR-1): the strip's old overflow-hidden (the
+    // initial port's slide-in companion) clipped the typeahead popover to a
+    // 4px sliver — the superset feature was VISUALLY INVISIBLE since
+    // session-8 while the E2E layer stayed green (Playwright's toBeVisible
+    // is clipping-blind; the round's VLM verification caught it). The
+    // overflow-hidden never served the animation (it clips the element's
+    // CONTENT, not the transformed element itself) — removed, the popover
+    // renders below the strip unclipped and the slide-in is unchanged.
+    <div className="border-t border-border animate-in slide-in-from-top-2 duration-300">
       <div className="max-w-7xl mx-auto px-4 py-3 relative">
         <form className="flex gap-2" onSubmit={submit} role="search">
           <Input
