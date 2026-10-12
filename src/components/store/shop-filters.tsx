@@ -131,12 +131,21 @@ export function ShopFilters({ categories, activeCategory, activePrice, activeSor
       </Select>
 
       {hasFilters && (
+        // Session-50 (SHOP-FILTERS-1): the reference's Clear is a shadcn
+        // ghost/sm Button — measured live (probe r50b §I) as this byte-exact
+        // class string (32px tall, 12px font, 10px radius, foreground, the
+        // bg-accent hover pair). A plain button, NOT the Button component:
+        // the clone's button.tsx is the older shadcn vintage (its base
+        // carries rounded-md text-sm — a string divergence AND a text-sm /
+        // text-xs conflict). The X renders 16px via [&_svg]:size-4 despite
+        // its h-3 w-3 classes — the reference's exact quirk (the
+        // parent-scoped utility out-specifies h-3/w-3).
         <button
           type="button"
           onClick={() => router.push("/shop")}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 h-9"
+          className="inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs gap-1"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3 w-3" />
           Clear
         </button>
       )}
