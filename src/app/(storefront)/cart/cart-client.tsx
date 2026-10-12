@@ -62,10 +62,14 @@ export function CartClient() {
                 <p className="text-sm font-bold mt-1">{formatCents(item.price)}</p>
                 <div className="flex items-center justify-between mt-auto pt-2">
                   <div className="flex items-center border border-border rounded-lg">
+                    {/* Session-49 (CART-STEPPER-1): the reference's /cart is
+                        the hardcoded EMPTY state — this page is pure
+                        superset, pinned to the DRAWER's design language (the
+                        minus decrements-to-remove; the disabled attr + the
+                        disabled:opacity-40 token are dropped). */}
                     <button
-                      className="p-1.5 hover:bg-secondary transition-colors rounded-l-lg disabled:opacity-40"
+                      className="p-1.5 hover:bg-secondary transition-colors rounded-l-lg"
                       aria-label={`Decrease quantity of ${item.name}`}
-                      disabled={item.quantity <= 1}
                       onClick={() => adjustQuantity(item.id, -1)}
                     >
                       <Minus className="h-3.5 w-3.5" />

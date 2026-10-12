@@ -21,10 +21,14 @@ export function BuyPanel({ productId, name, stock }: { productId: string; name: 
     <>
       <div className="flex items-center gap-4 mb-4">
         <div className="flex items-center border border-border rounded-xl">
+          {/* Session-49 (CART-STEPPER-1): the reference's minus at qty 1 is
+              ENABLED (opacity 1, cursor pointer) and its click is a NO-OP —
+              measured live. The Math.max(1, ...) clamp below IS the no-op;
+              the disabled attr + the disabled:opacity-40 token are dropped
+              (the class string is now byte-identical to the reference's). */}
           <button
-            className="p-3 hover:bg-secondary transition-colors rounded-l-xl disabled:opacity-40"
+            className="p-3 hover:bg-secondary transition-colors rounded-l-xl"
             aria-label="Decrease quantity"
-            disabled={quantity <= 1}
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
           >
             <Minus className="h-4 w-4" />

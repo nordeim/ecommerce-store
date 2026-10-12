@@ -136,6 +136,20 @@
      * The layout's body class matches (no `antialiased` utility). */
     @apply bg-background text-foreground font-sans;
   }
+  /* Session-49 (CART-STEPPER-1, the platform-cursor discovery): the
+   * reference's Base44 platform CSS gives EVERY <button> cursor:pointer —
+   * measured as a complete census (17/17 buttons on its PDP, 33/33 on its
+   * home, the auth submits, AND a synthetic bare <button> appended to the
+   * DOM: pointer — a platform-level rule, not a per-component class).
+   * Tailwind v4.3.3's preflight sets NO button cursor (buttons compute
+   * `default`), so the clone's buttons diverged site-wide — a
+   * hover-affordance delta invisible to the pixel sweep (the cursor is
+   * never rendered in screenshots). The rule restores the platform
+   * behavior; explicit utilities (disabled:cursor-not-allowed etc.) keep
+   * winning via class specificity. */
+  button {
+    cursor: pointer;
+  }
 }
 
 /* Utility used by the storefront horizontal feature rows (kept as a plain

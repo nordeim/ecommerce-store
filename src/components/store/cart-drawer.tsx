@@ -6,8 +6,10 @@
  * quantity steppers AND a right-side line total, Subtotal / Shipping / Total
  * summary with separators, Checkout + View Cart actions. Reference anatomy
  * (captured live 2026-10-07): the item name is a plain single-line
- * truncated h4 and the image is NOT a link — we keep the production-correct
- * extras the reference lacks (aria-labels, disabled minus at qty 1).
+ * truncated h4 and the image is NOT a link. Session-49 (CART-STEPPER-1):
+ * the reference's minus at qty 1 is ENABLED and REMOVES the line — the
+ * disabled floor was a session-2 build liberty, now dropped. We keep the
+ * production-correct extras the reference lacks (aria-labels).
  */
 import Link from "next/link";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
@@ -54,11 +56,17 @@ export function CartDrawer() {
                     <h4 className="text-sm font-medium truncate">{item.name}</h4>
                     <p className="text-sm font-bold mt-1">{formatCents(item.price)}</p>
                     <div className="flex items-center gap-2 mt-2">
+                      {/* Session-49 (CART-STEPPER-1): the reference's drawer
+                          minus at qty 1 is ENABLED and its click REMOVES the
+                          line ("Cart (1)" -> "Cart (0)" — doubly measured
+                          live). The -1 delta flows to changeQuantityBy, where
+                          nextQuantity(1, -1) = 0 is the DELETE signal
+                          (already unit-pinned); the disabled attr + the
+                          disabled:opacity-40 token are dropped. */}
                       <div className="flex items-center border border-border rounded-lg">
                         <button
-                          className="p-1.5 hover:bg-secondary transition-colors rounded-l-lg disabled:opacity-40"
+                          className="p-1.5 hover:bg-secondary transition-colors rounded-l-lg"
                           aria-label={`Decrease quantity of ${item.name}`}
-                          disabled={item.quantity <= 1}
                           onClick={() => adjustQuantity(item.id, -1)}
                         >
                           <Minus className="h-3.5 w-3.5" />
