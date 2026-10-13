@@ -46,10 +46,30 @@ async function main() {
   // (live-verification tracking writes leave the same residue) and the
   // tracking columns restore with the statuses (the e2e-reset guard's
   // dev-DB twin).
+  // Session-57 (ORDER-DETAIL-GEO-1): THE GUARD THIS BLOCK ALWAYS CLAIMED
+  // — the e2e-reset twin's SEEDED_ORDER_EVENT_IDS list, ported verbatim,
+  // and payment_refunded joining the type list. The unguarded form deleted
+  // the SEED'S OWN canonical timeline fixtures (evt-ord1-transit/delivered,
+  // evt-ord2-transit/tracking, evt-ord4-cancelled; evt-ord4-refunded
+  // survived only because payment_refunded was missing from the type
+  // list) — running the documented post-audit hygiene destroyed the very
+  // state it exists to restore. Found by the probe-first capture
+  // discipline (the r57 capture probes read 1-row timelines on the dev DB
+  // while the e2e DB told the 3-row stories); pinned by
+  // tests/dev-cleanup-guard.integration.test.ts.
+  const SEEDED_ORDER_EVENT_IDS = [
+    "evt-ord1-transit",
+    "evt-ord1-delivered",
+    "evt-ord2-transit",
+    "evt-ord2-tracking",
+    "evt-ord4-cancelled",
+    "evt-ord4-refunded",
+  ];
   const demoEvents = await db.orderEvent.deleteMany({
     where: {
-      type: { in: ["status_changed", "tracking_added"] },
+      type: { in: ["status_changed", "payment_refunded", "tracking_added"] },
       order: { number: { in: [...CANONICAL_ORDERS] } },
+      id: { notIn: SEEDED_ORDER_EVENT_IDS },
     },
   });
   await db.order.update({ where: { number: "ORD-2026-001" }, data: { status: "delivered" } });
