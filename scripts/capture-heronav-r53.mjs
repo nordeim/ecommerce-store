@@ -99,7 +99,7 @@ const focusProbe = await prevLoc.evaluate((el) => {
 });
 console.log("[279 probe: focus outline]", JSON.stringify(focusProbe));
 await page.screenshot({ path: `${OUT}/279-heronav-arrow-focused.png`, clip: { x: clip.x, y: clip.y + clip.height / 2 - 120, width: 320, height: 240 } });
-await page.evaluate(() => { const el = document.querySelector('button[aria-label="Previous slide"]'); el && el.blur(); });
+await page.evaluate(() => { const el = document.querySelector('button[aria-label="Previous slide"]'); if (el) el.blur(); });
 await sleep(200);
 
 // (280) the crossfade mid-transition — click next and capture ~300ms into

@@ -80,10 +80,14 @@ export function Footer() {
         <div className="shrink-0 h-[1px] w-full my-10 bg-background/10" role="none" />
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-xs text-background/40">&copy; 2026 LUXE Store. All rights reserved.</p>
-          <div className="flex gap-6 text-xs text-background/40">
-            <span className="hover:text-background transition-colors cursor-pointer">Privacy Policy</span>
-            <span className="hover:text-background transition-colors cursor-pointer">Terms of Service</span>
-            <span className="hover:text-background transition-colors cursor-pointer">Cookie Policy</span>
+          <div className="flex gap-6">
+            {/* Reference parity (session-54, FOOTER-ANN-1): the tokens live
+                on EACH span — text-xs text-background/40 with a
+                hover:text-background/60 target — and the parent is a bare
+                flex gap-6 (measured live on the reference, probe r54d). */}
+            <span className="text-xs text-background/40 hover:text-background/60 cursor-pointer transition-colors">Privacy Policy</span>
+            <span className="text-xs text-background/40 hover:text-background/60 cursor-pointer transition-colors">Terms of Service</span>
+            <span className="text-xs text-background/40 hover:text-background/60 cursor-pointer transition-colors">Cookie Policy</span>
           </div>
         </div>
       </div>
