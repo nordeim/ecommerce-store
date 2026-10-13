@@ -14,7 +14,7 @@ test.describe("guest checkout (session-6)", () => {
     // 1. Guest adds from the PDP — the badge bumps (no drawer auto-open).
     await page.goto("/product/charging-pad");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
 
     // 2. The checkout renders for the anonymous visitor with NO prefill
     //    (no session user — every field starts empty). Wait for hydration
@@ -61,7 +61,7 @@ test.describe("guest checkout (session-6)", () => {
     // 1. A guest places an order and captures the tokened success URL.
     await page.goto("/product/charging-pad");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await page.goto("/checkout");
     await page.waitForLoadState("networkidle");
     await page.getByRole("main").getByLabel("First Name").fill("Enum");
@@ -133,7 +133,7 @@ test.describe("guest checkout (session-6)", () => {
     //    tokened success URL (the token view).
     await page.goto("/product/charging-pad");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await page.goto("/checkout");
     await page.waitForLoadState("networkidle");
     // The hydration gate (the first test's documented pattern): the wizard

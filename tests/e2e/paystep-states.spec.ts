@@ -34,7 +34,7 @@ test.describe("checkout payment-step states (session-48, CHECKOUT-PAYSTEP-1)", (
     await clearCartViaDrawer(page);
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     await page.getByRole("dialog").getByRole("link", { name: "Checkout" }).click();
     await expect(page).toHaveURL(/\/checkout/);

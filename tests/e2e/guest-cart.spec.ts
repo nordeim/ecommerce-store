@@ -14,7 +14,7 @@ test.describe("guest cart", () => {
   test("a guest accumulates items across adds in ONE cart", async ({ page }) => {
     await page.goto("/product/vitamin-c-serum");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await page.goto("/product/leather-watch");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
     await expect(page.getByRole("button", { name: "Cart, 2 items" })).toBeVisible();
@@ -31,7 +31,7 @@ test.describe("guest cart", () => {
   test("guest steppers adjust quantity instead of emptying the cart", async ({ page }) => {
     await page.goto("/product/vitamin-c-serum");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(/Increase quantity/).click();

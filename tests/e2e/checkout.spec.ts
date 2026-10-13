@@ -26,7 +26,7 @@ test.describe("checkout", () => {
     // Reference parity: adding does NOT open the drawer — open it via the
     // header cart button (the reference's only drawer entry point), then
     // continue to checkout from the drawer.
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     await page.getByRole("dialog").getByRole("link", { name: "Checkout" }).click();
     await expect(page).toHaveURL(/\/checkout/);

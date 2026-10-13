@@ -41,7 +41,7 @@ test.describe("stock enforcement (session-6)", () => {
       // Assemble a 1-unit cart through the real PDP.
       await page.goto("/product/charging-pad");
       await page.getByRole("button", { name: "Add to Cart" }).first().click();
-      await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
 
       // Drive the DRAWER stepper — its +1 goes through the server action,
       // which must clamp the second increase at stock 2 (never 3).

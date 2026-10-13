@@ -148,7 +148,7 @@ test.describe("quantity stepper boundary states (session-49, CART-STEPPER-1)", (
     await clearCartViaDrawer(page);
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     const minus = dialog.getByLabel(/Decrease quantity/);
@@ -168,7 +168,7 @@ test.describe("quantity stepper boundary states (session-49, CART-STEPPER-1)", (
     await clearCartViaDrawer(page);
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     // The reference's minus-at-1 click empties the cart ("Cart (1)" ->
@@ -200,7 +200,7 @@ test.describe("quantity stepper boundary states (session-49, CART-STEPPER-1)", (
     await clearCartViaDrawer(page);
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     const minus = dialog.getByLabel(/Decrease quantity/);
@@ -256,7 +256,7 @@ test.describe("quantity stepper boundary states (session-49, CART-STEPPER-1)", (
     await clearCartViaDrawer(page);
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await page.goto("/cart");
     await page.waitForLoadState("networkidle");
     const main = page.getByRole("main");
@@ -282,7 +282,7 @@ test.describe("quantity stepper boundary states (session-49, CART-STEPPER-1)", (
     await main.getByLabel(/Decrease quantity/).click();
     await expect(main.getByText("$299.99").first()).toBeVisible();
     // The header badge (OUTSIDE main) tracks the decrement to 1.
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
   });
 
   // ---- P12: the platform-cursor discovery (the site-wide fix) ----

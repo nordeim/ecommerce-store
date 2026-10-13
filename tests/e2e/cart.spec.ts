@@ -19,7 +19,7 @@ test.describe("cart", () => {
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
     // The add is a server action — give the mutation a beat to land, then
     // assert the resting state: badge bumped, drawer closed.
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await page.waitForTimeout(700);
     await expect(page.getByRole("dialog")).toBeHidden();
   });
@@ -29,7 +29,7 @@ test.describe("cart", () => {
     // $9.99, Total $44.98 (and $79.99 -> $9.99; $299.99 -> Free).
     await page.goto("/product/vitamin-c-serum");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Subtotal").locator("..")).toContainText("$34.99");
@@ -69,7 +69,7 @@ test.describe("cart", () => {
     await page.goto("/product/yoga-mat");
     const add = page.getByRole("button", { name: "Add to Cart" }).first();
     await add.click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await add.click();
     await expect(page.getByRole("button", { name: "Cart, 2 items" })).toBeVisible();
     // Two toasts stack in the region (gap-2), each its own element.
@@ -82,7 +82,7 @@ test.describe("cart", () => {
     await page.goto("/shop");
     await page.locator(".bg-card.group").first().hover();
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("heading", { name: /Cart \(1\)/ })).toBeVisible();
@@ -95,7 +95,7 @@ test.describe("cart", () => {
   test("drawer item row matches the reference anatomy (session-2 parity)", async ({ page }) => {
     await page.goto("/product/wireless-headphones");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
 
@@ -149,7 +149,7 @@ test.describe("cart", () => {
   test("quantity stepper in the drawer updates totals; remove clears the cart", async ({ page }) => {
     await page.goto("/product/vitamin-c-serum");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     const dialog = page.getByRole("dialog");
     // Increase twice: 3 × $34.99 = $104.97 (crosses the free-shipping line).
@@ -173,13 +173,13 @@ test.describe("cart", () => {
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
     // Reference parity: the drawer never auto-opens, so the badge is
     // assertable directly — no dialog to dismiss first.
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
   });
 
   test("the full-page cart mirrors the drawer", async ({ page }) => {
     await page.goto("/product/yoga-mat");
     await page.getByRole("button", { name: "Add to Cart" }).first().click();
-    await expect(page.getByRole("button", { name: "Cart, 1 items" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cart, 1 item" })).toBeVisible();
     await openCartDrawer(page);
     await page.getByRole("dialog").getByRole("link", { name: "View Cart" }).click();
     await expect(page).toHaveURL(/\/cart/);

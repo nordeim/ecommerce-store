@@ -85,7 +85,7 @@ export function Header() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={cart.itemCount > 0 ? `Cart, ${cart.itemCount} items` : "Cart"}
+          aria-label={cart.itemCount > 0 ? `Cart, ${cart.itemCount} ${cart.itemCount === 1 ? "item" : "items"}` : "Cart"}
           onClick={() => setCartOpen(true)}
         >
           <ShoppingBag className="h-5 w-5" />
