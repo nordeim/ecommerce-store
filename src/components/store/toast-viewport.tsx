@@ -11,9 +11,14 @@
  *   copy:   "«Product name» added to cart!" / "… added to wishlist!"
  *
  * Timing: 3000ms auto-dismiss (measured 3.35s end-to-end incl. render);
- * enter springs from opacity-0 / translateY(16px) scale(0.96) — approximated
- * with a bouncy CSS bezier via @starting-style (the reference uses a JS
- * spring); exit rises to translateY(-10px) scale(0.95) then unmounts.
+ * enter springs from opacity-0 / translateY(20px) scale(0.95) — the
+ * reference's measured framer-motion from-pose (session-56, TOAST-ANIM-1),
+ * approximated with a bouncy CSS bezier via @starting-style (the reference
+ * uses a JS spring; it settles at ~302ms with a -2.41px overshoot, the
+ * bezier at ~301ms with ~-1.9px — the registered architecture gap); exit
+ * rises to translateY(-10px) scale(0.95) then unmounts, fading ease-OUT
+ * (the measured reference character — the easeOutQuad fit
+ * cubic-bezier(0.25, 0.46, 0.45, 0.94), 0.31 opacity at +150ms).
  * Rapid adds stack without dedupe (verified live).
  *
  * Deliberate divergences (registered in AGENTS.md): the region is

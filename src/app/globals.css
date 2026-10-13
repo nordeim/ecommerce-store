@@ -177,11 +177,15 @@
   display: none;
 }
 
-/* Toast animation (session-4, TOAST-1) — enter from opacity-0 /
-   translateY(16px) scale(0.96) with a bouncy bezier (approximates the
-   reference's framer-motion spring, which overshoots ~2px); exit rises to
-   translateY(-10px) scale(0.95) before unmount. @starting-style makes the
-   transition run on element insertion without JS state. */
+/* Toast animation (session-4, TOAST-1; calibrated session-56, TOAST-ANIM-1)
+   — the reference's framer-motion spring, measured live: enter FROM
+   opacity-0 / translateY(20px) scale(0.95) (the inline style at insertion,
+   r56a), settling at ~302ms with a -2.41px overshoot; exit rises to
+   translateY(-10px) scale(0.95) before unmount, fading ease-OUT (o=0.31
+   at +150ms, 0.001 at +266ms — the easeOutQuad fit r56b). @starting-style
+   makes the transition run on element insertion without JS state; the CSS
+   bezier approximates the JS spring (the overshoot 9.7% vs the reference's
+   12.05% — the registered architecture gap). */
 .toast-item {
   transition:
     opacity 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -194,11 +198,15 @@
 .toast-item.toast-exiting {
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
-  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  /* the measured ease-out fade character (r56b): the reference is 63%
+     gone at 44% of the exit; the easeOutQuad fit lands within 0.10 of
+     every measured checkpoint — the old ease-in (0.4, 0, 1, 1) lingered
+     24 opacity points above the reference mid-exit */
+  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 @starting-style {
   .toast-item:not(.toast-exiting) {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    transform: translateY(20px) scale(0.95);
   }
 }
