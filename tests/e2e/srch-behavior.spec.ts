@@ -112,7 +112,7 @@ test.describe("search behavior (session-46)", () => {
     // empty input does NOT navigate.
     const input = await openPanel(page);
     await expect(input).toHaveValue("");
-    await page.locator("header form").getByRole("button", { name: "Search" }).click();
+    await page.locator("header form").getByRole("button", { name: "Search", exact: true }).click();
     await page.waitForTimeout(800);
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByLabel("Search products")).toBeVisible();

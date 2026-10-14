@@ -10,7 +10,7 @@ test.describe("search", () => {
     const input = page.getByLabel("Search products");
     await expect(input).toBeFocused();
     await input.fill("headphones");
-    await page.locator("header form").getByRole("button", { name: "Search" }).click();
+    await page.locator("header form").getByRole("button", { name: "Search", exact: true }).click();
     await expect(page).toHaveURL(/\/shop\?search=headphones$/);
     await expect(page.getByRole("heading", { name: 'Results for "headphones"' })).toBeVisible();
     await expect(page.getByText("1 product found")).toBeVisible();
