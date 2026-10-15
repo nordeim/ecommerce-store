@@ -1646,3 +1646,27 @@ Stage Summary:
 - Deliverable: SRCHROWS-STATES-1 — the search typeahead popover's row interaction states (the sweep's nineteenth installment, the thrice-deferred standing next; the superset's own deep states): THREE superset-quality fixes (the WAI-ARIA combobox census making the typeahead visible to assistive tech; the arrow-key active-row state machine — the wrap-around, the entry-from-top, the Enter-on-active commit, the stale-highlight reset; the formatCents money-seam rejoin), pinned by 14 pins, octuple-mutation-proven
 - Gate at ship: 851 per run (356 unit + 495 E2E x 2 consecutive runs), sweep at baseline byte-identical pre- AND post-change (the fixes are typing-only surfaces), the mobile-nav token-exact, VLM 5/5 (316-320)
 - Next: the sweep's twentieth installment (the PDP description-tab's key-features list states) or the credential-gated items (Stripe test-mode keys, an email provider)
+
+---
+Task ID: S62 (session-122 round 62, PDPFEATURES-STATES-1)
+Agent: main (Super Z)
+Task: The standing round-62 instruction end-to-end on the ecommerce-store repo (a PULL round): docs review, baseline gate, live battery, the PDP description-tab key-features list audit (the sweep's 20th installment), the TDD closure-form remediation, the mutation battery, the full gate x2, the post-change battery, screenshots + VLM, docs duty, commit + SSH push to main.
+
+Work Log:
+- PULL round: git pull fast-forwarded 2b9aa6a..9123592 (docs/session_122.md only); environment intact (the hard-link DB at inode 566449, node_modules, Chromium); skills/ exclusion verified in all 4 configs
+- Baseline gate: lint 0/0 · tsc clean · 356/356 unit · build exit 0 · E2E 495 chromium unique (--list census 496/39 files; four FULL-PATH FILE-list groups 202/62/81/154, 499 summed with 4 setups), zero flakes
+- Pre-change battery ALL CLEAN (sweep 8/8 at baseline band; mobile-nav TOKEN-EXACT — the 80th run; watches + census clean)
+- Audit: four probes (r62a/a2 reference + r62b/b2/b3 clone) on the key-features list — ZERO DIVERGENCE on all 12 axes (the h3/ul/li/icon anatomy, the texts, the spacing, the interactivity + a11y censuses, the wrapper, the tabpanel association, the paragraph, @375) — the sweep's SEVENTH fully-parity family, NO production change
+- THREE registers documented: the margin-side engine register (v3 margin-top-following vs v4 margin-block-end-preceding — same paint, pin by rects); the illustrative-icon a11y superset (the clone's aria-hidden); the dead-prose-class register (both sites carry, neither emits)
+- The pin spec tests/e2e/pdpfeatures-states.spec.ts: 14 characterization pins, all GREEN (the closure form); ONE calibration iteration (the P7 transition: the measured value is all/0s on BOTH sites, not "none"); THREE engineering iterations (the element-form evaluates, the inlined WALK, the page-level fast-fail anchors after the M7 locator-wait trap)
+- The mutation battery x8 ALL CAUGHT (byte-exact restores): M1→P1+P12 · M2→P2+P6+P13+P14 · M3→P3 · M4→P4 · M5→P4+P13 · M6→P3 · M7→ALL 14 (the shared-anchor fast-fail, 1.4m) · M8→P9
+- THE ROUND'S OPERATIONAL DISCOVERIES: the LOCATOR-EVALUATE WAIT TRAP (a locator evaluate auto-waits 45s/pin when the anchor is missing — the fast-fail form fixes it); the STALE-SERVER TRAP (reuseExistingServer + rebuild = the platform error page at the next setup — kill :3100 before each rebuild); the CONTAMINATED-BACKUP recovery (a tool-timeout mid-mutation leaves the mutation applied and the next backup captures it — restore from git HEAD, never from /tmp)
+- Full gate x2: both runs identical — 202/62/95(n-q at 7 files)/154 = 513 summed (509 chromium + 4 setups), zero flakes; the counted total 865 = 356 + 509
+- Post-change battery ALL CLEAN (sweep at baseline byte-identical — zero production code touched; mobile-nav token-exact; watches + census clean); screenshots 321-325 (probe-first, :3001); VLM 5/5 (one description-side settle: the 322 crop headroom 20px→56px, the pixel measurement settled first)
+- Docs: PAD v1.62, SKILL v1.62.0 (lesson 066 — L95/L96/L97), AGENTS.md bullet, CLAUDE.md/README.md rows, verifier 38→39 ALL FAMILIES GREEN, session_123.md narrative, worklog S62, plan §6 filled
+- Commit + SSH push to main via docs/ssh_git_wrapper_v3.py (key materialized outside the repo, dry-run, push, remote verify, key shredded)
+
+Stage Summary:
+- Deliverable: PDPFEATURES-STATES-1 — the sweep's 20th installment, the SEVENTH fully-parity family (zero divergence, zero production change), pinned by 14 characterization pins, octuple-mutation-proven
+- Gate: 865 per run x2; sweep at baseline pre/post; mobile-nav token-exact; VLM 5/5 (321-325)
+- Next: the sweep's 21st (the buy-column feature chips — the other unpinned PDP features surface) or the credential-gated items (Stripe keys / email provider)
