@@ -27,6 +27,7 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useStore } from "./store-provider";
+import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 type Suggestion = {
@@ -42,6 +43,12 @@ export function SearchBar() {
   const [query, setQuery] = React.useState("");
   const [suggestions, setSuggestions] = React.useState<Suggestion[]>([]);
   const [loading, setLoading] = React.useState(false);
+  // Session-61 (SRCHROWS-STATES-1): the arrow-key ACTIVE ROW — the WAI-ARIA
+  // combobox contract (aria-activedescendant + the listbox pattern). Null =
+  // no row active (Enter then submits the query — the reference's measured
+  // Enter contract, srch-behavior P6). Cleared on every query change: the
+  // highlight indexes the CURRENT suggestion set, never a stale one.
+  const [activeSlug, setActiveSlug] = React.useState<string | null>(null);
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const stripRef = React.useRef<HTMLDivElement>(null);
@@ -151,11 +158,53 @@ export function SearchBar() {
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    // Session-61 (SRCHROWS-STATES-1): the combobox Enter contract — with a
+    // row ACTIVE (arrows), Enter COMMITS that row (the standard typeahead
+    // behavior; the same navigation as a row click). With NO row active,
+    // Enter keeps submitting the QUERY to the results page — the reference's
+    // measured Enter contract (srch-behavior P6), byte-identical under the
+    // intercept. The empty-query no-op (srch-behavior P5) can never have an
+    // active row (no suggestions with an empty query).
+    if (activeSlug) {
+      setSearchOpen(false);
+      router.push(`/product/${activeSlug}`);
+      return;
+    }
     const q = query.trim();
     if (!q) return;
     setSearchOpen(false);
     router.push(`/shop?search=${encodeURIComponent(q)}`);
   };
+
+  // Session-61 (SRCHROWS-STATES-1): the arrow-key handler — the WAI-ARIA
+  // combobox keyboard contract. ArrowDown/ArrowUp move the ACTIVE row through
+  // the suggestion list (wrap-around both directions; the null + ArrowUp
+  // entry-from-top lands on the LAST row — the listbox standard).
+  // preventDefault keeps the caret from jumping to the input's start/end
+  // while the popup is open (the combobox contract). Enter is NOT handled
+  // here: it flows to the form submit, whose activeSlug branch (above)
+  // commits the active row. The rows themselves stay plain buttons — the
+  // Tab path (the raw-button focus register) is untouched.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if (suggestions.length === 0) return;
+    e.preventDefault();
+    const i = suggestions.findIndex((s) => s.slug === activeSlug);
+    let next: number;
+    if (e.key === "ArrowDown") {
+      next = i === -1 ? 0 : (i + 1) % suggestions.length;
+    } else {
+      next = i === -1 ? suggestions.length - 1 : (i - 1 + suggestions.length) % suggestions.length;
+    }
+    setActiveSlug(suggestions[next].slug);
+  };
+
+  // Session-61: keep the active row in view (a no-op at <= 6 rows — the
+  // popover has no max-height today; the guard future-proofs a taller list).
+  React.useEffect(() => {
+    if (!activeSlug) return;
+    document.getElementById(`srch-opt-${activeSlug}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeSlug]);
 
   if (!searchOpen && !closing) return null;
   // The exit phase renders the strip WITHOUT the enter animation class (the
@@ -189,10 +238,27 @@ export function SearchBar() {
           <Input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Session-61: a new query invalidates the highlight — the
+              // active row indexes the CURRENT suggestion set only.
+              setActiveSlug(null);
+            }}
+            onKeyDown={onKeyDown}
             placeholder="Search products..."
             className="flex-1"
             aria-label="Search products"
+            /* Session-61 (SRCHROWS-STATES-1): the WAI-ARIA combobox census —
+               the input announces the popup it owns. The listbox pattern:
+               role=combobox + aria-expanded + aria-controls +
+               aria-autocomplete=list + aria-activedescendant while a row is
+               active. (The header toggle's aria-haspopup="dialog" composes —
+               a dialog-shaped strip containing a combobox.) */
+            role="combobox"
+            aria-expanded={showSuggestions}
+            aria-controls="search-suggestions"
+            aria-autocomplete="list"
+            aria-activedescendant={activeSlug ? `srch-opt-${activeSlug}` : undefined}
           />
           {/* Session-58: the reference's sm form (measured 64x32, 12px/500 —
               the h-8 px-3 text-xs tokens; the default-size 79x36 was the
@@ -217,7 +283,13 @@ export function SearchBar() {
           </Button>
         </form>
         {showSuggestions && !isExit && (
-          <div className="absolute left-4 right-4 mt-2 bg-popover border border-border rounded-xl shadow-lg overflow-hidden z-50">
+          <div
+            id="search-suggestions"
+            role={suggestions.length > 0 ? "listbox" : undefined}
+            aria-label="Search suggestions"
+            aria-busy={loading}
+            className="absolute left-4 right-4 mt-2 bg-popover border border-border rounded-xl shadow-lg overflow-hidden z-50"
+          >
             {loading && suggestions.length === 0 && (
               <p className="px-4 py-3 text-sm text-muted-foreground">Searching…</p>
             )}
@@ -225,7 +297,13 @@ export function SearchBar() {
               <button
                 key={s.slug}
                 type="button"
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent transition-colors"
+                role="option"
+                id={`srch-opt-${s.slug}`}
+                aria-selected={activeSlug === s.slug}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent transition-colors",
+                  activeSlug === s.slug && "bg-accent",
+                )}
                 onClick={() => {
                   setSearchOpen(false);
                   router.push(`/product/${s.slug}`);
@@ -239,7 +317,13 @@ export function SearchBar() {
                       capitalized — measured live (session-8, SEARCH-CASE-1). */}
                   <span className="block text-xs text-muted-foreground">{s.categoryName.toLowerCase()}</span>
                 </span>
-                <span className="text-sm font-semibold">${(s.price / 100).toFixed(2)}</span>
+                {/* Session-61 (SRCHROWS-STATES-1): the money seam — this was
+                    the ONLY storefront price rendered outside formatCents
+                    (an inline `(s.price / 100).toFixed(2)`); it now joins
+                    product-card/cart-drawer/admin on the money.ts contract
+                    ("integer cents everywhere; toFixed/Intl only at display
+                    via formatCents"). */}
+                <span className="text-sm font-semibold">{formatCents(s.price)}</span>
               </button>
             ))}
           </div>
