@@ -115,20 +115,25 @@ export function AccountTabs({
     // margin-top-on-panel; the base mt-6 alone supplies the same 24px here
     // (the PDP tabs work the same way).
     <Tabs defaultValue="profile">
-      <TabsList>
-        <TabsTrigger value="profile">
+      {/* The ACCOUNT variant (session-60, PDPTABS-STATES-1): the reference's
+        account tablist appends overflow-x-auto (the PDP variant's base —
+        ui/tabs.tsx — carries none; measured live both sides). */}
+      <TabsList className="overflow-x-auto">
+        {/* The ACCOUNT variant: gap-2 pairs with the lucide icons (the
+          reference's account triggers carry it; the PDP triggers do not). */}
+        <TabsTrigger value="profile" className="gap-2">
           <UserIcon className="h-4 w-4" />
           Profile
         </TabsTrigger>
-        <TabsTrigger value="orders">
+        <TabsTrigger value="orders" className="gap-2">
           <Package className="h-4 w-4" />
           Orders
         </TabsTrigger>
-        <TabsTrigger value="addresses">
+        <TabsTrigger value="addresses" className="gap-2">
           <MapPin className="h-4 w-4" />
           Addresses
         </TabsTrigger>
-        <TabsTrigger value="settings">
+        <TabsTrigger value="settings" className="gap-2">
           <Settings className="h-4 w-4" />
           Settings
         </TabsTrigger>
